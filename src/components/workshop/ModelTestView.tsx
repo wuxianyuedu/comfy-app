@@ -9,7 +9,6 @@
 // 本文件不出现 fetch / api.*。
 
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import {
   Boxes,
@@ -44,10 +43,13 @@ import {
 } from "./model-test-config";
 import { InputRow } from "./ModelTestInputRow";
 import { ModelTestProgressPanel } from "./ModelTestProgressPanel";
+import { ModelTestQueuePanel } from "./ModelTestQueuePanel";
 import { ModelTestSizeField } from "./ModelTestSizeField";
 import { ModelTestTree } from "./ModelTestTree";
 import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
+import { SectionCard } from "./ModelTestSectionCard";
 import { useModelTest } from "./hooks/use-model-test";
+import { useModelTestQueue } from "./hooks/use-model-test-queue";
 import { useModelTestTree } from "./hooks/use-model-test-tree";
 import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
 
@@ -60,39 +62,6 @@ const QueueTaskLogModal = dynamic(() =>
 
 type ModelTestController = ReturnType<typeof useModelTest>;
 
-/** 卡片外壳：标题行（图标 + 名称 + 右侧弱化说明）+ 内容。 */
-function Panel({
-  children,
-  className,
-  hint,
-  icon,
-  title,
-}: {
-  children: ReactNode;
-  className?: string;
-  hint?: string;
-  icon: ReactNode;
-  title: string;
-}) {
-  return (
-    <section
-      className={cn(
-        "flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm",
-        className,
-      )}
-    >
-      <div className="flex items-center gap-1.5">
-        <span className="text-primary-strong [&_svg]:size-3.5">{icon}</span>
-        <span className="text-sm font-semibold">{title}</span>
-        {hint !== undefined && hint !== "" && (
-          <span className="text-2xs text-muted-foreground ml-auto font-normal">{hint}</span>
-        )}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 /** 空态引导（还没选模型时占住中栏）：三步指路，不出现任何网络 / 导航动作。 */
 function OnboardingPanel({ c }: { c: ModelTestController }) {
   const kindLabel = MODEL_TEST_KIND_LABELS[c.kind];
@@ -102,7 +71,7 @@ function OnboardingPanel({ c }: { c: ModelTestController }) {
     `填写提示词等统一输入，点「生成」查看${kindLabel}真实产物`,
   ];
   return (
-    <Panel
+    <SectionCard
       className="flex-1 items-center justify-center py-10"
       hint="与工坊生成走同一条通道"
       icon={<Compass />}
@@ -131,7 +100,7 @@ function OnboardingPanel({ c }: { c: ModelTestController }) {
           </li>
         ))}
       </ol>
-    </Panel>
+    </SectionCard>
   );
 }
 
@@ -166,7 +135,7 @@ function LeftColumn({
     /* 普通静态栏（ISSUE #4997）：不吸顶、不设 max-h / 内部滚动、h-fit——
      * 高度随内容，底部空隙由页面既有内边距给。 */
     <aside className="flex w-full shrink-0 flex-col gap-4 xl:w-64">
-      <Panel hint="布局可切换" icon={<Boxes />} title="用途 / 模式 / 模型">
+      <SectionCard hint="布局可切换" icon={<Boxes />} title="用途 / 模式 / 模型">
         {c.loading || tree.loading ? (
           /* 骨架屏（ISSUE #4749）：与模型列表条目同形的占位条。 */
           <div aria-label="加载中" className="flex flex-col gap-2" role="status">
@@ -196,7 +165,7 @@ function LeftColumn({
             selectedValue={c.selectedModel}
           />
         )}
-      </Panel>
+      </SectionCard>
     </aside>
   );
 }
@@ -212,6 +181,9 @@ export function ModelTestView({
   pendingReprint?: ModelTestRetryPayload | null;
 }) {
   const c = useModelTest();
+  /* 生成队列总览（#5010）：与「队列」页同一份 controller；日志弹窗与测试格
+   * 共享同一个 logTarget 态（一次只看一份日志）。 */
+  const queue = useModelTestQueue();
   /* 选中的本地工作流声明「尺寸取自首图」时，尺寸口不可配置（工坊链路本就不下发
    * 尺寸值），改为只读展示第一张参考图的实际像素。远端通道没有工作流声明，不受影响。 */
   const sizeFromReference =
@@ -301,7 +273,7 @@ export function ModelTestView({
             <div className="flex min-w-0 flex-1 flex-col gap-4 xl:max-h-[calc(100dvh-96px)] xl:overflow-y-auto">
               {hasModel ? (
                 <>
-                  <Panel
+                  <SectionCard
                     className="flex-1"
                     hint="与工坊生成走同一份模式契约"
                     icon={<SlidersHorizontal />}
@@ -541,7 +513,7 @@ export function ModelTestView({
                         <span>{c.notice.text}</span>
                       </p>
                     )}
-                  </Panel>
+                  </SectionCard>
 
                   {/* 执行日志放中栏：紧贴生成动作（进度 → 日志），列宽也容得下
                   等宽字体行，不再挤在窄右栏里 */}
@@ -553,6 +525,12 @@ export function ModelTestView({
               ) : (
                 <OnboardingPanel c={c} />
               )}
+
+              {/* 生成队列总览（#5010）：与「队列」页同一份数据（task.list +
+              /api/comfy/queue），全局任务（工坊 / 画布 / 工作流库 / 本页）
+              都在这里；排队 / 任意一条可就地展开看输入参数。不依赖是否已选
+              模型 —— 没选模型时它就是这页的全局读数。 */}
+              <ModelTestQueuePanel c={queue} onOpenLog={setLogTarget} />
             </div>
 
             {/* ── 右栏：产物 / 请求与响应（选中模型后才出现）── */}
