@@ -16,6 +16,7 @@ import {
   type ParamOutputPort,
 } from "~/lib/workflow/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
+import { exposedParamDisplayLabel } from "~/lib/workflow/workflow-exposed-params";
 import type { ReactNode } from "react";
 import { Switch } from "~/components/ui/switch";
 import { FieldLabel } from "~/components/ui/field";
@@ -159,6 +160,51 @@ export function WorkflowParamCardColumn({
                 </FieldLabel>
               ) : null}
             </div>
+          );
+        }
+
+        /* 参考图是**数组形态的同一个对外参数**：契约里 reference-image / -2 / -3
+         * 各是一张图的槽位，但卡片只有一张 —— 每个槽位在卡里占一行、带自己的
+         * 圆点（与「尺寸」六形态共一张卡同构）。连上第一条线后由消费方追加下一
+         * 个槽位，这张卡就地长出第二个端点，不必去模式契约页手动加口。 */
+        if (entry.cls === "reference-image") {
+          const slots = entries.filter((item) => item.cls === "reference-image");
+          if (entry !== slots[0]) {
+            return null;
+          }
+          const cardLabel =
+            contractEntries?.find((item) => item.id === "reference-image")?.label ??
+            exposedParamDisplayLabel("reference-image");
+          return (
+            <WorkflowParamCard
+              canReset={canWire && slots.some((item) => isManual?.(item.id) === true)}
+              canWire={canWire}
+              classLabel={paramClassStyle("reference-image").label}
+              cls="reference-image"
+              endpoint={endpoint}
+              entryId="reference-image"
+              hostNodeId={slots[0]?.hostNodeId || slots[0]?.nodeId || ""}
+              idLabel="reference-image"
+              key="reference-image"
+              label={cardLabel}
+              onReset={canWire ? () => onReset?.("reference-image") : undefined}
+              onSelect={
+                onSelect
+                  ? () => {
+                      onSelect("reference-image");
+                    }
+                  : undefined
+              }
+              /* 一行 = 一个参考图槽位；端口形状仍由 paramOutputPorts 产出，
+               * handleId 就是槽位 id，连线的闸门与落库都按它认。 */
+              outputPorts={slots.flatMap((item) =>
+                paramOutputPorts(item, io, resolved[item.id], item.label),
+              )}
+              readOnly={!canWire}
+              /* 选中这张卡或它下面任意一条线，都点亮整张卡。 */
+              selected={slots.some((item) => selectedEntryId === item.id)}
+              width={CARD_WIDTH}
+            />
           );
         }
         const style = paramClassStyle(entry.cls);

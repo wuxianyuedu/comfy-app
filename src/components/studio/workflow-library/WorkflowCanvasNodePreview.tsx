@@ -8,9 +8,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import { buildParamEntries, sizeGroupIds } from "~/lib/workflow/workflow-param-mapping";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
-import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
 import {
   getMissingRequiredInputs,
   inferGroups,
@@ -23,6 +21,7 @@ import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWo
 import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
 import { deriveLibraryOutputCards, deriveLibraryParamCards } from "./workflow-library-param-cards";
+import { useReferenceImageArray } from "./hooks/use-reference-image-array";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { useSizeSource } from "./hooks/use-size-source";
 import { useGenerationRunner, type Phase } from "./hooks/use-generation-runner";
@@ -195,14 +194,7 @@ export function WorkflowCanvasNodePreview({
       ? phase.node.label
       : null;
 
-  /* 模式契约口清单 —— 卡片头的话术与「工坊封装」页签**同一份**
-   * （`modeContractEntries`：用户改过的模式走注册表，未改过的回落内置默认）。
-   * 两处各读各的会让同一页面的两个页签列出两种名字（ISSUE #596）。 */
-  const { contracts: storedContracts } = useModeContracts();
-  const contractEntries = useMemo(
-    () => modeContractEntries(effectiveMode, storedContracts),
-    [effectiveMode, storedContracts],
-  );
+  const { contracts: storedContracts, save: saveModeContracts } = useModeContracts();
 
   /* ── 对外参数卡片列（映射可编辑，ISSUE #355）──
    * 卡片说「由哪些端口组成」，表单行说「填什么值」；拖线改落点、选中后 ⌫ 断开、
@@ -218,8 +210,21 @@ export function WorkflowCanvasNodePreview({
     mode: effectiveMode,
     onPatchParamMap: handlePatchParamMap,
   });
-  /* 重置回调只依赖这个稳定的方法引用（#4467：内联箭头会击穿画布层 memo）。 */
-  const { resetMany: resetParamWires } = wiring;
+  /* 重置 / 连线回调只依赖这些稳定的方法引用（#4467：内联箭头会击穿画布层 memo）。 */
+  const { connect: connectParam, resetMany: resetParamWires } = wiring;
+  /* 参考图数组编排（§17.2 ②层）：生效契约、连线追加槽位、写回契约与失败提示
+   * 都收在 hook 里；视图只消费返回值，避免本组件长成巨型函数（§12.13）。 */
+  const refArray = useReferenceImageArray({
+    connect: connectParam,
+    contracts: storedContracts,
+    effectiveMode,
+    io: workflowIO,
+    paramMap: wiring.effectiveParamMap,
+    resetMany: resetParamWires,
+    saveContracts: saveModeContracts,
+  });
+  const { contractEntries, effectiveContractIds, notice, onConnect, paramEntries, resetParam } =
+    refArray;
   /* 本地 overlay 已经并入 wiring 内部的生效 paramMap，但卡片列与连线要读的
    * 是同一份 —— 故把 overlay 之后的 paramMap 回传给派生。`reportParamMap`
    * 让 hook 把「生效的那一份」吐出来（见 useParamWiring 的 effectiveParamMap）。 */
@@ -232,9 +237,9 @@ export function WorkflowCanvasNodePreview({
         groupedKeys,
         /* 卡片列的口子清单与上面那份**同一份**（用户改过契约的模式必须按改过的
          *  清单列 —— 用内置默认会多列出契约里没有的口，见 `deriveLibraryParamCards`）。 */
-        contractIds: contractEntries.map((item) => item.id),
+        contractIds: effectiveContractIds,
       }),
-    [workflowIO, wiring.effectiveParamMap, effectiveMode, groupedKeys, contractEntries],
+    [workflowIO, wiring.effectiveParamMap, effectiveMode, groupedKeys, effectiveContractIds],
   );
   /* ── 对外输出参数（右列）──
    * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么 →
@@ -265,25 +270,6 @@ export function WorkflowCanvasNodePreview({
     commitParamMap: wiring.commitParamMap,
   });
 
-  /* 契约条目表（#4467）：连线闸门与自动落点按它判 —— 与 paramCards /
-   * outputCards 一样是同源派生，收进 useMemo；否则宿主表单每敲一个字都
-   * 整表现算一遍（端口多的工作流输入时可感知卡顿）。 */
-  const paramEntries = useMemo(
-    () =>
-      buildParamEntries(workflowIO ?? null, {
-        mode: effectiveMode,
-        contractIds: contractEntries.map((item) => item.id),
-      }),
-    [workflowIO, effectiveMode, contractEntries],
-  );
-
-  /* 落点重置回调收口：内联箭头会击穿画布层三列节点的 memo（#4467）。 */
-  const handleResetParam = useCallback(
-    (id: string) => {
-      resetParamWires(sizeGroupIds(id));
-    },
-    [resetParamWires],
-  );
   const { onSizeFromReferenceChange, sizeFromReference } = useSizeSource({
     commitParamMap: wiring.commitParamMap,
     effectiveMode,
@@ -327,6 +313,11 @@ export function WorkflowCanvasNodePreview({
         <p className="bg-warning/10 text-warning-strong text-2xs w-full rounded-lg px-3 py-2">
           这条工作流还没有配置模式，参数落点暂不能连线（落点必须归属一个模式）。
           到工作流编辑器顶栏「编辑 IO」配置模式集合后，回这里拖卡片圆点连线。
+        </p>
+      )}
+      {viewMode === "edit" && notice !== null && (
+        <p className="bg-warning/10 text-warning-strong text-2xs w-full rounded-lg px-3 py-2">
+          {notice}
         </p>
       )}
       {viewMode === "edit" && (
@@ -379,7 +370,7 @@ export function WorkflowCanvasNodePreview({
             />
           }
           io={workflowIO}
-          onConnect={effectiveMode !== null && onPatchParamMap ? wiring.connect : undefined}
+          onConnect={effectiveMode !== null && onPatchParamMap ? onConnect : undefined}
           onConnectOutput={
             effectiveMode !== null && onPatchParamMap ? outputWiring.connect : undefined
           }
@@ -395,7 +386,7 @@ export function WorkflowCanvasNodePreview({
               : undefined
           }
           onResetOutput={outputWiring.reset}
-          onResetParam={handleResetParam}
+          onResetParam={resetParam}
           onSelectOutput={handleSelectOutput}
           onSelectParam={handleSelectParam}
           onSizeFromReferenceChange={onSizeFromReferenceChange}
