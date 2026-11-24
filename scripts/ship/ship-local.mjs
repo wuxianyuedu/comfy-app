@@ -122,6 +122,46 @@ export function splitStagedNames(stdout) {
 }
 
 /**
+ * 陈旧基线读数（ISSUE #4951）：`git cherry <基线> HEAD` 的输出 → 警示行。
+ *
+ * 判的是「`基线..HEAD` 里有没有 patch 已在上游的提交」（输出 `- <sha>`）——
+ * squash 合并后，旧分支提交与 master 上的 squash 提交是两个 sha、同内容，旧提交
+ * 永不在 master 历史里；从旧分支尖端直接开下一笔分支时，`git cherry` 恰好把这些
+ * 已落地的提交标出来（ISSUE #4945 的现场：PR 标题取到上一笔、合并验真退 2）。
+ *
+ * 判据自己不另立第二套：`-`/`+` 是 git 的 patch-id 等价判定，这里只转述。
+ * 多笔 PR 合成一次 squash 时单笔 patch 对不上 ⇒ 漏报（尽力而为的读数，不是闸）；
+ * 误报方向也不存在 —— `-` 意味着同一改动确实已在上游。
+ *
+ * @param {string | null | undefined} stdout `git cherry <基线> HEAD` 的原始输出（取不到时按「没读到」处置）
+ * @returns {{landed: string[], lines: string[]}} `landed` = 已随上一笔落地的提交 sha（全串）；
+ *   `lines` = 要打进阶段 0 的警示行（干净时为空）
+ */
+export function staleBaseReading(stdout) {
+  const landed = String(stdout ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("-"))
+    .map((l) => l.replace(/^-\s*/, "").trim())
+    .filter((s) => s !== "");
+  if (landed.length === 0) {
+    return { landed: [], lines: [] };
+  }
+  return {
+    landed,
+    lines: [
+      `[ship] ⚠ 这条分支里混有**已随上一笔落地**的提交（git cherry 判 \`-\`）：` +
+        `${landed.map((s) => s.slice(0, 8)).join(" ")} —— squash 合并后旧分支提交不在 ` +
+        "master 历史里，它们会随本笔 PR 再背进去：标题取到上一笔、合并验真退 2" +
+        "（ISSUE #4945 的现场）。",
+      "[ship] ⚠ 出口：先重放到最新上游再走 —— " +
+        "`git rebase --onto <基线> <旧提交> <分支>` 后强推本分支（或删了重建分支）。" +
+        "这一格是**读数**，不拦你（ISSUE #4951）。",
+    ],
+  };
+}
+
+/**
  * 把一条 `--add` 点名的路径归一成可与暂存清单比较的键。
  *
  * git 的路径是**仓库相对 + 正斜杠**，而人在 Windows 上点名的常是 `scripts\x.mjs`、
