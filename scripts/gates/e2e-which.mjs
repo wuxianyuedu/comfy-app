@@ -8,7 +8,9 @@
  * 改了哪条 spec 的判据就跑哪条，动了公共地基就跑 @critical，动了执行链路就跑
  * 出图主链路。它是**建议跑**，不替代每日全量档。
  *
- * 映射不猜：只认三类登记（见下），宁可说「没登记、自己判断」也不伪造一条精确命令。
+ * 映射不猜：只认登记（见下）与一条恒等规则 —— 改了哪个 spec 文件就建议跑那个
+ * （登记表只给高价值 spec 附判据说明，未登记的 spec 自改同样命中恒等规则，
+ * ISSUE #4942）；宁可说「没登记、自己判断」也不伪造一条精确命令。
  * 与 `gates:which` 同一族口径 —— 转述事实、不命名结论、不落盘、不跑测试。
  *
  * 用法：
@@ -83,6 +85,15 @@ export function mapE2eSelection(changed) {
       specs.push(spec);
       reasons[spec] = `改了该 spec 依赖的 support（${what.join(" / ")}）`;
     }
+  }
+  /* 恒等映射（ISSUE #4942）：改动面里出现哪个 `e2e/**.spec.ts`，它自己就是要跑的
+     那条 —— 登记表只收了高价值 spec 的判据说明，没登记的 spec（如
+     nav-auto-collapse）自改时同样该被建议跑自己，而不是落进「无登记、自行判断」。
+     已被登记面命中的 spec 保持原说明，不在这里覆盖。 */
+  for (const f of files) {
+    if (!f.startsWith("e2e/") || !f.endsWith(".spec.ts") || specs.includes(f)) continue;
+    specs.push(f);
+    reasons[f] = "改了这条 spec 本身 ⇒ 它就是该跑的那条";
   }
   /** @type {string[]} */
   const broad = [];
