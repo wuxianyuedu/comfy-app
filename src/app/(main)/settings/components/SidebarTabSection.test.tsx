@@ -72,11 +72,11 @@ describe("SidebarTabSection 的配置面", () => {
     render(<SidebarTabSection />);
     // 十三项全局视图（首页是固定页签，不在配置面内）；设置与 UI 控件总览也算在内
     expect(screen.getAllByRole("radiogroup")).toHaveLength(13);
-    expect(checkedMode("模型适配")).toBe("共享标签页");
-    expect(checkedMode("模型")).toBe("独立标签页");
-    /* ISSUE #3798：非侧栏的两屏出现在配置面里，默认档位分别是共享 / 独立。 */
+    expect(checkedMode("模型适配")).toBe("独立标签页");
+    expect(checkedMode("模型")).toBe("共享标签页");
+    /* ISSUE #3798：非侧栏的两屏出现在配置面里；出厂默认两屏都是共享档。 */
     expect(checkedMode("设置")).toBe("共享标签页");
-    expect(checkedMode("UI 控件总览")).toBe("独立标签页");
+    expect(checkedMode("UI 控件总览")).toBe("共享标签页");
     /* ISSUE #4868：资产库转正后同走一份配置，默认独立标签页。 */
     expect(checkedMode("资产库")).toBe("独立标签页");
     /* ISSUE #5009：角色库与资产库同族，默认独立标签页。 */
@@ -89,16 +89,17 @@ describe("SidebarTabSection 的配置面", () => {
     controller.section.setMode.mockClear();
     render(<SidebarTabSection />);
 
-    const shared = within(groupOf("UI 控件总览")).getAllByRole("radio")[1];
-    if (!shared) {
-      throw new Error("「UI 控件总览」组里没有第二个 radio");
+    /* 出厂默认是共享档：点另一档（独立）才是一次真改动。 */
+    const independent = within(groupOf("UI 控件总览")).getAllByRole("radio")[0];
+    if (!independent) {
+      throw new Error("「UI 控件总览」组里没有第一个 radio");
     }
-    await user.click(shared);
+    await user.click(independent);
 
     expect(controller.section.setMode).toHaveBeenCalledTimes(1);
     expect(controller.section.setMode.mock.calls[0]).toEqual([
       "uiKit",
-      "shared" satisfies SidebarTabMode,
+      "independent" satisfies SidebarTabMode,
     ]);
   });
 
@@ -108,16 +109,17 @@ describe("SidebarTabSection 的配置面", () => {
     controller.section.setMode.mockClear();
     render(<SidebarTabSection />);
 
-    const shared = within(groupOf("模型")).getAllByRole("radio")[1];
-    if (!shared) {
-      throw new Error("「模型」组里没有第二个 radio");
+    /* 出厂默认是共享档：点另一档（独立）才是一次真改动。 */
+    const independent = within(groupOf("模型")).getAllByRole("radio")[0];
+    if (!independent) {
+      throw new Error("「模型」组里没有第一个 radio");
     }
-    await user.click(shared);
+    await user.click(independent);
 
     expect(controller.section.setMode).toHaveBeenCalledTimes(1);
     const call = controller.section.setMode.mock.calls[0];
     expect(call?.[0]).toBe("models");
-    expect(call?.[1]).toBe("shared" satisfies SidebarTabMode);
+    expect(call?.[1]).toBe("independent" satisfies SidebarTabMode);
   });
 
   it("没有「保存」那个按钮了（改一档即存本机，ISSUE #3948）", () => {

@@ -180,14 +180,9 @@ describe("瞬时页签与配置面（ISSUE #1784 / #3623 / #3798）", () => {
      而界面上不会有任何东西提示「这一页的规则变了」。所以逐项钉死 ——
      以后想把某屏改成切走即关，必须先来改这里并说明理由。
      ⚠️ 它断言的是**项目默认**那份配置下的行为（出厂即如此，用户改了是他自己的选择）。
-     ISSUE #3798：UI 控件总览从「切走即关」改成「切走不关」，且非侧栏界面
-     （设置 / 控件总览）也进配置面 —— 判据只有配置，注册表不再写死标记。 */
-  const TRANSIENT_IDS: Array<WorkspaceView> = [
-    "settings",
-    "model-adapters",
-    "model-test",
-    "mode-contract",
-  ];
+     出厂默认（sidebar-tab-defaults.json）：models / settings / uiKit 是共享标签页
+     （切走即关），其余是独立标签页。 */
+  const TRANSIENT_IDS: Array<WorkspaceView> = ["models", "settings", "uiKit"];
 
   it("恰好这几项是瞬时页签（切走即关），其余都不是", () => {
     const config = defaultSidebarTabConfig();
@@ -199,10 +194,11 @@ describe("瞬时页签与配置面（ISSUE #1784 / #3623 / #3798）", () => {
       "home",
       "canvas",
       "workshop",
-      "models",
       "console",
-      /* #3798 的核心验收：对照基元时要来回切别处看效果，切走不能关。 */
-      "uiKit",
+      /* 模型适配 / 测试模型 / 模式契约出厂是独立标签页：切走不关。 */
+      "model-adapters",
+      "model-test",
+      "mode-contract",
     ];
     for (const id of nonTransientIds) {
       expect(isTransientView(id, config)).toBe(false);
@@ -226,18 +222,20 @@ describe("瞬时页签与配置面（ISSUE #1784 / #3623 / #3798）", () => {
     const ids = configurableTabViews().map((item) => item.id);
     expect(ids).toContain("settings");
     expect(ids).toContain("uiKit");
-    /* 默认：设置切走即关、控件总览切走不关；反过来配一份就整体翻转 ——
-       证明没有藏在注册表里的第二份意见（旧实现里这两屏永远走写死的标记）。 */
+    /* 默认：设置 / 控件总览切走即关（共享）、测试模型切走不关（独立）；反过来
+       配一份就整体翻转 —— 证明没有藏在注册表里的第二份意见（旧实现里这两屏
+       永远走写死的标记）。 */
     const defaults = defaultSidebarTabConfig();
     expect(isTransientView("settings", defaults)).toBe(true);
-    expect(isTransientView("uiKit", defaults)).toBe(false);
+    expect(isTransientView("uiKit", defaults)).toBe(true);
+    expect(isTransientView("model-test", defaults)).toBe(false);
     const flipped: SidebarTabConfig = {
       ...defaults,
       settings: "independent",
-      uiKit: "shared",
+      "model-test": "shared",
     };
     expect(isTransientView("settings", flipped)).toBe(false);
-    expect(isTransientView("uiKit", flipped)).toBe(true);
+    expect(isTransientView("model-test", flipped)).toBe(true);
   });
 
   it("项目默认那份 JSON 恰好覆盖配置面内的每一项（漏登记 = 那一屏没得配，ISSUE #3798）", () => {

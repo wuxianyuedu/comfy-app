@@ -198,7 +198,7 @@ describe("HistoryDetailModal 工作流参数按 IO 端口渲染", () => {
 describe("HistoryDetailModal 模式 / 模型名 / 参考图（ISSUE #4855）", () => {
   it("头部展示模式标签与模型名（与列表卡同一套身份信息）", () => {
     renderModal({ ...TASK_DETAIL_BASE, type: "I2I", modelName: "minimax_h3" });
-    expect(screen.getByText("图生图")).toBeTruthy();
+    expect(screen.getByText("图像编辑")).toBeTruthy();
     expect(screen.getByText("minimax_h3")).toBeTruthy();
   });
 

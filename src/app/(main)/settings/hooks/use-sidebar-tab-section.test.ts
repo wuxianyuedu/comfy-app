@@ -65,7 +65,8 @@ describe("侧边栏分区的控制器", () => {
       result.current.setMode("console", "shared");
     });
     expect(result.current.draft?.console).toBe("shared");
-    expect(result.current.draft?.models).toBe("independent");
+    /* models 的出厂档位是共享：没动它，草稿里保持默认值。 */
+    expect(result.current.draft?.models).toBe("shared");
   });
 
   it("改一档即存本机（不再有「保存」那一步，ISSUE #3948）", async () => {

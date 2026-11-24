@@ -45,23 +45,23 @@ describe("项目默认（跟代码走的那份）", () => {
     }
   });
 
-  it("模型适配 / 测试模型 / 模式契约出厂是共享标签页，其余是独立标签页", () => {
+  it("模型 / 设置 / UI 控件总览出厂是共享标签页，其余是独立标签页", () => {
     const config = projectSidebarTabConfig();
-    expect(config["model-adapters"]).toBe("shared");
-    expect(config["model-test"]).toBe("shared");
-    expect(config["mode-contract"]).toBe("shared");
-    expect(config.models).toBe("independent");
-    expect(config.console).toBe("independent");
-    /* ISSUE #3798：非侧栏的两屏也有出厂档位 —— 设置读过即走，控件总览切走不关。
-       漏登记任何一屏，它就没有配置条目、界面上也不出现那一行。 */
+    expect(config.models).toBe("shared");
     expect(config.settings).toBe("shared");
-    expect(config.uiKit).toBe("independent");
+    expect(config.uiKit).toBe("shared");
+    expect(config["model-adapters"]).toBe("independent");
+    expect(config["model-test"]).toBe("independent");
+    expect(config["mode-contract"]).toBe("independent");
+    expect(config.console).toBe("independent");
+    /* ISSUE #3798：非侧栏的两屏也有出厂档位 —— 漏登记任何一屏，它就没有
+       配置条目、界面上也不出现那一行。 */
   });
 
   it("返回的是副本：调用方改了它不会污染下一位调用方", () => {
     const first = projectSidebarTabConfig();
-    first.models = "shared";
-    expect(projectSidebarTabConfig().models).toBe("independent");
+    first.models = "independent";
+    expect(projectSidebarTabConfig().models).toBe("shared");
   });
 });
 

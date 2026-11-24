@@ -64,7 +64,7 @@ describe("ModelTagManager（标签库按模式计数，ISSUE #4102）", () => {
     expect(screen.queryByText(/^\d+ 个工作流$/)).toBeNull();
     /* 模式胶囊用中文标签（T2I → 文生图 …），同一工作流占两个模式就出两枚。 */
     expect(screen.getByText("文生图")).toBeTruthy();
-    expect(screen.getByText("图生图")).toBeTruthy();
+    expect(screen.getByText("图像编辑")).toBeTruthy();
     expect(screen.getByText("文生视频")).toBeTruthy();
     /* 没有绑定的标签如实显示「未绑定」，不冒充 0 个模式以外的状态。 */
     expect(screen.getByText("未绑定")).toBeTruthy();
