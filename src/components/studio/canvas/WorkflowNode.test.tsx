@@ -363,3 +363,33 @@ describe("LoadImage 的「选择文件上传」行不渲染", () => {
     expect(screen.queryByText("选择文件上传")).not.toBeInTheDocument();
   });
 });
+
+describe("节点参数文本可选可复制（#4932）", () => {
+  it("widget 行的参数名与值井带 nodrag + select-text：按住拖动是选字，不是拖节点", () => {
+    renderFlowNode(nodeData({ rawInputs: RAW_INPUTS }));
+    const row = htmlEl(document.querySelector('[data-input-key="seed"]'), "seed 参数行");
+    const spans = [...row.querySelectorAll("span")];
+    /* 按形态特征取行，不按文本：标签会被 friendlyInputName 映射成中文。 */
+    const label = spans.find((span) => span.className.includes("wrap-break-word"));
+    const value = spans.find((span) => span.className.includes("bg-canvas-deep"));
+    expect(label).toBeDefined();
+    expect(value).toBeDefined();
+    /* nodrag：React Flow v12 会把无 nodrag 元素上的 mousedown 当成节点拖拽
+     * 手势，文本永远选不中；select-text：恢复画布容器 user-select:none
+     * 掉的可选性。两类缺一不可。 */
+    for (const span of [label!, value!]) {
+      expect(span.className).toContain("nodrag");
+      expect(span.className).toContain("select-text");
+    }
+  });
+
+  it("顶部针脚行的输入名同样可选（nodrag + select-text）", () => {
+    renderFlowNode(nodeData({ rawInputs: RAW_INPUTS }));
+    const inRow = htmlEl(document.querySelector('[data-pin-input="model"]'), "model 针脚行");
+    const spans = [...inRow.querySelectorAll("span")];
+    const selectable = spans.filter(
+      (span) => span.className.includes("nodrag") && span.className.includes("select-text"),
+    );
+    expect(selectable.length).toBeGreaterThan(0);
+  });
+});
