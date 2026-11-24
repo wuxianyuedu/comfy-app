@@ -129,15 +129,8 @@ test.describe("临时页签（侧栏）@critical", () => {
     await openTempView(page, "设置");
     await expect(tabs(page)).toHaveCount(2);
 
-    for (const dark of [true, false]) {
-      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
-      await page.evaluate((d) => {
-        document.documentElement.classList.toggle("dark", d);
-      }, dark);
-      const label = dark ? "暗色" : "浅色";
-
-      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
-      const states = await tabs(page).evaluateAll((els) =>
+    const readStates = () =>
+      tabs(page).evaluateAll((els) =>
         els.map((el) => {
           const before = getComputedStyle(el, "::before");
           return {
@@ -148,6 +141,27 @@ test.describe("临时页签（侧栏）@critical", () => {
           };
         }),
       );
+
+    for (const dark of [true, false]) {
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
+      await page.evaluate((d) => {
+        document.documentElement.classList.toggle("dark", d);
+      }, dark);
+      const label = dark ? "暗色" : "浅色";
+
+      /* 切页签 / 切主题后，左缘色条的 opacity 走 transition（ISSUE #4946）：
+       * 采样早了读到的是中间值（CI 实测 0.54 / 0.82，断言未选中项色条应透明
+       * 就会假红）。先轮询等它收敛到终态再取快照做下面的逐条断言 —— 是「等
+       * 动画收敛」，不是抬单次断言的超时。 */
+      await expect
+        .poll(async () => {
+          const off = (await readStates()).find((s) => !s.active);
+          return Number(off?.barOpacity ?? "1");
+        })
+        .toBeLessThan(0.1);
+
+      // oxlint-disable-next-line no-await-in-loop -- 同上，串行轮次
+      const states = await readStates();
       const on = states.find((s) => s.active);
       const off = states.find((s) => !s.active);
       if (!on || !off) {
