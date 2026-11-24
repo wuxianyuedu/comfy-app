@@ -187,8 +187,10 @@ export type TaskFailure = {
  *  形状即 `~/lib/progress` 的 `SampleProgressSnapshot`，别处（状态栏聚合）同源。 */
 export type TaskProgressSnapshot = SampleProgressSnapshot;
 
-/** 任务详情行里参与进度快照的几个字段（tRPC 回来，时刻可能是 Date 或 ISO 串）。 */
-type TaskProgressRow =
+/** 任务详情行里参与进度快照的几个字段（tRPC 回来，时刻可能是 Date 或 ISO 串）。
+ *  导出：它是公开函数 `taskProgressSnapshot` 参数形状的一部分，typedoc 要收进
+ *  文档（私有会被判成 referenced-but-not-included 的 warning，自检翻红）。 */
+export type TaskProgressRow =
   | {
       claimedAt?: Date | string | number | null;
       createdAt?: Date | string | number | null;
