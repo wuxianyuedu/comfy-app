@@ -364,3 +364,76 @@ describe("useWorkflowLibrary", () => {
     });
   });
 });
+
+/* ISSUE #4974：画布接线落库（patchParamMap / patchWorkflowIO）后，列表角标的
+ * 封装状态由行的 paramMap / workflowIO 派生 —— 落库必须失效 workflow.list 重拉，
+ * 否则列表（30s staleTime + 关闭窗口聚焦刷新）拿到的还是旧行，角标停在 ⚠️，
+ * 要切走再切回才刷新。
+ *
+ * ⚠️ 环境形态记录（happy-dom）：mutation 的请求体在 happy-dom 的 fetch 里丢失，
+ * mock 服务端收到的 input 是 undefined —— 所以这里**只**断言「失效重拉发生」，
+ * 断不了「重拉带回新值」（那要在真浏览器 / 真服务端里验，见 e2e 与人工核对）。 */
+describe("画布接线落库后的列表同步（ISSUE #4974）", () => {
+  it("patchParamMap 落库后失效重拉 workflow.list（角标随新行数据刷新）", async () => {
+    behavior = {
+      workflows: [row({ id: "wf-1", name: "demo", paramMap: { old: true } })],
+      localPending: [],
+      tags: [],
+    };
+    const { result } = renderHook(() => useWorkflowLibrary(), {
+      wrapper: makeWrapper(),
+    });
+    await expect.poll(() => result.current.workflows).toHaveLength(1);
+
+    const callsBefore = listCalls;
+    const nextMap = { "source.mode:T2I": { prompt: "p-1" } };
+    await act(async () => {
+      await result.current.patchParamMap("wf-1", nextMap);
+    });
+
+    /* workflow.list 被失效重拉过：列表拿到的不再是旧行，角标据此即时翻 ✓
+     * —— 不靠 30s staleTime 到期，也不用切视图。 */
+    expect(listCalls).toBeGreaterThan(callsBefore);
+  });
+
+  it("patchWorkflowIO 落库后同样重拉 workflow.list", async () => {
+    behavior = {
+      workflows: [row({ id: "wf-1", name: "demo" })],
+      localPending: [],
+      tags: [],
+    };
+    const { result } = renderHook(() => useWorkflowLibrary(), {
+      wrapper: makeWrapper(),
+    });
+    await expect.poll(() => result.current.workflows).toHaveLength(1);
+
+    const callsBefore = listCalls;
+    const nextIO = { "p:prompt": { seedMode: "fixed" } };
+    await act(async () => {
+      await result.current.patchWorkflowIO("wf-1", nextIO);
+    });
+
+    expect(listCalls).toBeGreaterThan(callsBefore);
+  });
+
+  it("落库失败不失效列表：行保持旧值（未落库就没有新状态可刷）", async () => {
+    behavior = {
+      workflows: [row({ id: "wf-1", name: "demo", paramMap: { old: true } })],
+      localPending: [],
+      tags: [],
+      updateError: "更新失败",
+    };
+    const { result } = renderHook(() => useWorkflowLibrary(), {
+      wrapper: makeWrapper(),
+    });
+    await expect.poll(() => result.current.workflows).toHaveLength(1);
+
+    const callsBefore = listCalls;
+    await act(async () => {
+      await result.current.patchParamMap("wf-1", { new: true });
+    });
+
+    expect(result.current.workflows[0]?.paramMap).toEqual({ old: true });
+    expect(listCalls).toBe(callsBefore);
+  });
+});

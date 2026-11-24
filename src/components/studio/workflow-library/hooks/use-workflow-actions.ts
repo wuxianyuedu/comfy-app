@@ -167,12 +167,13 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     [setWorkflows, updateMut, report, load],
   );
 
-  /** 整体落库 workflowIO（详情预览里改 seed「控件后行为」等参数级配置）。
-   *  成功后失效 detail 缓存，预览面板按富化后的数据重渲染。 */
   /** 对外参数落点（`paramMap.source.mode:<模式>`）持久化。
    *
-   *  与 `patchWorkflowIO` 同一路径（PATCH 整列 + 失效两个 detail 缓存）：库里
-   *  拖一条线改落点，预览与编辑器都不该读到一个过期的 paramMap。 */
+   *  与 `patchWorkflowIO` 同一路径（PATCH 整列 + 失效 detail / detailFull / list
+   *  缓存）：库里拖一条线改落点，预览与编辑器都不该读到一个过期的 paramMap。
+   *  **列表也要失效**（ISSUE #4974）：列表角标的封装状态由行的 paramMap 派生，
+   *  只失效 detail 的话，列表查询（30s staleTime + 关闭窗口聚焦刷新）拿到的
+   *  还是旧行，角标停在 ⚠️ 直到切视图重挂。 */
   const patchParamMap = useCallback(
     async (id: string, paramMap: Record<string, unknown>) => {
       await runAsyncAction(
@@ -180,6 +181,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           await updateMut.mutateAsync({ id, paramMap });
           await queryClient.invalidateQueries(trpc.workflow.detail.queryFilter({ id }));
           await queryClient.invalidateQueries(trpc.workflow.detailFull.queryFilter({ id }));
+          await queryClient.invalidateQueries(trpc.workflow.list.queryFilter());
         },
         { report, failureText: "更新参数映射失败" },
       );
@@ -187,15 +189,18 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
     [updateMut, trpc, queryClient, report],
   );
 
+  /** 整体落库 workflowIO（详情预览里改 seed「控件后行为」等参数级配置）。
+   *  成功后失效 detail / detailFull / list 缓存：detailFull 才是预览表单的数据源
+   * （它带服务端富化的 defaultValue），只失效 detail 的话富化 IO 的缓存查询不会
+   *  重拉 → 默认值不刷新；列表同理（角标随行数据的封装状态走，ISSUE #4974）。 */
   const patchWorkflowIO = useCallback(
     async (id: string, workflowIO: Record<string, unknown>) => {
       await runAsyncAction(
         async () => {
           await updateMut.mutateAsync({ id, workflowIO });
-          /* detailFull 才是预览表单的数据源（它带服务端富化的 defaultValue），
-           * 只失效 detail 的话富化 IO 的缓存查询不会重拉 → 默认值不刷新。 */
           await queryClient.invalidateQueries(trpc.workflow.detail.queryFilter({ id }));
           await queryClient.invalidateQueries(trpc.workflow.detailFull.queryFilter({ id }));
+          await queryClient.invalidateQueries(trpc.workflow.list.queryFilter());
         },
         { report, failureText: "更新参数配置失败" },
       );
