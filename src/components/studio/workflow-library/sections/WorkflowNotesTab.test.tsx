@@ -4,13 +4,14 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { ChatArgs } from "~/lib/llm/browser";
 import type { WorkflowNote } from "~/components/studio/workflow-types";
 import { WorkflowNotesTab } from "./WorkflowNotesTab";
 
 /* LLM 网络层打桩：本文件只判页签渲染与翻译状态机，真链路在 /api/llm。 */
-const completeChat = vi.fn();
+const completeChat = vi.fn<(args: ChatArgs) => Promise<string>>();
 vi.mock("~/lib/llm/browser", () => ({
-  completeChat: (...args: Array<unknown>) => completeChat(...args),
+  completeChat: (args: ChatArgs) => completeChat(args),
 }));
 
 afterEach(() => {
@@ -52,15 +53,13 @@ describe("WorkflowNotesTab — 说明页签（#4963）", () => {
       expect(screen.getByText("该节点加载首帧图片。")).toBeInTheDocument();
     });
     expect(completeChat).toHaveBeenCalledTimes(1);
-    /* 系统提示 + 正文两条消息，taskType=chat —— 复用现有 LLM 链路。 */
-    const args = completeChat.mock.calls[0]![0] as {
-      messages: Array<{ content: string; role: string }>;
-      opts: { taskType: string };
-    };
+    /* 系统提示 + 正文两条消息，taskType=chat —— 复用现有 LLM 链路。
+       mock 按真实签名 ChatArgs 定型，读数不再走 any 断言。 */
+    const args = completeChat.mock.calls[0]![0];
     expect(args.messages).toHaveLength(2);
     expect(args.messages[0]!.role).toBe("system");
     expect(args.messages[1]!.content).toBe("This node loads the first frame image.");
-    expect(args.opts.taskType).toBe("chat");
+    expect(args.opts?.taskType).toBe("chat");
   });
 
   it("翻译失败给可读错误与重试出口，不静默吞", async () => {

@@ -172,10 +172,10 @@ describe("侧栏「临时页签」组（ISSUE #4770 / #4798）", () => {
       activeViewKey: tabKey("settings", null),
       tabs: tabsOf(["home", null], ["settings", null], ["workshop", "p1"]),
     });
-    fireEvent.pointerDown(tempButton("关闭 设置"));
+    fireEvent.pointerDown(tempButton("关闭 设置 页签"));
     expect(onCloseViewTab).toHaveBeenCalledWith(tabKey("settings", null));
     /* 首页固定页签：组里不列它，自然也没有它的关闭按钮。 */
-    expect(screen.queryByRole("button", { name: "关闭 首页" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "关闭 首页 页签" })).toBeNull();
   });
 
   it("「+」菜单在组内，点选项走 onOpenView", () => {
@@ -220,7 +220,7 @@ describe("侧栏「临时页签」组（ISSUE #4770 / #4798）", () => {
     fireEvent.click(tempButton("ComfyUI"));
     expect(useShellTabs.getState().activeTabId).toBe("comfyui");
 
-    fireEvent.pointerDown(tempButton("关闭 ComfyUI"));
+    fireEvent.pointerDown(tempButton("关闭 ComfyUI 页签"));
     expect(useShellTabs.getState().tabs.some((tab) => tab.id === "comfyui")).toBe(false);
   });
 
