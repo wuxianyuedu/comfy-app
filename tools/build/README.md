@@ -17,6 +17,7 @@ Windows 双击入口，逻辑在 [`../scripts/`](../scripts/) 同名文件里（
 | `build-tauri-release.ps1` | `src-tauri/target/release/app.exe`（**唯一入口**） | 改完 Rust / 窗口配置 / 启动页后（**必须带 `--features custom-protocol`**，否则启动页会被导航到 devUrl 且资源不内嵌） |
 | `build-standalone.ps1` | 完整生产构建（`pnpm tauri build --no-bundle`） | 要「双击即独立运行、不连 dev server」的分发场景 |
 | `rebuild-static.ps1` | 重建 `src-tauri/static` | `static` 被污染导致黑屏时，先跑它再重编壳 |
+| `clean-target.ps1` | （无——按档位删除 `src-tauri/target` 下的构建产物） | 磁盘吃紧（cargo 报 `os error 112`）或定期保养；默认只清 `incremental/`，`-Release` / `-All`（= `cargo clean`）加大档位，`-DryRun` 只列清单（跨平台 `pnpm target:prune`，ISSUE #4988） |
 
 ## 一键发布
 
