@@ -153,6 +153,7 @@ test.describe("临时页签（侧栏）@critical", () => {
        * 采样早了读到的是中间值（CI 实测 0.54 / 0.82，断言未选中项色条应透明
        * 就会假红）。先轮询等它收敛到终态再取快照做下面的逐条断言 —— 是「等
        * 动画收敛」，不是抬单次断言的超时。 */
+      // oxlint-disable-next-line no-await-in-loop -- e2e 按轮次串行取元素/断言，并行会让失败归因与截图错位
       await expect
         .poll(async () => {
           const off = (await readStates()).find((s) => !s.active);

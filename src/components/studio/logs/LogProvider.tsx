@@ -22,6 +22,7 @@ import {
   serialize,
   useLogStore,
 } from "./log-store";
+import { drainPendingConsoleEntries, queueConsoleEntry } from "./console-relay";
 
 export type { LogEntry, LogFilter, LogLevel, LogOriginFilter } from "./log-store";
 
@@ -120,13 +121,16 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
         }
         const location = captureLocation();
         const message = serialize(args);
-        queueMicrotask(() => {
-          addEntry({
-            level,
-            message,
-            source: "console",
-            location,
-          });
+        /* 入库走「入队 → 轮询回调排空」（console-relay，ISSUE #4919）：console.*
+         * 可能在任何组件的渲染期被触发，直接（或微任务里）写 store 会在渲染期
+         * setState 更新 LogPanel —— React 的 set-state-in-render 禁则。队列是
+         * 纯数组操作，任何时刻调用都安全；打印时刻此刻记下，入库沿用。 */
+        queueConsoleEntry({
+          level,
+          message,
+          source: "console",
+          location,
+          time: Date.now(),
         });
       };
 
@@ -256,6 +260,10 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") {
       return;
     }
+
+    /* 排空 console 中继队列（ISSUE #4919）：入库只发生在轮询回调这类非渲染期，
+     * 任何渲染期的 console.* 都不再能触发渲染期 setState。 */
+    drainPendingConsoleEntries(addEntry);
 
     const pollSource = async (source: PollSource) => {
       try {
