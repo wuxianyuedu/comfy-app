@@ -33,7 +33,8 @@ function inferMediaType(
   if (coverMediaType === "image") {
     return "image";
   }
-  if (/video|2V$|^T2V|^I2V|FLF/i.test(taskType)) {
+  // `2VA$`：音视频档（T2VA / FLF2VA / R2VA，ISSUE #4999）——产物是含音频轨的视频。
+  if (/video|2V$|2VA$|^T2V|^I2V|FLF/i.test(taskType)) {
     return "video";
   }
   if (/audio|tts|voice/i.test(taskType)) {

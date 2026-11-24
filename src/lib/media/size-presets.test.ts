@@ -306,6 +306,12 @@ describe("size-presets：场景与改动判定", () => {
     expect(sceneFromMode(null)).toBe("image");
   });
 
+  it("模式码推场景：音视频档（*VA，#4999）也走视频表", () => {
+    expect(sceneFromMode("T2VA")).toBe("video");
+    expect(sceneFromMode("flf2va")).toBe("video");
+    expect(sceneFromMode("R2VA")).toBe("video");
+  });
+
   it("默认表未被改动；改一格即视为已改", () => {
     expect(sceneIsModified("image", DEFAULT_SIZE_PRESET_TABLE)).toBe(false);
     const edited = structuredClone(DEFAULT_SIZE_PRESET_TABLE);

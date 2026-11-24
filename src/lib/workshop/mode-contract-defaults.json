@@ -213,5 +213,39 @@
     "mode": "T2S",
     "inputs": ["prompt", "negative", "size", "seed", "lora-name", "lora-strength"],
     "required": ["prompt"]
+  },
+  {
+    "mode": "T2VA",
+    "inputs": ["prompt", "negative", "size", "duration", "seed", "lora-name", "lora-strength"],
+    "required": ["prompt"]
+  },
+  {
+    "mode": "FLF2VA",
+    "inputs": [
+      "prompt",
+      "negative",
+      "first-frame",
+      "last-frame",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "required": ["prompt"]
+  },
+  {
+    "mode": "R2VA",
+    "inputs": [
+      "prompt",
+      "negative",
+      "first-frame",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength"
+    ],
+    "required": ["prompt"]
   }
 ]
