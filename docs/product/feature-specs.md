@@ -1854,6 +1854,8 @@
   关键词过滤生效，树角标计数随过滤口径变化；
   ③ 滑块拖到不同档位，网格列宽随之变化且刷新后保持（localStorage）；
   ④ 空库给出「先去历史加入资产」的引导，不是白屏。
+   ⑤ 内容区用**不封顶**档（`width="full"`，#5002）：左侧目录树贴齐页面内容区左边距
+   （只留统一容器的 `px-*`），不得被 1200px 居中窄栏推到中间、在宽屏留大片空白。
 - 落点：`src/components/studio/assets/AssetLibrary.tsx`（视图）、
   `src/components/studio/assets/hooks/use-asset-library.ts`（逻辑层）、
   `src/components/studio/assets/AssetFolderTree.tsx` + `hooks/use-asset-folders.ts`（目录树，见 FR-AL-04）、
