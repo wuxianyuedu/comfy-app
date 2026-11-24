@@ -48,7 +48,10 @@ type Payload = {
   sessions: Array<{
     crashed: boolean;
     id: string;
+    /* #4959：会话标记随份下发（可选字段，旧包 / 别的来源为 null）。 */
+    launchMode?: string | null;
     scope: "current" | "runs";
+    sessionEnded?: boolean | null;
     startedAt: number | null;
     title: string;
   }>;
@@ -107,12 +110,19 @@ function makeFile(name: string, content: string): void {
 function makePack(
   name: string,
   files: Record<string, string>,
-  opts: { crashed?: boolean; startedAt?: Date } = {},
+  opts: { crashed?: boolean; lastSession?: Record<string, unknown>; startedAt?: Date } = {},
 ): void {
   const dir = path.join(runsDir, name);
   fs.mkdirSync(path.join(dir, "services"), { recursive: true });
   for (const [file, content] of Object.entries(files)) {
     fs.writeFileSync(path.join(dir, "services", file), content, "utf8");
+  }
+  if (opts.lastSession !== undefined) {
+    fs.writeFileSync(
+      path.join(dir, "services", "comfyui-last-session.json"),
+      JSON.stringify(opts.lastSession),
+      "utf8",
+    );
   }
   fs.writeFileSync(
     path.join(dir, "run.json"),
@@ -496,5 +506,60 @@ describe("GET /api/logs/sessions · close 清理错误不覆盖原始异常（#4
     } finally {
       openSpy.mockRestore();
     }
+  });
+});
+
+/* ── #4959：会话标记随列表下发，视图据此区分「保活移交」与「真外部实例」─────
+ * 标记文件（comfyui-last-session.json）在 services/ 这个**共享**目录下，只有
+ * comfyui 这一个来源按名取它；归档份取所在包的，本次运行的份取 current/ 的。 */
+describe("GET /api/logs/sessions · 会话标记（#4959）", () => {
+  const mark = {
+    pid: null,
+    mode: "keepAlive",
+    startedAt: "2026-11-24T05:37:38.340Z",
+    exited: null,
+  };
+
+  it("归档份带所在包的标记（keepAlive 未记录退出 = 保活移交的指纹）", async () => {
+    makePack(
+      "2026-11-24_162336-07999d",
+      { "comfyui-runtime-20261124-133738.log": "x\n" },
+      { crashed: true, lastSession: mark },
+    );
+    const { data } = await get("source=comfyui-runtime");
+    expect(data.sessions[0]!.launchMode).toBe("keepAlive");
+    expect(data.sessions[0]!.sessionEnded).toBe(false);
+  });
+
+  it("本次运行的份带 current/services 下的标记；没写时为 null", async () => {
+    makeFile("comfyui-runtime-20261124-170000.log", "本次\n");
+    fs.writeFileSync(
+      path.join(servicesDir, "comfyui-last-session.json"),
+      JSON.stringify(mark),
+      "utf8",
+    );
+    const { data } = await get("source=comfyui-runtime");
+    expect(data.sessions[0]!.scope).toBe("current");
+    expect(data.sessions[0]!.launchMode).toBe("keepAlive");
+    expect(data.sessions[0]!.sessionEnded).toBe(false);
+  });
+
+  it("current/ 没写标记 → 本次运行的份两格为 null（读不出不当「已退出」）", async () => {
+    makeFile("comfyui-runtime-20261124-170000.log", "本次\n");
+    const { data } = await get("source=comfyui-runtime");
+    expect(data.sessions[0]!.scope).toBe("current");
+    expect(data.sessions[0]!.launchMode).toBeNull();
+    expect(data.sessions[0]!.sessionEnded).toBeNull();
+  });
+
+  it("别的来源不沾 comfyui 的标记（共享目录按来源点名）", async () => {
+    makePack(
+      "2026-11-24_162336-07999d",
+      { "ollama-runtime-20261124-133738.log": "别的来源\n" },
+      { lastSession: mark },
+    );
+    const { data } = await get("source=ollama-runtime");
+    expect(data.sessions[0]!.launchMode).toBeNull();
+    expect(data.sessions[0]!.sessionEnded).toBeNull();
   });
 });

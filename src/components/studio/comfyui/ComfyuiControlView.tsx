@@ -30,6 +30,7 @@ import {
   comfyConfigHint,
   comfyDotState,
   comfyDotTitle,
+  comfyExternalInstanceNotice,
   comfyStatusParts,
   isComfyBusy,
 } from "./comfyui-control-config";
@@ -46,16 +47,8 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
   const running = c.status?.up === true;
   const configHint = comfyConfigHint(c.instance);
   const statusParts = comfyStatusParts(c.status, flags);
-  /* 外部拉起的实例没有本应用的 stdout 捕获（#4891）：ComfyUI 在跑、而最新的
-     运行日志会话已「退出」（或压根没有会话）时，当前实例就不是本应用
-     launcher 拉起的（如 Comfy Desktop 拉起）—— 明确说出来，别让面板里
-     两天前的退出会话冒充当前日志。 */
-  const newestRuntimeSession = c.log.sessions[0];
-  const newestRuntimeSessionExited = newestRuntimeSession?.title.includes("退出") === true;
-  const externalInstanceNotice =
-    running && (newestRuntimeSession === undefined || newestRuntimeSessionExited)
-      ? "当前 ComfyUI 实例在运行，但不是本应用 launcher 拉起的（如由 Comfy Desktop 拉起）：应用侧没有它的 stdout 捕获，本面板只有历史会话的启动日志；当前实例的日志请看 Comfy Desktop 侧的控制台 / 日志文件。"
-      : null;
+  /* 提示条判据收在 config（#4891 立题、#4959 修正）：视图只渲染，不自拼文案。 */
+  const externalInstanceNotice = comfyExternalInstanceNotice(running, c.log.sessions[0]);
 
   return (
     /* 弹性列（min-h-full）：内容不足一屏时「运行日志」吃满剩余高度（重设计稿），

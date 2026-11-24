@@ -31,6 +31,9 @@
  * `current/` 下的份是裸文件名，归档份是 `<包名>/<文件名>`。客户端原样回传即可，
  * **不解析它** —— 形态判据只在服务端一处。
  */
+/** 那次启动用什么模式拉的（词表与写侧 `ComfySessionMark["mode"]` 同源，见 `lifecycle-session-log.ts`）。 */
+export type LogSessionLaunchMode = "keepAlive" | "bound" | "cli" | "studio";
+
 export type LogSessionMeta = {
   /** 该次运行异常退出（归档包 `run.json` 的 `crashed`）；`current` 恒为 false。 */
   crashed: boolean;
@@ -42,8 +45,19 @@ export type LogSessionMeta = {
    * （同一秒内两次启动的 `-2`、迁移前的旧固定名）不撞成一个 id。
    */
   id: string;
+  /**
+   * 该份日志对应那次启动的进程模式（写侧会话标记 `comfyui-last-session.json`
+   * 的 `mode` 原值；读不到标记文件时为 null）。视图据此区分「保活移交」与
+   * 「真外部实例」（ISSUE #4959）。
+   */
+  launchMode?: LogSessionLaunchMode | null;
   /** `current` = 正在写的本次运行；`runs` = 已归档的历史运行包。 */
   scope: "current" | "runs";
+  /**
+   * 那次启动是否已记录退出：`false` = 未记录（保活移交仍在跑的指纹）；
+   * `true` = 已记录退出；`null` = 没有可读的会话标记。
+   */
+  sessionEnded?: boolean | null;
   /** 该次启动的时刻（毫秒）；迁移前的旧固定名读不出时刻，为 null。 */
   startedAt: number | null;
   /**

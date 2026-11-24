@@ -16,7 +16,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { scanRunPacks } from "./log-run-packs.server";
+import { readLastSessionFacts, scanRunPacks } from "./log-run-packs.server";
 
 let root: string;
 let runs: string;
@@ -34,6 +34,8 @@ afterEach(() => {
 type PackSpec = {
   crashed?: boolean;
   files?: Record<string, string>;
+  /** 写一份会话标记（`comfyui-last-session.json`，#4959）。 */
+  lastSession?: Record<string, unknown>;
   /** 不写 `run.json`（模拟被截断 / 手工搬进来的包）。 */
   noRunJson?: boolean;
 };
@@ -50,6 +52,13 @@ function makePack(name: string, spec: PackSpec = {}): void {
   fs.mkdirSync(svc, { recursive: true });
   for (const [file, content] of Object.entries(spec.files ?? {})) {
     fs.writeFileSync(path.join(svc, file), content, "utf8");
+  }
+  if (spec.lastSession !== undefined) {
+    fs.writeFileSync(
+      path.join(svc, "comfyui-last-session.json"),
+      JSON.stringify(spec.lastSession),
+      "utf8",
+    );
   }
   if (spec.noRunJson === true) {
     return;
@@ -69,6 +78,7 @@ function makePack(name: string, spec: PackSpec = {}): void {
 async function scan(
   source: Parameters<typeof scanRunPacks>[0]["source"] = "comfyui-runtime",
   maxPacks = 50,
+  lastSessionFileName?: string,
 ) {
   return scanRunPacks({
     runsDir: runs,
@@ -76,6 +86,7 @@ async function scan(
     runJsonName: "run.json",
     maxPacks,
     source,
+    lastSessionFileName,
   });
 }
 
@@ -215,5 +226,68 @@ describe("条数上限与 total", () => {
     ]);
     /* 4 个包各 1 份 = 4 份，不受 maxPacks 影响 */
     expect(total).toBe(4);
+  });
+});
+
+describe("会话标记（#4959：区分保活移交与真外部实例）", () => {
+  const mark = {
+    pid: null,
+    mode: "keepAlive",
+    startedAt: "2026-11-24T05:37:38.340Z",
+    exited: null,
+  };
+
+  it("传了 lastSessionFileName 时，包带上会话标记的可判字段", async () => {
+    makePack("2026-11-24_162336-07999d", {
+      files: { "comfyui-runtime-20261124-133738.log": "x\n" },
+      lastSession: mark,
+    });
+    const { packs } = await scan("comfyui-runtime", 50, "comfyui-last-session.json");
+    expect(packs[0]!.lastSession).toEqual({ mode: "keepAlive", ended: false });
+  });
+
+  it("不传文件名（别的来源）→ 不读标记，包的 lastSession 为 null", async () => {
+    makePack("2026-11-24_162336-07999d", {
+      files: { "ollama-runtime-20261124-133738.log": "x\n" },
+      lastSession: mark,
+    });
+    const { packs } = await scan("ollama-runtime");
+    expect(packs[0]!.lastSession).toBeNull();
+  });
+
+  it("标记文件缺失 / 坏 JSON / 不传名 → null（读不出不当「已退出」）", async () => {
+    makePack("2026-11-24_162336-07999d", {
+      files: { "comfyui-runtime-20261124-133738.log": "x\n" },
+    });
+    const svc = path.join(runs, "2026-11-24_162336-07999d", "services");
+    fs.writeFileSync(path.join(svc, "comfyui-last-session.json"), "{not json", "utf8");
+    expect(await readLastSessionFacts(svc, "comfyui-last-session.json")).toBeNull();
+    expect(await readLastSessionFacts(svc, undefined)).toBeNull();
+  });
+
+  it("exited 非空 → ended=true；mode 词表外 → mode=null（外部文件不可信，按白名单判）", async () => {
+    const svc = path.join(runs, "2026-11-24_162336-07999d", "services");
+    fs.mkdirSync(svc, { recursive: true });
+    fs.writeFileSync(
+      path.join(svc, "comfyui-last-session.json"),
+      JSON.stringify({
+        mode: "bound",
+        exited: { at: "2026-11-24T06:00:00.000Z", reason: "exit 1" },
+      }),
+      "utf8",
+    );
+    expect(await readLastSessionFacts(svc, "comfyui-last-session.json")).toEqual({
+      mode: "bound",
+      ended: true,
+    });
+    fs.writeFileSync(
+      path.join(svc, "comfyui-last-session.json"),
+      JSON.stringify({ mode: "something-else", exited: null }),
+      "utf8",
+    );
+    expect(await readLastSessionFacts(svc, "comfyui-last-session.json")).toEqual({
+      mode: null,
+      ended: false,
+    });
   });
 });

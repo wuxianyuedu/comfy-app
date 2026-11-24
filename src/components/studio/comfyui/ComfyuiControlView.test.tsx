@@ -212,6 +212,53 @@ describe("ComfyuiControlView", () => {
       render(<ComfyuiControlView c={controller()} />);
       expect(screen.queryByText(/不是本应用 launcher 拉起的/)).toBeNull();
     });
+
+    /* #4959：归档会话的标题恒带「退出」（那是**那轮应用**怎么结束的，不是那次
+       ComfyUI 会话退出了）。保活移交（上一轮 keepAlive 拉起、未记录退出、实例
+       还活着）不许再被误报成外部拉起 —— 提示要说清「上一轮拉起的保活实例仍在
+       运行」，并指出当前实例日志的真实位置（归档包的 keepalive 日志）。 */
+    const keepalivePack = "2026-11-24_162336-07999d";
+    const handoverSession = {
+      crashed: true,
+      id: `${keepalivePack}/comfyui-runtime-20261124-133738.log`,
+      scope: "runs" as const,
+      startedAt: 3,
+      title: "11-24 13:37:38 · 异常退出 · 07999d",
+      launchMode: "keepAlive" as const,
+      sessionEnded: false,
+    };
+
+    it("运行中 + 归档的保活会话未记录退出 → 按保活移交提示，不报外部拉起（#4959）", () => {
+      render(
+        <ComfyuiControlView
+          c={controller({
+            status: running,
+            log: { ...controller().log, sessions: [handoverSession] },
+          })}
+        />,
+      );
+      const notice = screen.getByText(/保活模式拉起/);
+      expect(notice.textContent).toContain("本轮已接管");
+      /* 日志位置指到归档包，不说「去看 Comfy Desktop」。 */
+      expect(notice.textContent).toContain(keepalivePack);
+      expect(notice.textContent).toContain("comfyui-keepalive-*.log");
+      expect(screen.queryByText(/不是本应用 launcher 拉起的/)).toBeNull();
+    });
+
+    it("运行中 + 归档的保活会话已记录退出 → 仍按外部拉起提示（那个进程已经没了）", () => {
+      render(
+        <ComfyuiControlView
+          c={controller({
+            status: running,
+            log: {
+              ...controller().log,
+              sessions: [{ ...handoverSession, sessionEnded: true }],
+            },
+          })}
+        />,
+      );
+      expect(screen.getByText(/不是本应用 launcher 拉起的/)).toBeInTheDocument();
+    });
   });
 
   it("未配置路径：启动是禁用的，但**给出**去设置页配置的出口", () => {

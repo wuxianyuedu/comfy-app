@@ -32,7 +32,7 @@
 import { compareText } from "~/lib/ordered-set";
 import { formatClock, formatShortDate } from "~/lib/time-format";
 
-import type { LogSessionMeta } from "./log-sessions";
+import type { LogSessionLaunchMode, LogSessionMeta } from "./log-sessions";
 
 /** 归档份 id 的分隔符（包名与文件名两侧都不含，见模块头）。 */
 const PACK_SEP = "/";
@@ -89,12 +89,25 @@ export function parsePackScopedId(id: string): { fileName: string; packName: str
   return { packName, fileName };
 }
 
+/** 一个运行包的会话标记读数（写侧 `comfyui-last-session.json` 的可判字段）。 */
+export type PackLastSession = {
+  /** 是否已记录退出：false = 未记录（保活移交的指纹）；true = 已记录；null = 读不出。 */
+  ended: boolean | null;
+  /** 那次启动的进程模式（词表外为 null）。 */
+  mode: LogSessionLaunchMode | null;
+};
+
 /** `runs/` 里的一个运行包（读目录与 `run.json` 归 `log-run-packs.server.ts`）。 */
 export type RunPack = {
   /** `run.json` 的 `crashed` —— 崩溃现场恰恰最值得看，界面上要标出来。 */
   crashed: boolean;
   /** 这一包里该来源的份（新→旧）；空数组 = 那次运行没启动过这个服务。 */
   files: Array<PackLogFile>;
+  /**
+   * 该包的会话标记（`comfyui-last-session.json`，由 `log-run-packs.server` 读）；
+   * 读不到为 null。包里的份据此带上 `launchMode` / `sessionEnded`（ISSUE #4959）。
+   */
+  lastSession?: PackLastSession | null;
   /** 目录名（`<日期>_<时分秒>-<runId>`），字典序即时间序。 */
   name: string;
   /** `run.json` 的 `startedAt`（毫秒）；读不到时退回名字里的时刻，再读不到为 null。 */
@@ -146,6 +159,8 @@ export function buildRunScopedOptions(
   packs: Array<RunPack>,
   max: number,
   total: number,
+  /* 本次运行的会话标记（`current/services/` 下的那份）；归档份的标记随包走。 */
+  currentLastSession: PackLastSession | null = null,
 ): { sessions: Array<RunScopedOption>; total: number } {
   const out: Array<RunScopedOption> = [];
   /* 本次运行：倒序（最新那次启动在最上面，与整条列表同向）。 */
@@ -156,6 +171,8 @@ export function buildRunScopedOptions(
       startedAt: file.startedAt,
       scope: "current",
       crashed: false,
+      launchMode: currentLastSession?.mode ?? null,
+      sessionEnded: currentLastSession?.ended ?? null,
     });
   }
   for (const pack of packs) {
@@ -167,6 +184,8 @@ export function buildRunScopedOptions(
         startedAt: file.startedAt,
         scope: "runs",
         crashed: pack.crashed,
+        launchMode: pack.lastSession?.mode ?? null,
+        sessionEnded: pack.lastSession?.ended ?? null,
       });
     }
   }
