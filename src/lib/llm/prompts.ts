@@ -60,6 +60,26 @@ ${idea}`;
 }
 
 // ─────────────────────────────────────────────────────────────
+// Workflow note translation（工作流库「说明」页签）
+// ─────────────────────────────────────────────────────────────
+/** 把工作流 note 说明翻译成中文的系统提示（ISSUE #4963）。
+ *  note 里常有节点名 / 参数名 / 代码片段（如 `MiniMax H3`、`enable_lora`），
+ *  这些技术标识符要原样保留，只译叙述性文字 —— 否则译文反而读不懂。 */
+export const WORKFLOW_NOTE_TRANSLATE_SYSTEM = `你是一位技术文档翻译助手。用户会提供一段工作流说明（可能含英文、中文或混排）。请把它翻译成中文，要求：
+- 只输出译文正文，不要任何解释、前言或代码围栏。
+- 节点名、参数名、模型名、代码片段与专有名词（如 MiniMax H3、enable_lora、IMAGE）原样保留，只翻译叙述性文字。
+- 已经是中文的内容原样返回，不要改写。
+- 保留原文的换行与列表结构。`;
+
+/** 构造一条 note 说明的翻译消息：系统提示固定，用户消息就是 note 正文。 */
+export function buildWorkflowNoteTranslateMessages(text: string): Array<LLMMessage> {
+  return [
+    { role: "system", content: WORKFLOW_NOTE_TRANSLATE_SYSTEM },
+    { role: "user", content: text },
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────
 // Character design
 // ─────────────────────────────────────────────────────────────
 export const CHARACTER_SYSTEM = `你是角色设定助手。用户会给出一个角色的名字和（可选的）已有描述或风格。请补全该角色的视觉设定，用于 AI 绘画。

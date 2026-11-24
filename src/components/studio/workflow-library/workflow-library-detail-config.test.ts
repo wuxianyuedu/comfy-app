@@ -6,8 +6,28 @@
 
 import { describe, expect, it } from "vitest";
 
-import { isDetailLoadingFor } from "./workflow-library-detail-config";
+import {
+  DEFAULT_DETAIL_TAB,
+  DETAIL_TABS,
+  isDetailLoadingFor,
+  visibleDetailTabs,
+} from "./workflow-library-detail-config";
 import { resolveActiveMode, resolveCanvasMounted } from "./hooks/use-workflow-library-detail";
+
+describe("详情页签集合（#4963 说明页签）", () => {
+  it("说明页签存在，紧跟实际使用、在源文件之前，默认页签仍是工坊封装", () => {
+    const keys = DETAIL_TABS.map((tab) => tab.key);
+    expect(keys).toContain("notes");
+    expect(keys.indexOf("notes")).toBe(keys.indexOf("use") + 1);
+    expect(keys.indexOf("notes")).toBe(keys.indexOf("source") - 1);
+    expect(DEFAULT_DETAIL_TAB).toBe("params");
+  });
+
+  it("说明页签恒可见（不像参考图装载那样按槽位显隐）", () => {
+    expect(visibleDetailTabs([]).map((tab) => tab.key)).toContain("notes");
+    expect(visibleDetailTabs([{ id: "reference-image" }]).map((tab) => tab.key)).toContain("notes");
+  });
+});
 
 describe("isDetailLoadingFor", () => {
   it("未选中工作流不算加载（空态由视图渲染）", () => {
