@@ -1,7 +1,7 @@
 // ── 「测试模型」树形菜单的纯构建（ISSUE #4916）──────────────────────────
 // 模型下拉从「本地 / 远端两组平铺」升级为树形，且布局可切换。本文件只放
 // 布局定义、条目装配与树构建这些纯函数（不碰 React / 网络）：视图在
-// ModelTreeSelect.tsx，跨用途取数在 hooks/use-model-test-tree.ts（复用
+// ModelTestTree.tsx，跨用途取数在 hooks/use-model-test-tree.ts（复用
 // useTestCatalog，不另立第二份取数口径）。
 
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
