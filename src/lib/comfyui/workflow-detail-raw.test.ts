@@ -170,6 +170,72 @@ describe("buildRawInputs — 子工作流封装节点的 proxyField 暂存", () 
   });
 });
 
+describe("buildRawInputs — seed 后无哨兵槽的 legacy 配对（ISSUE #4931）", () => {
+  /** 只暴露 seed、不暴露其随机化控制的封装节点（type 是子图 UUID，控件顺序表
+   *  查不到 ⇒ 走 legacy 游标）：`widgets_values` 里没有 `control_after_generate`
+   *  哨兵槽，seed 后的槽属于下一个真控件（模型 COMBO）。游标必须按长度判定
+   *  「无哨兵」，否则从 unet_name 起整体错位一位。 */
+  const seedlessSentinel = requireRawWorkflow({
+    last_node_id: 1,
+    nodes: [
+      {
+        id: 105,
+        type: "4c314f31-ecda-4b08-ae98-faaba1bf613f",
+        pos: [-596, 4933],
+        inputs: [
+          { name: "prompt", type: "STRING", link: null, widget: { name: "prompt" } },
+          { name: "noise_seed", type: "INT", link: null, widget: { name: "noise_seed" } },
+          { name: "unet_name", type: "COMBO", link: null, widget: { name: "unet_name" } },
+          { name: "clip_name", type: "COMBO", link: null, widget: { name: "clip_name" } },
+          { name: "vae_name", type: "COMBO", link: null, widget: { name: "vae_name" } },
+        ],
+        widgets_values: [
+          "a prompt",
+          757_358_688_076_805,
+          "unet.safetensors",
+          "clip.safetensors",
+          "vae.safetensors",
+        ],
+        outputs: [{ name: "VIDEO", type: "VIDEO", links: [] }],
+      },
+    ],
+    links: [],
+  });
+
+  function valueByName(entries: Array<{ name: string; widgetValue?: unknown }>) {
+    return Object.fromEntries(entries.map((e) => [e.name, e.widgetValue]));
+  }
+
+  it("widgets_values 无哨兵槽时按无哨兵顺序配对（unet_name 不错位）", async () => {
+    const { rawInputsById } = await buildRawInputs(seedlessSentinel, noCombo, noMultiline);
+    const byName = valueByName(rawInputsById["105"]!);
+    expect(byName.prompt).toBe("a prompt");
+    expect(byName.noise_seed).toBe(757_358_688_076_805);
+    expect(byName.unet_name).toBe("unet.safetensors");
+    expect(byName.clip_name).toBe("clip.safetensors");
+    expect(byName.vae_name).toBe("vae.safetensors");
+  });
+
+  it("widgets_values 带哨兵槽时仍按含哨兵顺序配对（回归对照）", async () => {
+    const snapshot: unknown = JSON.parse(JSON.stringify(seedlessSentinel));
+    const withSentinel = requireRawWorkflow(snapshot);
+    withSentinel.nodes[0]!.widgets_values = [
+      "a prompt",
+      757_358_688_076_805,
+      "fixed",
+      "unet.safetensors",
+      "clip.safetensors",
+      "vae.safetensors",
+    ];
+    const { rawInputsById } = await buildRawInputs(withSentinel, noCombo, noMultiline);
+    const byName = valueByName(rawInputsById["105"]!);
+    expect(byName.noise_seed).toBe(757_358_688_076_805);
+    expect(byName.unet_name).toBe("unet.safetensors");
+    expect(byName.clip_name).toBe("clip.safetensors");
+    expect(byName.vae_name).toBe("vae.safetensors");
+  });
+});
+
 describe("buildRawInputs — 封装槽位的作者名从子图边界 pin 回收（ISSUE #349）", () => {
   /** 真实导出形状：wrapper 本层只有自动编号的别名，`properties.proxyWidgets`
    *  被 ComfyUI 隔离掉（只剩 quarantine），作者名只留在子图边界 `inputs[]` 上。 */

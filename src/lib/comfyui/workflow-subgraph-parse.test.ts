@@ -146,6 +146,62 @@ describe("buildSubgraphGraph — 子图暴露口的作者名", () => {
   });
 });
 
+describe("buildSubgraphGraph — seed 后无哨兵槽的 widget 配对（ISSUE #4931）", () => {
+  /** 只暴露 seed、不暴露其随机化控制的封装节点（如 MiniMax H3 I2V）：
+   *  `widgets_values` 里没有 `control_after_generate` 哨兵槽，seed 后的槽
+   *  属于下一个真控件（模型 COMBO）。配对必须按长度自适应退回无哨兵顺序，
+   *  否则从 unet_name 起全部错位一位。 */
+  function makeSeedSub(): RawSubgraphDef {
+    return {
+      id: "4c314f31-ecda-4b08-ae98-faaba1bf613f",
+      name: "I2V",
+      inputs: [],
+      outputs: [],
+      links: [],
+      nodes: [
+        {
+          id: 105,
+          type: "ImageToVideoMiniMaxH3",
+          inputs: [
+            { name: "noise_seed", idx: 0, type: "INT", widget: { name: "noise_seed" }, link: null },
+            { name: "unet_name", idx: 1, type: "COMBO", widget: { name: "unet_name" }, link: null },
+            { name: "clip_name", idx: 2, type: "COMBO", widget: { name: "clip_name" }, link: null },
+          ],
+          outputs: [],
+          widgets_values: [757_358_688_076_805, "unet.safetensors", "clip.safetensors"],
+        },
+      ],
+    };
+  }
+
+  function valueByName(rows: Array<RawInputEntryLike>): Record<string, unknown> {
+    return Object.fromEntries(rows.map((r) => [r.name, r.widgetValue]));
+  }
+  type RawInputEntryLike = { name: string; widgetValue?: unknown };
+
+  it("widgets_values 无哨兵槽时按无哨兵顺序配对（unet_name 不错位）", () => {
+    const sub = makeSeedSub();
+    const { linkById } = parseSubgraphLinks(sub);
+    const { rawInputsById } = buildSubgraphGraph(sub, linkById);
+    const byName = valueByName(rawInputsById["105"]!);
+    expect(byName.noise_seed).toBe(757_358_688_076_805);
+    expect(byName.unet_name).toBe("unet.safetensors");
+    expect(byName.clip_name).toBe("clip.safetensors");
+  });
+
+  it("widgets_values 带哨兵槽时仍按含哨兵顺序配对（回归对照）", () => {
+    const sub = makeSeedSub();
+    const node = sub.nodes![0]!;
+    node.widgets_values = [757_358_688_076_805, "fixed", "unet.safetensors", "clip.safetensors"];
+    const { linkById } = parseSubgraphLinks(sub);
+    const { rawInputsById } = buildSubgraphGraph(sub, linkById);
+    const byName = valueByName(rawInputsById["105"]!);
+    expect(byName.noise_seed).toBe(757_358_688_076_805);
+    expect(byName.unet_name).toBe("unet.safetensors");
+    expect(byName.clip_name).toBe("clip.safetensors");
+  });
+});
+
 describe("buildSubgraphGraph — 节点作者标题", () => {
   /* ComfyUI properties 里改过名的节点（`title`）必须在子图内部也生效 ——
    * 画布标题栏按 `friendlyNodeTitle(classType, title)` 取名，作者名优先于
