@@ -72,7 +72,18 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
   });
   const widgetEntries = allEntries.filter(([k]) => {
     const m = rawMeta[k];
-    return m?.widget !== undefined && m.preview !== true;
+    if (m === undefined || m.widget === undefined || m.preview === true) {
+      return false;
+    }
+    /* IMAGEUPLOAD 是 ComfyUI 前端专有的「选择文件上传」按钮槽位（LoadImage
+     * 的 `upload`）：API 图不携带它、写入的值会在 API 转换时被整体剥掉，
+     * 画布上也没有任何可操作功能 —— 与富化层同口径（workflow-detail-io
+     * 不产出该条目），整行不再渲染。已连线 / 边界形态按理不存在，保留
+     * 以防边锚点丢失。 */
+    if (m.type.toUpperCase() === "IMAGEUPLOAD" && !m.isConnection && m.isBoundary !== true) {
+      return false;
+    }
+    return true;
   });
   // 布局**之前**按 `name` 跨两桶去重 —— 把类型端口与内联 widget
   // 合在一起的自定义节点（Z-Image-Base）会让同一个名字出现两次；
