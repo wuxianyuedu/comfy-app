@@ -439,6 +439,7 @@ export function ModelTestView({
                             onAdd={(files) => {
                               void c.addReferenceImages(files);
                             }}
+                            onError={c.showNotice}
                             onRemove={c.removeReferenceImage}
                             required={row.required}
                           />
@@ -457,6 +458,7 @@ export function ModelTestView({
                               c.patchValue(row.valueKey, value);
                             }
                           }}
+                          onError={c.showNotice}
                           onPickFile={(file) => {
                             if (row.valueKey === "first-frame" || row.valueKey === "image") {
                               void c.setInputFromFile(row.valueKey, file);
