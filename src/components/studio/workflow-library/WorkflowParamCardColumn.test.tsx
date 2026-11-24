@@ -295,6 +295,53 @@ describe("WorkflowParamCardColumn", () => {
     }
   });
 
+  it("参考图是数组形态的一张卡：每个槽位一行一颗端点，不再一槽一张卡", () => {
+    const refIo: WorkflowIOMap = {
+      ...io,
+      "7::widget::image_0": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "7",
+        nodeTitle: "图像输入",
+        name: "image_0",
+        label: "image_0",
+        type: "IMAGE",
+        defaultValue: "",
+      },
+      "7::widget::image_1": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "7",
+        nodeTitle: "图像输入",
+        name: "image_1",
+        label: "image_1",
+        type: "IMAGE",
+        defaultValue: "",
+      },
+    };
+    const refEntries = buildParamEntries(refIo, {
+      mode: "I2I",
+      contractIds: ["prompt", "reference-image", "reference-image-2"],
+    });
+    const { container } = render(
+      <WorkflowParamCardColumn
+        endpoint={(port) => <span data-node-handle={port.handleId} />}
+        entries={refEntries}
+        io={refIo}
+        resolved={{}}
+      />,
+    );
+    /* 两个契约槽合成一张「参考图」卡，卡内两行各自的 handle = 槽位 id。 */
+    const card = container.querySelector('[data-testid="param-node-reference-image"]');
+    expect(card).toBeTruthy();
+    expect(container.querySelector('[data-testid="param-node-reference-image-2"]')).toBeNull();
+    expect(container.querySelector('[data-node-handle="reference-image"]')).toBeTruthy();
+    expect(container.querySelector('[data-node-handle="reference-image-2"]')).toBeTruthy();
+    expect(card!.textContent).toContain("参考图");
+    expect(card!.textContent).toContain("参考图 2");
+    expect(screen.getByTestId("param-node-out-type-reference-image-0").textContent).toBe("IMAGE");
+  });
+
   it("库里没有对外参数时不渲染卡片列", () => {
     const { container } = render(<WorkflowParamCardColumn entries={[]} io={io} resolved={{}} />);
     expect(container.querySelector('[data-testid="workflow-param-card-column"]')).toBeNull();

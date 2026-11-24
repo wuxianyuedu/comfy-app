@@ -487,6 +487,11 @@
   第一张参考图的实际像素；提交不下发尺寸值，也不把「尺寸未连线」报成配置缺失。
   未声明时按原口径由外部尺寸值驱动 / 工作流图内默认值兜底，不做「有参考图线且没尺寸线
   就自动推断」的猜测。
+  参考图是**数组形态的同一个对外参数**（#4973）：编辑页里 `reference-image` 及带序号槽
+  合在一张卡里，每个槽一行一颗端点；连上一条线后同卡自动冒出下一个参考图端点（上限 16），
+  不必去模式契约页手动加口。新槽会写回该模式的契约（本机覆盖，按项目默认落差集），
+  使运行期按契约 id 落点、按 `referenceImages` 数组下发；写回失败给可读出口，
+  不静默变成「画了线但运行时不生效」。一张卡的 ↺ 撤销整组槽位。
 - 落点（提示）：`src/components/studio/workflow-library/WorkflowCanvasNodePreview.tsx`。
 - 落点：`src/lib/workflow/workflow-param-mapping.ts`、
   `src/lib/workflow/workflow-size-source.ts`、
