@@ -1296,6 +1296,17 @@
   （`ViewableImage`，与历史任务卡 / 工作流库预览同一份组合）—— 点击打开
   图片查看器（缩放 / 适应窗口 / 原始宽高标题），键盘可达；「移除」按钮的
   位置与行为不变。
+  **生成队列总览就在本页**（ISSUE #5010）：页面中栏底部有「生成队列」卡 ——
+  与「队列」页（FR-QE-01）**同一份数据**（tRPC `task.list` 逐条 +
+  `/api/comfy/queue` 富读数对账，不另造第二份队列真相），工坊 / 画布 /
+  工作流库 / 本页发起的任务都在：四格指标（运行中 / 排队中 / 今日完成 /
+  失败）+ 跑动中富卡（进度 / 已跑 / 预计剩余 / 当前节点 / 主模型）+
+  排队位次列表（带模型名徽标）+ 最近结果（含失败原因）。任意一条可**就地
+  展开**查看输入参数（`task.detail` 的 `workflowInputs` / 顶层参数派生，
+  长值截断）；取消与执行日志大屏（同 FR-LM-08 那份弹窗）就地可用。排队 /
+  最近各铺前 5 / 4 条，尾数指回「队列」页；「队列」页本身不改动。组件
+  测试：`src/components/workshop/ModelTestQueuePanel.test.tsx`；参数派生
+  纯函数测试：`src/components/studio/queue/queue-task-params.test.ts`。
 - 按名解析的连接参数（#3778）：远端模型按名直连时，Base URL / 密钥按
   「条目自己的 → 所属供应商的」折算（#3501 起两者以供应商为单位，模型行
   两格为空是常态）—— 模型在但两处都没填地址时给**定向**报错（点名模型），
@@ -1304,6 +1315,9 @@
   `src/components/workshop/hooks/use-model-test.ts`、
   `src/components/workshop/model-test-config.ts`、
   `src/components/workshop/ModelAdaptersView.tsx`（固定值编辑器）、
+  `src/components/workshop/ModelTestQueuePanel.tsx`（生成队列总览卡）、
+  `src/components/workshop/hooks/use-model-test-queue.ts`、
+  `src/components/studio/queue/queue-task-params.ts`（参数派生）、
   `src/lib/workshop/model-mode-contract.ts`（constants）
 
 #### FR-LM-08 测试模型执行日志体验
