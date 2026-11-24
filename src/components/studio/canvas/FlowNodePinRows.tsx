@@ -147,7 +147,10 @@ export function FlowNodePinRows({
                   )}
                 <Hint label={String(inName)}>
                   <span
-                    className="text-2xs min-w-0 flex-1 truncate text-left"
+                    /* 参数 / 端口名可选可复制：nodrag 让按住拖动走原生文本
+                     * 选择而不是节点拖拽；select-text 恢复画布容器
+                     * user-select:none 掉的可选性（下同，不再逐处重复）。 */
+                    className="nodrag nopan text-2xs min-w-0 flex-1 truncate text-left select-text"
                     style={{
                       color: tone.labelColor,
                       fontWeight: tone.labelWeight,
@@ -162,7 +165,7 @@ export function FlowNodePinRows({
               <>
                 <Hint label={`${outName} (${outType})`}>
                   <span
-                    className="text-2xs min-w-0 flex-1 truncate text-right"
+                    className="nodrag nopan text-2xs min-w-0 flex-1 truncate text-right select-text"
                     style={{
                       color: tone.labelColor,
                       fontWeight: tone.labelWeight,

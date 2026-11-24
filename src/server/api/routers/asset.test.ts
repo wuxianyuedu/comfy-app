@@ -139,8 +139,82 @@ describe("asset.createFromTask —— 入库契约", () => {
   });
 });
 
+describe("asset.createFromTask —— 同目录去重（ISSUE #4937）", () => {
+  const seedDupTask = () =>
+    seedTask(tdb, {
+      id: "task-dup",
+      userId: "user-a",
+      prompt: "霓虹雨夜的赛博朋克街景",
+      images: [{ localPath: "/api/generated/task-dup/a.png" }],
+    });
+
+  it("同一目录重复加入：第二次 created=0、duplicated=1，不产生重复行", async () => {
+    seedDupTask();
+    const first = await caller().createFromTask({
+      taskId: "task-dup",
+      scope: "public",
+      category: "scene",
+    });
+    expect(first.created).toBe(1);
+    const second = await caller().createFromTask({
+      taskId: "task-dup",
+      scope: "public",
+      category: "scene",
+    });
+    expect(second.created).toBe(0);
+    expect(second.duplicated).toBe(1);
+    const list = await caller().list({ scope: "all", category: "all" });
+    expect(list.items).toHaveLength(1);
+    expect(list.categories.find((c) => c.category === "scene")?.count).toBe(1);
+  });
+
+  it("跨分类再收仍允许（另一次有意的归档）", async () => {
+    seedDupTask();
+    await caller().createFromTask({ taskId: "task-dup", scope: "public", category: "scene" });
+    const other = await caller().createFromTask({
+      taskId: "task-dup",
+      scope: "public",
+      category: "reference",
+    });
+    expect(other.created).toBe(1);
+    expect(other.duplicated).toBe(0);
+    const list = await caller().list({ scope: "all", category: "all" });
+    expect(list.items).toHaveLength(2);
+  });
+
+  it("多张产物部分重复：只收缺的那张，created / duplicated / skipped 如实回报", async () => {
+    seedTask(tdb, {
+      id: "task-multi",
+      userId: "user-a",
+      prompt: "霓虹雨夜的赛博朋克街景",
+      images: [
+        { localPath: "/api/generated/task-multi/a.png" },
+        { localPath: "/api/generated/task-multi/b.png" },
+      ],
+    });
+    const first = await caller().createFromTask({
+      taskId: "task-multi",
+      scope: "public",
+      category: "scene",
+    });
+    expect(first.created).toBe(2);
+    const list = await caller().list({ scope: "all", category: "scene" });
+    await caller().delete({ id: list.items[0]!.id });
+    const second = await caller().createFromTask({
+      taskId: "task-multi",
+      scope: "public",
+      category: "scene",
+    });
+    expect(second.created).toBe(1);
+    expect(second.duplicated).toBe(1);
+    expect(second.skipped).toBe(0);
+    const after = await caller().list({ scope: "all", category: "scene" });
+    expect(after.items).toHaveLength(2);
+  });
+});
+
 describe("asset.list —— 过滤与计数", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     seedTask(tdb, {
       id: "task-a",
       userId: "user-a",
@@ -155,8 +229,8 @@ describe("asset.list —— 过滤与计数", () => {
       params: {},
       images: [{ localPath: "/api/generated/task-b/b.png" }],
     });
-    void caller().createFromTask({ taskId: "task-a", scope: "public", category: "reference" });
-    void caller().createFromTask({
+    await caller().createFromTask({ taskId: "task-a", scope: "public", category: "reference" });
+    await caller().createFromTask({
       taskId: "task-b",
       scope: "project",
       projectId: "proj-1",

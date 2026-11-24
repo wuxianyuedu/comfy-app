@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * `AssetCard` — 资产库网格里的单张资产卡（ISSUE #4868）：
- * 方形缩略图 + 类型 / 归属徽标 + 名称 + 分类 + 参数完整度，操作只有
- * 「详情 / 删除」两件（重生成走详情里的「用此参数生成」）。
+ * `AssetCard` — 资产库网格里的单张资产卡（ISSUE #4868 建卡；#4943 加「移动」）：
+ * 方形缩略图 + 类型 / 归属徽标 + 名称 + 分类 · 目录 + 参数完整度，操作是
+ * 「查看参数 / 移动目录 / 删除」三件（重生成走详情里的「用此参数生成」）。
  * 纯展示组件：数据与回调都由 AssetLibrary 注入（规范 17 §17.2 第③层）。
  */
-import { FileText, FolderInput, Maximize2, Music, Trash2 } from "lucide-react";
+import { FileText, FolderInput, Music, Settings2, Trash2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -123,7 +123,10 @@ export function AssetCard({ asset, onMove, onOpenDetail, onRemove }: AssetCardPr
               size="icon-xs"
               variant="ghost"
             >
-              <Maximize2 aria-hidden className="size-3.5" data-icon="inline-start" />
+              {/* 「参数」语义的图标：这里打开的是详情弹窗（生成参数表 +
+                  「用此参数生成」），不是放大——看大图点图片本身
+                  （ViewableImage）。此前用 Maximize2 被读成冗余的放大按钮。 */}
+              <Settings2 aria-hidden className="size-3.5" data-icon="inline-start" />
             </Button>
             {onMove !== undefined && (
               <Button

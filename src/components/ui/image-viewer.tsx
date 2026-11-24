@@ -23,9 +23,12 @@ import { onNextFrame, type CancelNextFrame } from "~/lib/next-frame";
 /** 画布内单边留白（px）：图片不贴边，也参与「适应窗口」的可视区折算。 */
 const VIEWPORT_PADDING = 16;
 
-/** 弹窗尺寸：贴视口但留出四周余量，且不挡住底部状态栏。 */
-const VIEWER_POPUP_WIDTH = "w-[min(96vw,1400px)]";
-const VIEWER_BODY_HEIGHT = "h-[min(86vh,880px)]";
+/** 弹窗尺寸：贴视口但留出四周余量，且不挡住底部状态栏。
+ *  上限给足（2400×1300）：宽屏 / 4K 下 1400×880 会在两侧留出大片死区、
+ *  图片几乎没「看大」，底部还会因画布高度不足溢出滚动条（ISSUE #4944）；
+ *  小屏由 `min()` 的 96vw / 90vh 兜底，不受上限影响。 */
+const VIEWER_POPUP_WIDTH = "w-[min(96vw,2400px)]";
+const VIEWER_BODY_HEIGHT = "h-[min(90vh,1300px)]";
 
 export type ImageViewerProps = {
   alt?: string;
