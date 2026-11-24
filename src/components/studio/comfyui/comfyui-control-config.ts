@@ -5,6 +5,8 @@
  * 本模块只做四态→文案/圆点/禁用投影，不引 lifecycle-notice 的第二套判据。 */
 
 import type { StatusDotState } from "~/components/ui/status-dot";
+import { parsePackScopedId } from "~/lib/log/log-run-packs";
+import type { LogSessionMeta } from "~/lib/log/log-sessions";
 
 /** 本页消费的运行态四态（与 `setting.comfyStatus` 出口逐字段一致）。 */
 export type ComfyRuntimeStatus = {
@@ -156,4 +158,41 @@ export function comfyConfigHint(
     return null;
   }
   return "还没配置 ComfyUI 路径 —— 在「设置 → 创作后端」里填源码根或桌面实例根，再回来启动。";
+}
+
+/** 真外部实例（如 Comfy Desktop 自己拉起、本应用从未 spawn 过）的提示（#4891 原文案）。 */
+const EXTERNAL_INSTANCE_NOTICE =
+  "当前 ComfyUI 实例在运行，但不是本应用 launcher 拉起的（如由 Comfy Desktop 拉起）：应用侧没有它的 stdout 捕获，本面板只有历史会话的启动日志；当前实例的日志请看 Comfy Desktop 侧的控制台 / 日志文件。";
+
+/**
+ * 运行中、而最新一份启动日志不属于本次运行时，提示条该说什么（#4891 立题、
+ * #4959 修正误报）。判据不看标题里有没有「退出」二字 —— 归档会话的标题恒带
+ * 「正常/异常退出」（那是**那轮应用**怎么结束的，不是那次 ComfyUI 会话退出了），
+ * 照它判会把「保活移交」误报成外部拉起。改看会话标记的事实：
+ *
+ * - 最新一份属于**本次运行** → 本应用刚拉起过，不提示；
+ * - 最新一份在归档包、且标记是 `keepAlive` 未记录退出 → **保活移交**：实例是
+ *   上一轮应用拉起的，按设计活到现在，本轮已接管 —— 指出当前实例日志的真实
+ *   位置（归档包的 keepalive 重定向日志），而不是让用户去看 Comfy Desktop；
+ * - 其余（无会话 / 标记已记录退出 / 模式不可知）→ 按真外部实例提示。
+ */
+export function comfyExternalInstanceNotice(
+  running: boolean,
+  newest: Pick<LogSessionMeta, "id" | "scope" | "launchMode" | "sessionEnded"> | undefined,
+): string | null {
+  if (!running) {
+    return null;
+  }
+  if (newest === undefined) {
+    return EXTERNAL_INSTANCE_NOTICE;
+  }
+  if (newest.scope === "current") {
+    return null;
+  }
+  if (newest.launchMode === "keepAlive" && newest.sessionEnded === false) {
+    const packName = parsePackScopedId(newest.id)?.packName ?? null;
+    const where = packName === null ? "" : `（log/runs/${packName}/services/）`;
+    return `当前 ComfyUI 实例仍在运行：它是上一轮应用以保活模式拉起的（应用退出后按设计不关闭，本轮已接管）。本面板只列到上一轮的启动日志；当前实例的输出在归档运行包${where}的 comfyui-keepalive-*.log 里。`;
+  }
+  return EXTERNAL_INSTANCE_NOTICE;
 }

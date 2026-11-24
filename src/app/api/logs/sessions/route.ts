@@ -6,14 +6,15 @@ import { LOG_DIRS } from "../../../../../scripts/launcher-core/log.mjs";
 import { LOG_LAYOUT, runsDir } from "../../../../../scripts/launcher-core/run.mjs";
 import { apiErrorBody } from "~/lib/api-error";
 import { clamp } from "~/lib/clamp";
-import { LOG_ROOT } from "~/lib/log/log-paths";
+import { COMFY_LAST_SESSION_FILE_NAME } from "~/lib/comfyui/lifecycle-session-log";
+import { LOG_ROOT, SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 import type { LogSessionsPayload } from "~/lib/log/log-sessions";
 import {
   buildRunScopedOptions,
   parsePackScopedId,
   type PackLogFile,
 } from "~/lib/log/log-run-packs";
-import { scanRunPacks } from "~/lib/log/log-run-packs.server";
+import { readLastSessionFacts, scanRunPacks } from "~/lib/log/log-run-packs.server";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import {
@@ -158,22 +159,31 @@ export async function GET(request: Request) {
      * `log/runs`）—— 与 `POST /api/logs/diagnostics` 把 `path.dirname(LOG_ROOT)`
      * 交给 `exportDiagnostics()` 是同一手法。 */
     const root = path.dirname(LOG_ROOT);
+    /* 会话标记只有 comfyui 这一个来源有；文件在 `services/` 这个**共享**目录下，
+     * 必须按来源点名，否则 comfyui 的标记会被安到别的来源的份上。 */
+    const lastSessionFileName =
+      source === "comfyui-runtime" ? COMFY_LAST_SESSION_FILE_NAME : undefined;
     const { packs, total: archivedTotal } = await scanRunPacks({
       runsDir: runsDir(root),
       sourceDir: LOG_DIRS.services,
       runJsonName: LOG_LAYOUT.runJson,
       maxPacks: MAX_PACKS,
       source,
+      lastSessionFileName,
     });
 
     /* 分组、顺序、文案全在纯判据那一层：端点只把两边的数据递进去，不自己拼列表
      * —— 「本次运行恒在最前」「其后按次运行分组」「文案三段」是**用户侧契约**，
      * 写在端点或视图里都会与另一处漂开（§12.12）。 */
+    /* 本次运行的会话标记与归档包同源（都在 `services/` 下），一并补进列表 ——
+     * 视图据最新一项区分「保活移交」与「真外部实例」（ISSUE #4959）。 */
+    const currentLastSession = await readLastSessionFacts(SERVICES_LOG_DIR, lastSessionFileName);
     const { sessions, total } = buildRunScopedOptions(
       currentEntries.map(toPackFile),
       packs,
       MAX_FILES,
       currentEntries.length + archivedTotal,
+      currentLastSession,
     );
     if (sessions.length === 0) {
       return NextResponse.json(emptyPayload());
