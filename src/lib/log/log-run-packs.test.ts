@@ -28,8 +28,13 @@ function file(name: string, startedAt: number | null): PackLogFile {
 }
 
 /** 造一个包（`files` 按旧→新，与 IO 那层的输出同序）。 */
-function pack(name: string, files: Array<PackLogFile>, crashed = false): RunPack {
-  return { name, startedAt: packNameToMs(name), crashed, files };
+function pack(
+  name: string,
+  files: Array<PackLogFile>,
+  crashed = false,
+  lastSession: RunPack["lastSession"] = null,
+): RunPack {
+  return { name, startedAt: packNameToMs(name), crashed, lastSession, files };
 }
 
 describe("包目录名解析", () => {
@@ -172,5 +177,40 @@ describe("下拉文案：时刻 · 退出形态 · runId", () => {
     expect(sessions[1]!.title).toContain("异常退出");
     expect(sessions[1]!.crashed).toBe(true);
     expect(sessions[1]!.title).toContain("bbbbbb");
+  });
+});
+
+describe("会话标记随份走（#4959：视图据此区分保活移交与真外部实例）", () => {
+  it("归档份带上所在包的 launchMode / sessionEnded", () => {
+    const p = pack("2026-11-24_162336-07999d", [file("r.log", 1000)], true, {
+      mode: "keepAlive",
+      ended: false,
+    });
+    const { sessions } = buildRunScopedOptions([], [p], 30, 1);
+    expect(sessions[0]!.launchMode).toBe("keepAlive");
+    expect(sessions[0]!.sessionEnded).toBe(false);
+  });
+
+  it("包没带标记（读不到 / 旧夹具）→ 两格为 null，消费方退保守档", () => {
+    const { sessions } = buildRunScopedOptions(
+      [],
+      [pack("2026-11-24_162336-07999d", [file("r.log", 1000)])],
+      30,
+      1,
+    );
+    expect(sessions[0]!.launchMode).toBeNull();
+    expect(sessions[0]!.sessionEnded).toBeNull();
+  });
+
+  it("本次运行的份带 currentLastSession；不传时同为 null（默认参不破坏旧调用）", () => {
+    const withMark = buildRunScopedOptions([file("c.log", 1)], [], 30, 1, {
+      mode: "bound",
+      ended: false,
+    });
+    expect(withMark.sessions[0]!.launchMode).toBe("bound");
+    expect(withMark.sessions[0]!.sessionEnded).toBe(false);
+    const withoutMark = buildRunScopedOptions([file("c.log", 1)], [], 30, 1);
+    expect(withoutMark.sessions[0]!.launchMode).toBeNull();
+    expect(withoutMark.sessions[0]!.sessionEnded).toBeNull();
   });
 });

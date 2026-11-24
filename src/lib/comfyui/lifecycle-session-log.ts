@@ -34,7 +34,10 @@ import {
  *  连带静默杀树、强制关机、任务管理器结束进程）没有任何活着的进程能写日志 ——
  *  只能在下一次启动时读这个文件反推「上次那家伙不是正常结束的」。
  *  「有开始没结束」就是那类情况的指纹。 */
-const COMFY_SESSION_MARK = `${SERVICES_LOG_DIR}/comfyui-last-session.json`;
+/** 标记文件名（读方按名取：日志会话端点据此补「那次启动的模式 / 是否已退出」，#4959）。 */
+export const COMFY_LAST_SESSION_FILE_NAME = "comfyui-last-session.json";
+
+const COMFY_SESSION_MARK = `${SERVICES_LOG_DIR}/${COMFY_LAST_SESSION_FILE_NAME}`;
 
 /** `ComfySessionMark["mode"]` 的全部合法取值（外部文件不可信，按白名单判）。 */
 const SESSION_MODES: ReadonlyArray<ComfySessionMark["mode"]> = [

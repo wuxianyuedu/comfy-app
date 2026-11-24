@@ -30,9 +30,11 @@ import {
   formatFileTime,
   packNameToMs,
   sortPackNames,
+  type PackLastSession,
   type PackLogFile,
   type RunPack,
 } from "./log-run-packs";
+import type { LogSessionLaunchMode } from "./log-sessions";
 import {
   compareRuntimeLogFiles,
   legacyRuntimeLogFileName,
@@ -42,6 +44,12 @@ import {
 
 /** 列包时的参数（路径与文件名从布局常量来，不在本模块写死）。 */
 export type ScanRunPacksOptions = {
+  /**
+   * 会话标记的文件名（如 `comfyui-last-session.json`）；只有拥有这个标记的来源
+   * 才传 —— 标记文件在 `sourceDir` 这个**共享**目录下，按来源点名，避免把
+   * comfyui 的标记安到别的来源的份上。不给时不读，包的 `lastSession` 为 null。
+   */
+  lastSessionFileName?: string;
   /** 最多列几个包（更老的翻不到，列出来只是噪声）。 */
   maxPacks: number;
   /** `run.json` 的文件名（从 `run.mjs` 的 `LOG_LAYOUT.runJson` 来）。 */
@@ -69,6 +77,52 @@ async function readPackMeta(
   } catch {
     return null;
   }
+}
+
+/** 会话标记 `mode` 的白名单（与写侧 `SESSION_MODES` 同一词表，外部文件不可信）。 */
+const LAST_SESSION_MODES: ReadonlyArray<LogSessionLaunchMode> = [
+  "keepAlive",
+  "bound",
+  "cli",
+  "studio",
+];
+
+/**
+ * 读一处「会话标记」（`comfyui-last-session.json`，写方唯一出处是
+ * `lifecycle-session-log.ts`）的可判字段：那次启动的模式 + 是否已记录退出。
+ *
+ * `fileName` 不给（别的来源没有这个标记）或读不到 / 形状不认识 → null ——
+ * 「没有标记」按未知处理，消费方退回保守结论，绝不把「读不出」当成「已退出」。
+ */
+export async function readLastSessionFacts(
+  dir: string,
+  fileName: string | undefined,
+): Promise<PackLastSession | null> {
+  if (fileName === undefined || fileName === "") {
+    return null;
+  }
+  let meta: Record<string, unknown>;
+  try {
+    const text = await fs.promises.readFile(
+      /*turbopackIgnore: true*/ path.join(dir, fileName),
+      "utf8",
+    );
+    const parsed = asRecord(JSON.parse(text) as unknown);
+    if (parsed === null) {
+      return null;
+    }
+    meta = parsed;
+  } catch {
+    return null;
+  }
+  /* `find` 在白名单里逐个比对，命中即词表内的原值 —— 不做类型断言。 */
+  const mode = LAST_SESSION_MODES.find((m) => m === meta.mode) ?? null;
+  const exitedRecord = asRecord(meta.exited);
+  const ended = exitedRecord === null ? (meta.exited === null ? false : null) : true;
+  if (mode === null && ended === null) {
+    return null;
+  }
+  return { mode, ended };
 }
 
 /** `run.json` 的 `startedAt`（ISO 串）→ 毫秒；缺失 / 读不出给 null。 */
@@ -139,7 +193,7 @@ export async function scanRunPacks(options: ScanRunPacksOptions): Promise<{
   packs: Array<RunPack>;
   total: number;
 }> {
-  const { runsDir, sourceDir, runJsonName, maxPacks, source } = options;
+  const { runsDir, sourceDir, runJsonName, maxPacks, source, lastSessionFileName } = options;
   let names: Array<string>;
   try {
     names = (
@@ -167,12 +221,18 @@ export async function scanRunPacks(options: ScanRunPacksOptions): Promise<{
     total += files.length;
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
     const meta = await readPackMeta(dir, runJsonName);
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+    const lastSession = await readLastSessionFacts(
+      path.join(/*turbopackIgnore: true*/ dir, sourceDir),
+      lastSessionFileName,
+    );
     packs.push({
       name,
       /* `run.json` 的更准（它是写进去的启动时刻）；读不到时退回名字里那个
        * —— 两者都是那次运行的启动时刻。 */
       startedAt: startedAtMs(meta) ?? packNameToMs(name),
       crashed: meta?.crashed === true,
+      lastSession,
       files,
     });
   }
