@@ -311,7 +311,9 @@ export function ModelTestResultPanel({
 }) {
   const hasDetails = c.requestRows.length > 0 || c.responseRows.length > 0;
   return (
-    <div className="flex w-full shrink-0 flex-col gap-4 xl:w-80">
+    /* max-h 与中/左栏同口径（ISSUE #4983/#4991）：右栏也封顶在显示区域高度，
+     * 超出在栏内滚动——三栏都不把页面撑出滚动条。 */
+    <div className="flex h-fit w-full shrink-0 flex-col gap-4 xl:max-h-[calc(100dvh-96px)] xl:w-80 xl:overflow-y-auto">
       <ResultCard c={c} />
       {/* 分节点进度可视化（#4811：从中栏挪到右栏「请求」原来的位置）：解析执行日志
           里的 comfy-cli progress/executing 事件按节点出条（#4743）；无进度事件
