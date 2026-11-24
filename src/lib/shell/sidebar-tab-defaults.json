@@ -1,6 +1,7 @@
 {
   "models": "shared",
   "assets": "independent",
+  "characters": "independent",
   "history": "independent",
   "queue": "independent",
   "comfyui": "independent",

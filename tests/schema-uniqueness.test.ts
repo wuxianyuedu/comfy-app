@@ -100,6 +100,7 @@ const REQUIRED_UNIQUE_KEYS: Record<string, Array<{ columns: Array<string> }>> = 
   episodeCharacter: [{ columns: ["episodeId", "characterId"] }],
   character: [{ columns: ["seriesId", "name"] }],
   season: [{ columns: ["seriesId", "seasonNumber"] }],
+  characterProfile: [{ columns: ["userId", "name"] }],
 };
 
 const sorted = (cols: Array<string>): string => [...cols].sort().join("+");

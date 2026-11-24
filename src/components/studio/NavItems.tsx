@@ -19,6 +19,7 @@ import {
   Server,
   Settings,
   Terminal,
+  Users,
 } from "lucide-react";
 
 import {
@@ -38,6 +39,7 @@ export type WorkspaceView =
   | "canvas"
   | "models"
   | "assets"
+  | "characters"
   | "works"
   | "workshop"
   | "library"
@@ -127,6 +129,15 @@ export const NAV_ITEMS: Array<NavItem> = [
     label: "资产库",
     enabled: true,
     icon: <AtSign size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* 角色库（ISSUE #5009）：跨项目的二次元角色档案池——详细描述 + 从描述
+       自动提取的特征标签 + 按工作流批量生成立绘 + 按标签搜索选角。
+       与「资产库」同族（沉淀型全局库），放它旁边。 */
+    id: "characters",
+    label: "角色库",
+    enabled: true,
+    icon: <Users size={22} strokeWidth={1.8} />,
   },
   {
     id: "history",

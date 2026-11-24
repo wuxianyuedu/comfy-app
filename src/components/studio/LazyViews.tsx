@@ -100,6 +100,12 @@ export const AssetLibraryView = lazyView("assets", () =>
   import("~/components/studio/assets/AssetLibrary").then((mod) => mod.AssetLibrary),
 );
 
+/* 角色库（ISSUE #5009）：跨项目二次元角色档案池（描述 + 特征标签 + 立绘 + 标签搜索），
+ * 与资产库同族的全局视图。 */
+export const CharacterLibraryView = lazyView("characters", () =>
+  import("~/components/studio/characters/CharacterLibrary").then((mod) => mod.CharacterLibrary),
+);
+
 /* ── 项目内分区（一项目一页签后由项目页容器按需拉起） ── */
 
 /* 资源库：整页素材管理（分类 / 搜索 / 上传 / 删除），与画布那块抽屉同源取数。 */

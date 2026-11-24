@@ -39,6 +39,7 @@ const jsonColumns = new Set<string>([
   "run",
   "scriptReview",
   "styleTags",
+  "tags",
   "portraits",
   "inputTypes",
   "outputTypes",
@@ -79,6 +80,7 @@ const TABLES = [
   "episode",
   "character",
   "episode_character",
+  "characterProfile",
 ];
 
 const CREATE_SQL = `
@@ -236,6 +238,13 @@ CREATE TABLE IF NOT EXISTS episode_character (
   id TEXT PRIMARY KEY, episodeId TEXT NOT NULL, characterId TEXT NOT NULL, role TEXT NOT NULL DEFAULT '',
   createdAt TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS characterProfile (
+  id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, archetype TEXT NOT NULL DEFAULT '',
+  gender TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '[]',
+  portraitUrl TEXT, portraits TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'draft',
+  source TEXT NOT NULL DEFAULT 'manual', taskId TEXT, params TEXT, width INTEGER, height INTEGER,
+  createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
 
 -- 与 schema.ts 对齐的唯一索引（缺了它们，仓储的 onConflictDoUpdate 会直接抛
 -- ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint）：
@@ -249,6 +258,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS episode_project_uniq ON episode (projectId);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_character_uniq ON episode_character (episodeId, characterId);
 CREATE UNIQUE INDEX IF NOT EXISTS wmtt_tag_wt_uniq ON workflowModelTag_workflowTemplate (workflowModelTag, workflowTemplate);
 CREATE UNIQUE INDEX IF NOT EXISTS character_series_name_uniq ON "character" (seriesId, name);
+CREATE UNIQUE INDEX IF NOT EXISTS characterProfile_user_name_uniq ON characterProfile (userId, name);
 CREATE UNIQUE INDEX IF NOT EXISTS season_series_number_uniq ON season (seriesId, seasonNumber);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_season_number_uniq ON episode (seasonId, episodeNumber);
 CREATE UNIQUE INDEX IF NOT EXISTS wt_user_name_uniq ON workflowTemplate (userId, name);

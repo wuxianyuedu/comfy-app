@@ -38,3 +38,4 @@ export * from "./repository-skill";
 export * from "./repository-user";
 export * from "./repository-post";
 export * from "./repository-asset";
+export * from "./repository-character-profile";
