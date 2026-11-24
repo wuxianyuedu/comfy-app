@@ -4,7 +4,7 @@
  */
 import "server-only";
 
-import { and, desc, eq, inArray, like, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, like, or } from "drizzle-orm";
 
 import { db } from "~/lib/db";
 import { asset, type Asset } from "~/server/db/schema";
@@ -150,6 +150,33 @@ export class AssetRepository extends DrizzleRepository<Asset> {
         })),
       )
       .returning();
+  }
+
+  /** 同一目录（分类 + 归属）里是否已收过这张产物 —— 同源任务 + 同名
+   *  （多张产物的名字自带序号，见路由层 `assetNameOf`）。用于「加入资产库」
+   *  的目录内去重（ISSUE #4937）：`projectId` 空与非空是两种归属，分别判。 */
+  async findDuplicate(filter: {
+    category: string;
+    name: string;
+    projectId: string | null;
+    scope: string;
+    sourceTaskId: string;
+    userId: string;
+  }): Promise<boolean> {
+    const conditions = [
+      eq(asset.userId, filter.userId),
+      eq(asset.sourceTaskId, filter.sourceTaskId),
+      eq(asset.name, filter.name),
+      eq(asset.category, filter.category),
+      eq(asset.scope, filter.scope),
+      filter.projectId === null ? isNull(asset.projectId) : eq(asset.projectId, filter.projectId),
+    ];
+    const rows = await db
+      .select({ id: asset.id })
+      .from(asset)
+      .where(and(...conditions))
+      .limit(1);
+    return rows.length > 0;
   }
 
   /** 归属校验 + 取单条（路由层的越权判据统一走这里，不再各写一份）。 */

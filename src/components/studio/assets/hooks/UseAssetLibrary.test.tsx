@@ -42,7 +42,11 @@ describe("useAddToAssetLibrary — 写后失效 asset.list 缓存（ISSUE #4935�
       defaultOptions: { queries: { staleTime: 30_000, retry: false } },
     });
     invalidateSpy = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
-    trpcMocks.createFromTaskMutationFn.mockResolvedValue({ created: 1, skipped: 0 });
+    trpcMocks.createFromTaskMutationFn.mockResolvedValue({
+      created: 1,
+      skipped: 0,
+      duplicated: 0,
+    });
   });
 
   it("加入成功后失效 asset.list 缓存，再回调 onDone", async () => {
@@ -64,6 +68,31 @@ describe("useAddToAssetLibrary — 写后失效 asset.list 缓存（ISSUE #4935�
       { taskId: "t1", scope: "public", category: "scene" },
       expect.anything(),
     );
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["asset", "list"] });
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(toast.info).toHaveBeenCalledWith("已加入资产库");
+  });
+
+  it("全部重复时提示「已在此目录中」：不算失败，仍失效缓存并关弹窗（ISSUE #4937）", async () => {
+    trpcMocks.createFromTaskMutationFn.mockResolvedValueOnce({
+      created: 0,
+      skipped: 0,
+      duplicated: 1,
+    });
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useAddToAssetLibrary(onDone), { wrapper });
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.addToLibrary({
+        taskId: "t1",
+        scope: "public",
+        category: "scene",
+      });
+    });
+
+    expect(ok).toBe(true);
+    expect(toast.info).toHaveBeenCalledWith("该资产已在此目录中");
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["asset", "list"] });
     expect(onDone).toHaveBeenCalledTimes(1);
   });

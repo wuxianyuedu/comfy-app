@@ -143,8 +143,26 @@ export const assetRouter = createTRPCRouter({
       }
       const total = task.images.length;
       let created = 0;
+      let duplicated = 0;
       for (const [index, image] of task.images.entries()) {
         const id = createId();
+        const name = assetNameOf(task.prompt, task.workflowName, index, total);
+        const projectId = input.scope === "project" ? (input.projectId ?? null) : null;
+        /* 同一目录（分类 + 归属）里已收过这张产物时跳过（ISSUE #4937）：
+           查重放在复制之前，重复加入不再产生多余的资产文件。 */
+        // oxlint-disable-next-line no-await-in-loop -- 与下面的串行链同一条
+        const isDuplicate = await assetRepository.findDuplicate({
+          userId: ctx.user.id,
+          sourceTaskId: task.id,
+          name,
+          category: input.category,
+          scope: input.scope,
+          projectId,
+        });
+        if (isDuplicate) {
+          duplicated += 1;
+          continue;
+        }
         /* 逐张「复制 → 插行」必须串行（oxlint no-await-in-loop 豁免）：复制成功
            才插行，且每张的目录互不相干；SQLite 单写者下并行也不会更快。 */
         // oxlint-disable-next-line no-await-in-loop -- 复制成功才插行，顺序依赖
@@ -159,11 +177,11 @@ export const assetRouter = createTRPCRouter({
           {
             userId: ctx.user.id,
             id,
-            name: assetNameOf(task.prompt, task.workflowName, index, total),
+            name,
             mediaType: assetMediaTypeOf(storedUrl),
             category: input.category,
             scope: input.scope,
-            projectId: input.scope === "project" ? (input.projectId ?? null) : null,
+            projectId,
             subdir: input.subdir ?? null,
             localPath: storedUrl,
             width: image.width,
@@ -178,10 +196,12 @@ export const assetRouter = createTRPCRouter({
         firstRowRequired(rows, "资产入库");
         created += 1;
       }
-      if (created === 0) {
+      if (created === 0 && duplicated === 0) {
+        /* 一张都没收进来且也不是重复（全是复制失败）——这才是真的入库失败；
+           「全部重复」是正常结论，由 created/duplicated 如实回报（见下）。 */
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "资产入库失败" });
       }
-      return { created, skipped: total - created };
+      return { created, skipped: total - created - duplicated, duplicated };
     }),
 
   /** 删除：库行 + 资产文件目录（文件在资产自己的目录里，不影响原任务）。 */
