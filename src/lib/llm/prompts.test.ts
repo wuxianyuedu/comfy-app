@@ -9,6 +9,7 @@ import {
   buildShotImageReviewMessages,
   buildShotRepromptMessages,
   buildStoryboardMessages,
+  buildWorkflowNoteTranslateMessages,
   parseCharacter,
   parseCharacterFull,
   parseStoryboard,
@@ -18,6 +19,17 @@ import {
  *   ① 模型不听话（带代码围栏、带前言、字段名写错、给了越界景别）
  *   ② 值不是字符串（对象 / 数组 / null）—— 直接拼进模板会得到 `[object Object]`
  * 所以用例全部走「不听话的模型」这条线。 */
+
+describe("buildWorkflowNoteTranslateMessages（#4963）", () => {
+  it("系统提示要求保留技术标识符，用户消息就是 note 正文", () => {
+    const [system, user] = buildWorkflowNoteTranslateMessages("Load MiniMax H3 with enable_lora.");
+    expect(system!.role).toBe("system");
+    expect(system!.content).toContain("中文");
+    expect(system!.content).toContain("原样保留");
+    expect(user!.role).toBe("user");
+    expect(user!.content).toBe("Load MiniMax H3 with enable_lora.");
+  });
+});
 
 describe("buildScriptMarkdownMessages", () => {
   it("项目类型 / 基调 / 梗概 / 灵感都进 user 消息，system 是剧本规范", () => {

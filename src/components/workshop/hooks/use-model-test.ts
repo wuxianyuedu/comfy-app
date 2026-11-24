@@ -168,6 +168,9 @@ export type ModelTestController = {
   /** 切换用途页签（候选 / 选中 / 表单随之重置）。 */
   setKind: (kind: ModelTestKind) => void;
   setMode: (mode: string) => void;
+  /** 往当前格反馈位写一条错误读数（拖拽上传等输入侧错误与生成失败同一条
+   *  通道，#4975）。 */
+  showNotice: (text: string) => void;
   /** 当前格本地工作流任务 id（入队后登记；null = 没有可看大屏的任务）。 */
   taskId: string | null;
   /** 当前格的执行日志（SSE log 帧，#4080 评论 8）。 */
@@ -855,6 +858,9 @@ export function useModelTest(): ModelTestController {
     mode,
     modeTabs,
     notice: activeSession.notice,
+    /* 拖拽上传等输入侧错误与生成失败走同一条 notice 反馈位（#4975）：
+     * 输入行只把读数递上来，落到哪个格由这里统一接管。 */
+    showNotice: showPreviewError,
     generate,
     openBusy,
     openResultInBrowser,

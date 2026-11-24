@@ -448,8 +448,8 @@
 
 - 状态：已上线
 - 需求：打开一条工作流的详情以页签组织，顺序即渲染顺序：
-  **工坊封装**（默认）/ **编辑对外参数** / **IO 预览** / **实际使用** / **源文件**
-  （页签集合以 `DETAIL_TABS` 为准）。
+  **工坊封装**（默认）/ **编辑对外参数** / **IO 预览** / **实际使用** / **说明** / **源文件**
+  （页签集合以 `DETAIL_TABS` 为准；「参考图装载」按是否配置参考图槽位显隐）。
 - 行为与验收：默认落最轻的页签（工坊封装）——不牵画布引擎与 JSON 树；
   「编辑对外参数 / 实际使用」共用同一常驻实例，切页签只切视图模式，
   表单值与运行态不丢。
@@ -669,6 +669,24 @@
   维持既有的堆叠文本框形态。与子图节点（SubgraphWidgetRow）的值框同一套视觉。
 - 落点：`src/components/studio/canvas/FlowNodeWidgetRows.tsx`（widget 行）、
   `src/components/studio/canvas/SubgraphWidgetRow.tsx`（子图行，既有形态基准）
+
+#### FR-WF-15 详情「说明」页签（note 节点正文清单 + 翻译成中文）
+
+- 状态：已上线
+- 需求：不打开工作流编辑器就能在工作流库详情查看工作流内 note 节点的说明正文
+  （ISSUE #4963）。note 说明常含模型用法、参数含义等关键信息，且可能是英文，
+  需要在同一页签里翻译成中文。
+- 行为与验收：详情新增「说明」页签（默认不选中），列出该工作流所有 note 节点，
+  每条展示「剥掉 `Note:` 前缀的标题 + 原文正文」；点「翻译成中文」用已配置的
+  LLM 把正文译成中文，节点名 / 参数名 / 模型名等技术标识符原样保留；
+  译文按 note 的 id+正文缓存（切页签不重译，正文变了才重译）；翻译中给 loading、
+  失败给可读原因与重试出口，不静默吞；没有 note 时给空态。note 数据来自
+  `workflow.detailFull` 富化的 `notes`，零新增详情请求；翻译复用现有 `/api/llm`
+  链路（`completeChat`），不另起基础设施。
+- 落点：`src/components/studio/workflow-library/sections/WorkflowNotesTab.tsx`、
+  `src/components/studio/workflow-library/hooks/use-workflow-note-translation.ts`、
+  `src/lib/llm/prompts.ts`（翻译 system prompt）、
+  `src/components/studio/workflow-library/workflow-library-detail-config.ts`（`DETAIL_TABS`）
 
 ---
 
