@@ -71,6 +71,7 @@
 | `build/build-all.ps1` | build/ | 一键编排 | `pnpm tauri build`（app.exe + nsis/msi 安装包）→ 在仓库根生成 `Comfy APP.lnk` 双击入口 → 发布到项目内 `dist\desktop` 留 2 份（规范 §7.7） |
 | `build/rebuild-static.ps1` | build/ | 资源 | 清理并重建 `src-tauri/static`（standalone / 嵌入资源来源） |
 | `build/package-portable.ps1` | build/ | 免安装版 | 组装解压即用的 portable zip（逻辑 `scripts/build/package-desktop-portable.mjs`，跨平台 `pnpm package:portable`，规范 §7.7 / ISSUE #3345） |
+| `build/clean-target.ps1` | build/ | 清理 | 清理 Rust 构建产物 `src-tauri/target` 腾磁盘：默认只清 `incremental/`，`-Release` / `-All`（= `cargo clean`）加大档位，`-DryRun` 只列清单（逻辑 `scripts/clean-target.ps1`，跨平台 `pnpm target:prune`，规范 §5 排障 / ISSUE #4489 / #4988） |
 | `docs/generate-docs.ps1` | docs/ | 文档 | 一键生成原文文档：`pnpm doc:check` 校验一致性 + `pnpm doc:render` 生成本机 `docs/generated/`（**不入库**，#3586；跨平台等价：`pnpm doc:gen`；逻辑在 `scripts/docs/generate-docs.ps1` / `scripts/docs/generate-docs.mjs`） |
 | `docs/generate-api-docs.ps1` | docs/ | 文档 | 一键重生成 API 文档 `docs/api/**`（跨平台等价：`pnpm run docs`；逻辑在 `scripts/docs/generate-api-docs.mjs`，跑 + 验 + 重试在 `scripts/docs/typedoc-run.mjs`） |
 | `shadcn-registry/start-shadcn-registry.ps1` | shadcn-registry/ | 团队 shadcn Registry | 启动本地 shadcn Registry HTTP 服务（`D:/dev/Comfy-APP-T3/registry`，供 `shadcn add @comfy-app-t3/*`） |
@@ -93,6 +94,7 @@
 | `build/build-tauri-release.ps1` | `scripts/build-tauri-release.ps1` |
 | `build/rebuild-static.ps1` | `scripts/rebuild-static.ps1` |
 | `build/package-portable.ps1` | `scripts/package-portable.ps1`（薄转交 → `pnpm package:portable`） |
+| `build/clean-target.ps1` | `scripts/clean-target.ps1`（薄转交 → `pnpm target:prune`） |
 | `shadcn-registry/start-shadcn-registry.ps1` | `scripts/start-shadcn-registry.ps1` |
 | `database-studio/start-database-studio.ps1` | `database-studio/start-database-studio.logic.ps1`（本类无 `scripts/` 分层，后缀区分） |
 | `start/start-web.ps1` | `scripts/dev-launcher.ps1` |
