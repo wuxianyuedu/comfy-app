@@ -150,3 +150,50 @@ describe("WorkflowSubgraphNode — 封装节点暴露口的显示名（ISSUE #34
     expect(last.style.width).toBe("4px");
   });
 });
+
+describe("WorkflowSubgraphNode — 已连线暴露参数不显示默认值（ISSUE #5051）", () => {
+  /* 复刻用户截图的形态：width / height 已由父图连线传入（绿点），
+   *  封装内部默认值 3104 在运行期不会生效 —— 不应再摆出来误导。 */
+  const wiredData = {
+    ...baseData,
+    inputs: [
+      {
+        name: "width",
+        type: "INT",
+        isConnection: true,
+        widget: { name: "width" },
+        widgetValue: 3104,
+      },
+      {
+        name: "height",
+        type: "INT",
+        isConnection: true,
+        widget: { name: "height" },
+        widgetValue: 3104,
+      },
+      {
+        name: "seed",
+        type: "INT",
+        isConnection: false,
+        widget: { name: "seed" },
+        widgetValue: 12_345,
+      },
+    ],
+  };
+
+  it("已连线的暴露参数只留标签与端口点，不渲染值格；未连线槽位照常显示数值", () => {
+    const { container } = renderNode(<WorkflowSubgraphNode data={wiredData} />);
+    /* 标签都在（参数本身还看得到）。 */
+    expect(screen.getByText("width")).toBeInTheDocument();
+    expect(screen.getByText("height")).toBeInTheDocument();
+    expect(screen.getByText("seed")).toBeInTheDocument();
+    /* 连线传入会覆盖内部默认值 —— 3104 不会生效，不再显示。 */
+    expect(screen.queryByText("3104")).not.toBeInTheDocument();
+    /* 未连线槽位的默认值照常显示。 */
+    expect(screen.getByText("12345")).toBeInTheDocument();
+    /* 连线槽位仍保留左侧端口点（Handle），连线几何不丢。 */
+    expect(container.querySelector('[data-handleid="width"]')).not.toBeNull();
+    expect(container.querySelector('[data-handleid="height"]')).not.toBeNull();
+    expect(container.querySelector('[data-handleid="seed"]')).toBeNull();
+  });
+});
