@@ -7,7 +7,8 @@ import { tempTabButtons } from "./support/sidebar-tabs";
  *
  * 侧栏常驻项（含这两项）自 #3740 后不再在顶部「已打开的视图」页签条里出 tab：
  * 打开/选中由侧栏按钮的激活态与打开态胶片表达，关闭在侧栏悬停态按钮上。
- * 本文件判的是「真的切到这一屏、内容真的渲染、没开弹窗」以及瞬时视图切走即关。
+ * 本文件判的是「真的切到这一屏、内容真的渲染、没开弹窗」，以及切走后的挂载语义
+ * （ISSUE #5003 起两屏出厂**独立标签页**：切走不关、保持挂载）。
  */
 
 /* #4770 起页签在侧栏「临时页签」组：侧栏常驻项（含这两项）根本不进临时页签，
@@ -66,7 +67,7 @@ test.describe("模型适配 / 模式契约作为视图 @critical", () => {
     await expect(stripOf(page).filter({ hasText: "模式契约" })).toHaveCount(0);
   });
 
-  test("两个瞬时视图先后打开：当前始终是最后打开的那一个，切走即关且不叠弹窗", async ({ page }) => {
+  test("两个独立视图先后打开：当前始终是最后打开的那一个，切走不关且不叠弹窗", async ({ page }) => {
     await page.goto("/workspace");
     await openFromSidebar(page, "模型适配");
     await expectSidebarViewActive(page, "模型适配", "model-adapters");
@@ -81,8 +82,12 @@ test.describe("模型适配 / 模式契约作为视图 @critical", () => {
     ).toBeVisible({ timeout: 20_000 });
 
     await openFromSidebar(page, "首页");
-    await expect(page.locator('[data-view="mode-contract"]')).toHaveCount(0, { timeout: 5000 });
-    await expect(page.locator('[data-view="model-adapters"]')).toHaveCount(0);
+    /* ISSUE #5003 起这两屏出厂是**独立标签页**：切走不关 —— 视图保持挂载、
+       只是从当前屏让位成隐藏；曾经「瞬时视图切走即关」的判据随之反转。 */
+    await expect(page.locator('[data-view="mode-contract"]')).toHaveCount(1);
+    await expect(page.locator('[data-view="model-adapters"]')).toHaveCount(1);
+    await expect(page.locator('[data-view="mode-contract"]')).toBeHidden();
+    await expect(page.locator('[data-view="model-adapters"]')).toBeHidden();
     await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 
