@@ -2,6 +2,7 @@
   "models": "shared",
   "assets": "independent",
   "characters": "independent",
+  "style": "independent",
   "history": "independent",
   "queue": "independent",
   "comfyui": "independent",

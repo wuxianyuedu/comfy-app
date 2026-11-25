@@ -15,6 +15,7 @@ import {
   Home,
   Image as ImageIcon,
   ListChecks,
+  Palette,
   Puzzle,
   Server,
   Settings,
@@ -40,6 +41,7 @@ export type WorkspaceView =
   | "models"
   | "assets"
   | "characters"
+  | "style"
   | "works"
   | "workshop"
   | "library"
@@ -138,6 +140,14 @@ export const NAV_ITEMS: Array<NavItem> = [
     label: "角色库",
     enabled: true,
     icon: <Users size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* 风格库（ISSUE #5069）：同一份提示词套不同画风生图对比。画风数据复用
+     * Skill 系统（内置种子 + 界面新建），与资产库 / 角色库同族的沉淀型全局库。 */
+    id: "style",
+    label: "风格库",
+    enabled: true,
+    icon: <Palette size={22} strokeWidth={1.8} />,
   },
   {
     id: "history",

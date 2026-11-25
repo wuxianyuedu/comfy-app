@@ -1881,8 +1881,8 @@
   关键词过滤生效，树角标计数随过滤口径变化；
   ③ 滑块拖到不同档位，网格列宽随之变化且刷新后保持（localStorage）；
   ④ 空库给出「先去历史加入资产」的引导，不是白屏。
-   ⑤ 内容区用**不封顶**档（`width="full"`，#5002）：左侧目录树贴齐页面内容区左边距
-   （只留统一容器的 `px-*`），不得被 1200px 居中窄栏推到中间、在宽屏留大片空白。
+  ⑤ 内容区用**不封顶**档（`width="full"`，#5002）：左侧目录树贴齐页面内容区左边距
+  （只留统一容器的 `px-*`），不得被 1200px 居中窄栏推到中间、在宽屏留大片空白。
 - 落点：`src/components/studio/assets/AssetLibrary.tsx`（视图）、
   `src/components/studio/assets/hooks/use-asset-library.ts`（逻辑层）、
   `src/components/studio/assets/AssetFolderTree.tsx` + `hooks/use-asset-folders.ts`（目录树，见 FR-AL-04）、
@@ -1991,3 +1991,43 @@
   `src/lib/character/portrait-prompt.ts`（提示词）、`src/lib/character/character-store.ts`（落盘）、
   `src/lib/core/repository-character-profile.ts`（状态机回写）、
   `src/components/studio/characters/CharacterGenerateDialog.tsx`（弹窗）
+
+## 18. 风格库（FR-SL）
+
+#### FR-SL-01 侧栏风格库与可搜索画风列表
+
+- 状态：已上线（#5069）
+- 需求：侧栏「风格库」进入；画风提示词描述可搜索、可多选，结果并排对比。
+- 行为与验收：① 侧栏有「风格库」入口且可点开（与资产库 / 角色库同族的全局视图）；
+  ② 画风列表按名字 / 说明 / 标签模糊搜索，输入即时收窄；
+  ③ 每条画风显示名字、说明与标签，可全选 / 清空，勾选数可见；
+  ④ 已有画风来自 Skill 系统（含内置种子），不在本页再抄一份数据。
+- 落点：`src/components/studio/NavItems.tsx`（入口）、
+  `src/components/studio/LazyViews.tsx` + `WorkspaceViewStack.tsx`（视图注册）、
+  `src/components/studio/styles/StyleLibrary.tsx`（视图）、
+  `src/server/api/routers/skill.ts`（`skill.list` 搜索）。
+
+#### FR-SL-02 数据驱动的基础提示词拼接
+
+- 状态：已上线（#5069）
+- 需求：同一份基础提示词由用户输入 + 一个动漫角色形象 + 一个场景组成，可预览。
+- 行为与验收：① 角色与场景是内置文字预设（各 8 条），按 id 选择，不选则不放进提示词；
+  ② 拼接顺序固定为「用户输入 → 角色 → 场景」，空白项不进结果，页面显示拼好的预览；
+  ③ 新增角色 / 场景只加一条预设数据，不改组件；用例钉住唯一 id 与拼接顺序。
+- 落点：`src/components/studio/styles/style-presets.ts`（预设 + 纯拼接函数）、
+  `style-presets.test.ts`（形状与拼接口径）。
+
+#### FR-SL-03 多画风生图与画风扩展
+
+- 状态：已上线（#5069）
+- 需求：对每个勾选画风用其提示词描述分别生图；只列支持文生图（T2I）的模型；
+  用户能在界面新建画风，新增后立刻可选，不改代码。
+- 行为与验收：① 模型候选经 `useModelCatalog("image", "T2I")` 收窄（本地工作流声明 T2I /
+  远端模型配了 T2I 适配器），其他模式不出现；
+  ② 本地走工作流封装 + `generate.generate` + SSE 观察取产物，远端走 `/api/workshop-api/generate`，
+  两条链路都不新造；③ 画风模板含 `{subject}` 时替换主体，否则作为后缀，负向词去重；
+  ④ 每格独立失败（一张失败不影响其他画风），有界并发 2；
+  ⑤ 新建画风写 `skill.create`，保存后刷新列表并自动勾选，slug 重复给明确冲突提示。
+- 落点：`src/components/studio/styles/hooks/use-style-library.ts`（编排，规范 17 ②）、
+  `src/lib/workshop/generation-client.ts` + `generation-api-client.ts`（既有生成链路）、
+  `src/lib/async-pool.ts`（有界并发）。

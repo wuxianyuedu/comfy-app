@@ -31,6 +31,7 @@ import {
   ModelTestView,
   QueueMonitor,
   SettingsView,
+  StyleLibraryView,
   UIKitGalleryView,
   isLazyView,
 } from "./LazyViews";
@@ -200,6 +201,10 @@ export function WorkspaceViewStack({
 
       case "characters": {
         return <CharacterLibraryView />;
+      }
+
+      case "style": {
+        return <StyleLibraryView />;
       }
 
       case "comfyui": {
