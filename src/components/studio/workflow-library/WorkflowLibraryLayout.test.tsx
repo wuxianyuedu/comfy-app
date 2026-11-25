@@ -122,6 +122,25 @@ describe("详情头部：窄屏不丢按钮", () => {
     renderHeader();
     expect(screen.getByTestId("detail-title-block").className).toContain("min-w-45");
   });
+
+  it("操作层级（#5058）：编辑是唯一实心主按钮，删除隔离在分隔线之后的行尾", () => {
+    renderHeader();
+    /* 主操作：编辑走实心品牌色（Button 的 default 实心档），不再与
+     *  其余描边次级按钮同权重。 */
+    const edit = screen.getByRole("button", { name: "编辑" });
+    expect(edit.className).toContain("bg-primary");
+
+    /* 危险隔离：分隔线之后只剩「删除」一个动作，且它排在行尾。 */
+    const actions = screen.getByTestId("detail-actions");
+    const divider = actions.querySelector("span[aria-hidden='true']");
+    if (divider === null) {
+      throw new Error("危险隔离分隔线未渲染");
+    }
+    const children = [...actions.children];
+    const afterDivider = children.slice(children.indexOf(divider) + 1);
+    expect(afterDivider).toHaveLength(1);
+    expect(afterDivider[0]?.textContent).toContain("删除");
+  });
 });
 
 describe("详情头部：在线工作流的「更新」入口（#4377）", () => {
@@ -212,12 +231,14 @@ describe("左右分栏：详情面板能窄于内容最小宽度", () => {
     const library = read("WorkflowLibrary.tsx");
     /* react-resizable-panels v4：数值 = 像素、字符串 = 百分比。#981 的 bug 正是
      * 写成数值（defaultSize={24} → 24px、maxSize={45} → 45px，列表被夹到 45px）。
-     * 这里钉死两件事：① 三处尺寸都是字符串百分比；② 不再残留任何数值形式。 */
-    const listPanel = tagContaining(library, 'defaultSize="24"');
+     * 这里钉死两件事：① 三处尺寸都是字符串百分比；② 不再残留任何数值形式。
+     * #5058：列表下限从 16% 提到 22%（16% 时列表 ~237px，名称截到读不了），
+     * 起步 24% → 30%，长名在截断前尽量展开。 */
+    const listPanel = tagContaining(library, 'defaultSize="30"');
     expect(listPanel.startsWith("<ResizablePanel")).toBe(true);
-    expect(listPanel).toContain('minSize="16"');
+    expect(listPanel).toContain('minSize="22"');
     expect(listPanel).toContain('maxSize="45"');
-    const detailPanel = tagContaining(library, 'defaultSize="76"');
+    const detailPanel = tagContaining(library, 'defaultSize="70"');
     expect(detailPanel.startsWith("<ResizablePanel")).toBe(true);
     expect(detailPanel).toContain('minSize="40"');
     expect(library).not.toMatch(/defaultSize=\{\d+\}/);
