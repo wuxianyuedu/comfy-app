@@ -13,6 +13,8 @@
  * 都是这一档），其余形态返回 null，由调用方按「无法细看、按文件大小判」兜底。
  */
 
+import "server-only";
+
 import { inflateSync } from "node:zlib";
 
 import { clampInt } from "~/lib/clamp";
