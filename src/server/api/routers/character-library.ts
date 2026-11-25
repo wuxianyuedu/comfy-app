@@ -416,7 +416,7 @@ export const characterLibraryRouter = createTRPCRouter({
       if (
         task === null ||
         task.status === "FAILED" ||
-        task.status === "CANCELED" ||
+        task.status === "CANCELLED" ||
         (task.status === "SUCCEEDED" && (task.images?.length ?? 0) === 0)
       ) {
         // oxlint-disable-next-line no-await-in-loop -- 对账逐行回写，SQLite 单写者并行无收益

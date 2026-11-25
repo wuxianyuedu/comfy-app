@@ -350,6 +350,18 @@ describe("characterLibrary.syncGeneration —— 生成对账回写", () => {
     const queued = await caller().detail({ id: queuedId });
     expect(queued.status).toBe("generating");
   });
+
+  it("任务取消（CANCELLED，全仓口径）：状态落 failed，角色能重新进生图池（#5054）", async () => {
+    const cancelledId = await seedGeneratingCharacter("task-cancelled", "CANCELLED");
+    const res = await caller().syncGeneration();
+    expect(res.failed).toBe(1);
+    expect(res.pending).toBe(0);
+    const detail = await caller().detail({ id: cancelledId });
+    expect(detail.status).toBe("failed");
+    /* 失败角色随后可被 enqueueGeneration 再次入队（取消 → 重跑的闭环）。 */
+    const rerun = await caller().enqueueGeneration({ workflowId: "wf-1" });
+    expect(rerun.enqueued).toBe(1);
+  });
 });
 
 describe("characterLibrary.scoreQuality / scoreAllQuality / regenerateFlagged —— 质量打分", () => {
