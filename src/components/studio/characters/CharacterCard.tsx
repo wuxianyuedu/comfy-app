@@ -2,7 +2,8 @@
 
 /**
  * `CharacterCard` — 角色库网格里的单张角色卡（ISSUE #5009）：
- * 竖版立绘缩略图 + 状态徽标 + 名字 + 原型 + 特征标签（前几枚）。
+ * 竖版立绘缩略图 + 名字 + 状态徽标 + 原型 + 质量分 + 特征标签（前几枚）。
+ * 状态徽标放信息区、不压在立绘上（反馈：徽标挡图影响观看）。
  * 纯展示组件：数据与回调都由 CharacterLibrary 注入（规范 17 §17.2 第③层）。
  */
 import { Trash2, UserRound } from "lucide-react";
@@ -47,15 +48,6 @@ export function CharacterCard({ character, onOpenDetail, onRemove }: CharacterCa
             {character.status === "failed" ? "生成失败" : "暂无立绘"}
           </span>
         )}
-        {/* 状态徽标（左上）。 */}
-        <span
-          className={cn(
-            "text-2xs absolute top-2 left-2 rounded-full px-2 py-0.5 font-medium",
-            characterStatusClass(character.status),
-          )}
-        >
-          {CHARACTER_STATUS_LABELS[character.status] ?? character.status}
-        </span>
         {/* 删除入口（悬停浮现，与资产卡同纪律）。 */}
         <Button
           aria-label={`删除角色 ${character.name}`}
@@ -70,7 +62,7 @@ export function CharacterCard({ character, onOpenDetail, onRemove }: CharacterCa
         </Button>
       </div>
 
-      {/* ── 信息区：名字 + 原型 + 标签（整块可点，进详情） ── */}
+      {/* ── 信息区：名字 + 状态 + 原型 + 质量 + 标签（整块可点，进详情） ── */}
       <Button
         className="flex h-auto flex-col gap-1.5 p-3 text-left"
         onClick={() => {
@@ -82,24 +74,35 @@ export function CharacterCard({ character, onOpenDetail, onRemove }: CharacterCa
         <TruncatedText className="text-ink-strong truncate text-sm font-medium">
           {character.name}
         </TruncatedText>
+        {/* 状态徽标放信息区、不压在立绘上（ISSUE #5009 反馈：徽标挡图）。 */}
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "text-2xs rounded-full px-1.5 py-0.5 font-medium",
+              characterStatusClass(character.status),
+            )}
+          >
+            {CHARACTER_STATUS_LABELS[character.status] ?? character.status}
+          </span>
+          {character.qualityScore !== null && character.qualityScore !== undefined ? (
+            <span
+              className={cn(
+                "text-2xs font-medium",
+                character.qualityScore >= 80
+                  ? "text-success-strong"
+                  : character.qualityScore >= 60
+                    ? "text-warning-strong"
+                    : "text-danger-strong",
+              )}
+            >
+              质量 {character.qualityScore}
+            </span>
+          ) : null}
+        </div>
         <p className="text-ink-fainter text-2xs truncate">
           {character.archetype === "" ? "未设原型" : character.archetype}
           {character.gender === "" ? "" : ` · ${character.gender}`}
         </p>
-        {character.qualityScore !== null && character.qualityScore !== undefined ? (
-          <p
-            className={cn(
-              "text-2xs font-medium",
-              character.qualityScore >= 80
-                ? "text-success-strong"
-                : character.qualityScore >= 60
-                  ? "text-warning-strong"
-                  : "text-danger-strong",
-            )}
-          >
-            质量 {character.qualityScore}
-          </p>
-        ) : null}
         {character.tags.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {visibleTags.map((tag) => (
