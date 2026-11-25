@@ -5,6 +5,7 @@
 // 任务本身无快照，只能按 params.workflow 现查（resolveParamLabel）。
 
 import { asRecord, isRecord } from "~/lib/is-record";
+import { rawGraphWidgetValue } from "~/lib/comfyui/raw-overrides";
 import {
   modeContractEntries,
   referenceImageSlotIndex,
@@ -146,10 +147,13 @@ export function deriveTaskOrigin(detail: TaskDetail | null): TaskOrigin {
 }
 
 /** 一行「工坊参数」（模式契约的一个对外口 + 该次任务落在它上面的值）。
- *  `value` 为 `undefined` 表示这个口本次没给值——仍占一行（契约配了几个口就显示几个）。 */
+ *  `value` 为 `undefined` 表示这个口本次没给值——仍占一行（契约配了几个口就显示几个）。
+ *  `source` 标值的来路：本次提交，或工作流图内默认值（界面挂「默认值」角标，
+ *  免得把图内配置误读成「本次传了这个值」）。 */
 export type WorkshopParamRow = {
   id: string;
   label: string;
+  source: "submitted" | "default";
   value: unknown;
 };
 
@@ -182,20 +186,29 @@ type RawWorkflowInput = {
   value: unknown;
 };
 
-/** 解析一个契约口在本次任务里的值：顶层 params（含别名）→ 参考图口按推导清单
- *  取槽位 → 尺寸口按 size 族 pin 聚合 → 同名 workflowInputs pin 兜底。
+/** 解析契约口取值要用的**任务上下文**（收成一个对象，免得逐参数传一长串）。 */
+type PortResolveContext = {
+  /** 任务详情（读执行快照的图内默认值用；复制去重投不读，传 null）。 */
+  detail: TaskDetail | null;
+  inputs: Array<RawWorkflowInput>;
+  io: WorkflowIOMap | null | undefined;
+  params: Record<string, unknown>;
+  refs: Array<string>;
+};
+
+/** 解析一个契约口在本次任务里的值与来路：顶层 params（含别名）→ 参考图口按
+ *  推导清单取槽位 → 尺寸口按 size 族 pin 聚合 → 同名 workflowInputs pin 兜底
+ *  → 图内默认值回落（ISSUE #5041：工坊没传的口，工作流用的是图内配置值）。
  *  都取不到返回 `undefined`（不臆造）。 */
-function resolvePortValue(
+function resolvePort(
   portId: string,
-  params: Record<string, unknown>,
-  inputs: Array<RawWorkflowInput>,
-  io: WorkflowIOMap | null | undefined,
-  refs: Array<string>,
-): unknown {
+  ctx: PortResolveContext,
+): { source: "submitted" | "default"; value: unknown } | undefined {
+  const { params, inputs, io, refs, detail } = ctx;
   const keys = PORT_TO_PARAM_KEYS[portId] ?? [portId];
   for (const key of keys) {
     if (!isBlank(params[key])) {
-      return params[key];
+      return { value: params[key], source: "submitted" };
     }
   }
   /* 参考图口（ISSUE #4855 / #4910）：按 `deriveReferenceImages` 的去重保序清单
@@ -207,7 +220,7 @@ function resolvePortValue(
     const slot = portId === "reference-image" ? 1 : referenceImageSlotIndex(portId);
     const value: unknown = refs[slot - 1];
     if (typeof value === "string" && value.trim() !== "") {
-      return value;
+      return { value, source: "submitted" };
     }
   }
   if (portId === "size") {
@@ -215,19 +228,70 @@ function resolvePortValue(
       .filter((input) => SIZE_PIN_NAMES.has(input.name))
       .map((input) => `${resolveParamLabel(input, io)} ${kvValueText(input.value)}`);
     if (parts.length > 0) {
-      return parts.join(" · ");
+      return { value: parts.join(" · "), source: "submitted" };
+    }
+    /* 本次没下发任何尺寸 pin：工作流用的是图内默认尺寸（#5041）——按 IO 里的
+     * 尺寸族端口逐个读执行快照的图内值，展示格式与提交值一致。 */
+    const defaults = sizeFamilyGraphDefaults(detail, io);
+    if (defaults.length > 0) {
+      return { value: defaults.join(" · "), source: "default" };
     }
   }
   const pin = inputs.find((input) => input.name === portId);
   if (pin && !isBlank(pin.value)) {
-    return pin.value;
+    return { value: pin.value, source: "submitted" };
+  }
+  /* 同名 IO 端口的图内默认值兜底（种子这类「工坊没给、图内一定有」的口，#5041）。 */
+  const entry = Object.values(io ?? {}).find(
+    (item) => item.direction === "input" && item.name === portId,
+  );
+  if (entry !== undefined) {
+    const value = graphDefaultOf(detail, entry);
+    if (!isBlank(value)) {
+      return { value, source: "default" };
+    }
   }
   return undefined;
 }
 
+/** 尺寸族端口在执行快照里的**图内默认值**（#5041）：与提交值聚合同一份展示
+ *  格式（`可读名 值`），取不到的端口跳过，全取不到返回空数组。 */
+function sizeFamilyGraphDefaults(
+  detail: TaskDetail | null,
+  io: WorkflowIOMap | null | undefined,
+): Array<string> {
+  const parts: Array<string> = [];
+  for (const entry of Object.values(io ?? {})) {
+    if (entry.direction !== "input" || !SIZE_PIN_NAMES.has(entry.name)) {
+      continue;
+    }
+    const value = graphDefaultOf(detail, entry);
+    if (isBlank(value)) {
+      continue;
+    }
+    parts.push(
+      `${resolveParamLabel({ name: entry.name, nodeId: entry.nodeId }, io)} ${kvValueText(value)}`,
+    );
+  }
+  return parts;
+}
+
+/** 只取值（「复制去重投」的载荷用）：不带来源，也不做图内默认值回落 ——
+ *  那份载荷折的是**本次提交**，粘贴侧（测试模型）会按自己的表单默认值跑。 */
+function resolvePortValue(
+  portId: string,
+  params: Record<string, unknown>,
+  inputs: Array<RawWorkflowInput>,
+  io: WorkflowIOMap | null | undefined,
+  refs: Array<string>,
+): unknown {
+  return resolvePort(portId, { params, inputs, io, refs, detail: null })?.value;
+}
+
 /** 工坊参数：按**该任务模式的生效契约口清单**逐个列出（含本次没给值的口），
- *  值从 params / workflowInputs 解析。契约来源与工坊封装页、工作流库画布卡片
- *  同一份（`modeContractEntries`），不再各写一份硬编码键名清单。 */
+ *  值从 params / workflowInputs 解析；没给值的口回落工作流图内默认值（#5041），
+ *  来源随行标注（界面挂「默认值」角标）。契约来源与工坊封装页、工作流库画布
+ *  卡片同一份（`modeContractEntries`），不再各写一份硬编码键名清单。 */
 export function deriveWorkshopParams(
   detail: TaskDetail | null,
   mode: string | null | undefined,
@@ -237,11 +301,15 @@ export function deriveWorkshopParams(
   const params = paramsOf(detail);
   const inputs = workflowInputsOf<RawWorkflowInput>(detail);
   const refs = deriveReferenceImages(detail);
-  return modeContractEntries(mode, contracts).map((port) => ({
-    id: port.id,
-    label: port.label,
-    value: resolvePortValue(port.id, params, inputs, io, refs),
-  }));
+  return modeContractEntries(mode, contracts).map((port) => {
+    const resolved = resolvePort(port.id, { params, inputs, io, refs, detail });
+    return {
+      id: port.id,
+      label: port.label,
+      value: resolved?.value,
+      source: resolved?.source ?? "default",
+    };
+  });
 }
 
 /** 一行「工作流参数」（工作流 IO 的一个输入端口）。 */
@@ -348,9 +416,15 @@ function submittedValueFor(
  * 原始 JSON 折叠仍列 `params` 顶层键（不再过滤 seed / steps / cfg —— 那条过滤
  * 是为躲开已删除的「生成参数卡」重复，却会让种子这类关键参数从表中凭空消失）。
  */
-/** 从执行快照的 API 图里读端口落点的**实际值**：端口没传值时，工作流用的是
+/** 从执行快照的图里读端口落点的**实际值**：端口没传值时，工作流用的是
  *  图内节点上配置的默认值（如 minimax 的 aspect_ratio / megapixels / seed）——
  *  这些值一定存在（ISSUE #5009 反馈：显示「未提供」会让人以为参数没配）。
+ *
+ *  快照有两种形状（与 `graph-node-class.ts` / `executed-model.ts` 的双格式
+ *  识别同一组事实，ISSUE #5041）：
+ *   · **API 图**：`{ nodeId: { inputs: { name: value } } }` —— 按键直取；
+ *   · **RAW（UI 格式原件，comfy-cli 路径落库的那种）**：`{ nodes: [...],
+ *     definitions: { subgraphs: [...] } }`，控件值在 `widgets_values` 下标里。
  *  子图引脚的运行期节点 id 是 `宿主id:内部id`，两个候选都试。 */
 function graphDefaultOf(detail: TaskDetail | null, entry: WorkflowIOEntry): unknown {
   const snapshot = detail?.workflowSnapshot;
@@ -372,7 +446,8 @@ function graphDefaultOf(detail: TaskDetail | null, entry: WorkflowIOEntry): unkn
       return inputs[entry.name];
     }
   }
-  return undefined;
+  /* RAW（UI 格式）：按同一套节点定位（含子图宿主链）+ 控件槽位序读图内值。 */
+  return rawGraphWidgetValue(workflow, candidates[0] ?? entry.nodeId, entry.name);
 }
 
 export function deriveWorkflowParams(
