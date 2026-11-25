@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { ToastProvider } from "~/components/studio/ToastProvider";
 
-import { FILTERS } from "./history-types";
+import { FILTERS, HISTORY_TASK_STATUSES } from "./history-types";
 
 afterEach(cleanup);
 
@@ -116,8 +116,15 @@ describe("FILTERS 的配色只给语义键", () => {
     }
   });
 
-  it("ALL 不给圆点（没有「全部」这个状态），其余四枚各给一枚", () => {
+  it("ALL 不给圆点（没有「全部」这个状态），其余三枚各给一枚", () => {
     expect(FILTERS.find((f) => f.key === "ALL")?.tone).toBeUndefined();
-    expect(FILTERS.filter((f) => f.tone)).toHaveLength(4);
+    expect(FILTERS.filter((f) => f.tone)).toHaveLength(3);
+  });
+
+  it("历史只收终态任务：进行中 / 排队不设筛选枚（ISSUE #5009 现场反馈）", () => {
+    /* 历史页应是「生成好的内容」；排队 / 进行中的任务在「队列」页看。
+     * 取数口径（HISTORY_TASK_STATUSES）也只含终态，两边必须一致。 */
+    expect(FILTERS.map((f) => f.key)).toEqual(["ALL", "SUCCEEDED", "FAILED", "CANCELLED"]);
+    expect(HISTORY_TASK_STATUSES.split(",")).toEqual(["SUCCEEDED", "FAILED", "CANCELLED"]);
   });
 });
