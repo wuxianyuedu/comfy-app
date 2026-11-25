@@ -348,6 +348,33 @@ function submittedValueFor(
  * 原始 JSON 折叠仍列 `params` 顶层键（不再过滤 seed / steps / cfg —— 那条过滤
  * 是为躲开已删除的「生成参数卡」重复，却会让种子这类关键参数从表中凭空消失）。
  */
+/** 从执行快照的 API 图里读端口落点的**实际值**：端口没传值时，工作流用的是
+ *  图内节点上配置的默认值（如 minimax 的 aspect_ratio / megapixels / seed）——
+ *  这些值一定存在（ISSUE #5009 反馈：显示「未提供」会让人以为参数没配）。
+ *  子图引脚的运行期节点 id 是 `宿主id:内部id`，两个候选都试。 */
+function graphDefaultOf(detail: TaskDetail | null, entry: WorkflowIOEntry): unknown {
+  const snapshot = detail?.workflowSnapshot;
+  if (!isRecord(snapshot)) {
+    return undefined;
+  }
+  const workflow = isRecord(snapshot.workflow) ? snapshot.workflow : undefined;
+  if (workflow === undefined) {
+    return undefined;
+  }
+  const candidates =
+    entry.hostNodeId === undefined
+      ? [entry.nodeId]
+      : [`${entry.hostNodeId}:${entry.nodeId}`, entry.nodeId];
+  for (const nodeId of candidates) {
+    const node = isRecord(workflow[nodeId]) ? workflow[nodeId] : undefined;
+    const inputs = isRecord(node?.inputs) ? node.inputs : undefined;
+    if (inputs !== undefined && Object.hasOwn(inputs, entry.name)) {
+      return inputs[entry.name];
+    }
+  }
+  return undefined;
+}
+
 export function deriveWorkflowParams(
   detail: TaskDetail | null,
   io: WorkflowIOMap | null | undefined,
@@ -367,12 +394,26 @@ export function deriveWorkflowParams(
     }
     const submittedValue = submitted?.value;
     const trimmedLabel = entry.label?.trim() ?? "";
+    /* 值的优先级：本次提交 > IO 作者写的默认值 > 执行图里节点配置的默认值。
+     * 都没有才留空（真·未提供）。后两档都标 source: "default"，界面会挂
+     * 「默认值」角标，不会被误读成「本次传了这个值」。 */
+    const declared = submittedValue === undefined ? resolveEntryDefault(entry, mode) : undefined;
+    const graphDefault =
+      submittedValue === undefined && declared === undefined
+        ? graphDefaultOf(detail, entry)
+        : undefined;
+    const effective =
+      submittedValue === undefined
+        ? declared === undefined
+          ? graphDefault
+          : declared
+        : submittedValue;
     return {
       id: entry.ioKey,
       label: trimmedLabel === "" ? entry.name : trimmedLabel,
       name: entry.name,
       source: submittedValue === undefined ? "default" : "submitted",
-      value: submittedValue === undefined ? resolveEntryDefault(entry, mode) : submittedValue,
+      value: effective,
     };
   });
 
