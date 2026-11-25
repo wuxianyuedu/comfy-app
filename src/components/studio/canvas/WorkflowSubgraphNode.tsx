@@ -9,6 +9,7 @@ import { sanitizeComboLabel, NODE_TITLE_H, hexToRgba } from "../workflow-utils";
 import type { WorkflowSubgraphData, RawInputMeta } from "../workflow-types";
 import { FrostLayer } from "./NodeFrost";
 import { useIOEditContext } from "./IOEditContext";
+import { SubgraphEnterFooter } from "./SubgraphEnterFooter";
 import { SubgraphHeader } from "./SubgraphHeader";
 import { useHoverElevation } from "../workflow-editor/HoverElevation";
 import { SubgraphCollapsedAnchors } from "./SubgraphCollapsedAnchors";
@@ -140,7 +141,6 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         io={io}
         isCollapsed={isCollapsed}
         nodeId={String(data.nodeId)}
-        onEnter={data.onEnter}
         onToggle={() => {
           setUserCollapsed((value) => !value);
         }}
@@ -221,6 +221,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
           )}
         </div>
       )}
+
+      {/* 底部「进入子图」进入条 —— 新版 ComfyUI 形态：整宽、居中弱化色文字 +
+       *  图标，悬停提亮。下钻的唯一入口（标题栏不再放钻入章）。折叠态不渲染。 */}
+      {!isCollapsed && <SubgraphEnterFooter onEnter={data.onEnter} />}
     </div>
   );
 });
