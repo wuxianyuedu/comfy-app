@@ -139,8 +139,10 @@ export function WorkflowLibrary({
 
       <ResizablePanelGroup className="min-h-0 flex-1" orientation="horizontal">
         {/* react-resizable-panels v4：数值 = 像素、字符串 = 百分比。这里必须用
-         * 字符串百分比，否则 v4 把 24/16/45 当像素，列表被夹到 45px（issue #981）。 */}
-        <ResizablePanel defaultSize="24" maxSize="45" minSize="16">
+         * 字符串百分比，否则 v4 把 24/16/45 当像素，列表被夹到 45px（issue #981）。
+         * 列表下限 22%（#5058）：16% 时列表只有 ~237px，名称被截成两三个音节，
+         * 商业级列表的可扫读性保不住；30% 起步让长名在截断前尽量展开。 */}
+        <ResizablePanel defaultSize="30" maxSize="45" minSize="22">
           <WorkflowLibraryList
             /* 拖入 JSON 导入：整片列表侧栏就是投放区（与导入面板同一漏斗）。 */
             dragActive={c.importState.listDragActive}
@@ -167,7 +169,7 @@ export function WorkflowLibrary({
           />
         </ResizablePanel>
         <ResizableHandle withHandle />
-        <ResizablePanel defaultSize="76" minSize="40">
+        <ResizablePanel defaultSize="70" minSize="40">
           {/* `min-w-0` 必须有：详情面板是弹性项，默认 `min-width: auto` 会让它**不
             肯窄于内容的最小宽度**（面板里的画布预览、卡片列都不小），于是整行宽度
             超过窗口、右半部分连同头部按钮一起被根容器的 `overflow-hidden` 裁掉
