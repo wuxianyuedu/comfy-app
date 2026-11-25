@@ -43,6 +43,7 @@ import {
 } from "../history-list-derive";
 import {
   FILTERS,
+  HISTORY_TASK_STATUSES,
   type FilterKey,
   type SortKey,
   type TaskDetail,
@@ -149,7 +150,7 @@ export function useHistoryList(args: {
   const isTabActive = useViewTabActive();
   const tasksQ = useInfiniteQuery(
     trpc.task.list.infiniteQueryOptions(
-      { take: PAGE_SIZE },
+      { take: PAGE_SIZE, status: HISTORY_TASK_STATUSES },
       {
         getNextPageParam: (lastPage) => {
           if (!lastPage.hasMore) {

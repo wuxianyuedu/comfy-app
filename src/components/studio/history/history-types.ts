@@ -25,6 +25,14 @@ export type TaskItem = {
 
 export type FilterKey = "ALL" | "SUCCEEDED" | "RUNNING" | "FAILED" | "CANCELLED" | "QUEUED";
 
+/**
+ * 历史页的取数口径：**只取终态任务**（已完成 / 失败 / 已取消）。
+ * 排队中 / 进行中的任务不是「生成好的内容」，不进历史——它们在「队列」页
+ * （QueueMonitor）看。ISSUE #5009 现场反馈：批量生图的一千条排队任务把
+ * 历史页糊满「无图待生成」卡片，历史页因此只应呈现终态。
+ */
+export const HISTORY_TASK_STATUSES = "SUCCEEDED,FAILED,CANCELLED";
+
 export type SortKey = "newest" | "oldest";
 
 /** 任务详情（来自 tRPC task.detail 的完整输出）。 */
@@ -42,7 +50,6 @@ export type FilterDef = {
 export const FILTERS: Array<FilterDef> = [
   { key: "ALL", label: "全部" },
   { key: "SUCCEEDED", label: "已完成", tone: "up" },
-  { key: "RUNNING", label: "进行中", tone: "probing" },
   { key: "FAILED", label: "失败", tone: "down" },
   { key: "CANCELLED", label: "已取消", tone: "busy" },
 ];
