@@ -126,4 +126,8 @@ export function useSimulatedProgress(tasks: Array<TaskItem>) {
   return map;
 }
 
-export const PAGE_SIZE = 8;
+/* 每页 100 条：历史会积累上千条（ISSUE #5009 现场一次批量就是 1000+），
+ * 每页 8 条意味着滚动加载要打上百次请求才能看全——页太小，请求次数才是
+ * 慢的主因。100 条一方面把请求数压到十几次，一方面单页负载仍可控
+ * （task.list 的 take 上限是 200）。 */
+export const PAGE_SIZE = 100;
