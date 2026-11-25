@@ -165,9 +165,9 @@ export async function complete(taskId: string, promptId: string) {
 
 /* ── manifest（归档件）辅助 ────────────────────────────────────── */
 
-/** 北京时间（UTC+8）的 ISO 带偏移格式：`2026-11-25T02:53:44.915+08:00`。
- *  manifest 是给人对照时钟的归档件，时间一律落北京时间（ISSUE #5009 反馈）；
- *  带偏移的 ISO 机器可读、排序不乱，也不会被误读成 UTC。 */
+/** 北京时间（UTC+8）的 ISO 带偏移格式：把 UTC 时刻加 8 小时，并把偏移
+ *  `+08:00` 写进同一串（替代结尾的 `Z`）。manifest 是给人对照时钟的
+ *  归档件，时间一律落北京时间（ISSUE #5009 反馈）。 */
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
 function beijingIso(value: Date | string | null | undefined): string | null {
   if (value === null || value === undefined) {
