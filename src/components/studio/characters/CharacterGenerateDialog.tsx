@@ -29,7 +29,8 @@ export type CharacterGenerateDialogProps = {
 /** 本批数量的档位（一次入队太多会长时间占满队列，分批点几次更可控）。 */
 const BATCH_LIMITS = [10, 50, 100, 200] as const;
 
-/** 图片工作流：文生图两代词都认（库里模板的 taskType 是 T2I / TXT2IMG）；没有时退回全部。 */
+/** 图片工作流：只认文生图（库里的 taskType 是 T2I，别名为 TXT2IMG）；
+ *  视频（I2V / R2V…）与图像编辑（I2I）一律不算——角色立绘只能来自文生图。 */
 function isImageWorkflow(workflow: WorkflowRow): boolean {
   return workflow.taskType === "T2I" || workflow.taskType === "TXT2IMG";
 }
@@ -60,10 +61,10 @@ export function CharacterGenerateDialog({
 
   /* 选中态：用户点选优先；未点选时按默认派生（minimax 优先，ISSUE #5009 的
    * 指定工作流）——派生值随工作流清单到达自动就位，不需要 effect 回写。 */
-  const candidates = useMemo(
-    () => (workflows.some(isImageWorkflow) ? workflows.filter(isImageWorkflow) : workflows),
-    [workflows],
-  );
+  /* 候选只收图片工作流（T2I / TXT2IMG）：视频 / 编辑类一律不进角色立绘的
+   * 选择面。库里一条图片工作流都没有时就地给空态提示，**不**回落到视频
+   * 工作流——角色立绘只能来自文生图。 */
+  const candidates = useMemo(() => workflows.filter(isImageWorkflow), [workflows]);
   const defaultId = useMemo(() => defaultWorkflow(candidates)?.id ?? null, [candidates]);
   const effectiveWorkflowId = workflowId ?? defaultId;
   const selected = candidates.find((workflow) => workflow.id === effectiveWorkflowId) ?? null;
