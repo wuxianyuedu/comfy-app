@@ -140,7 +140,7 @@ export function WorkflowLibraryList({
               size="icon-xs"
               variant="ghost"
             >
-              <X className="size-3.5" />
+              <X className="size-3.5" data-icon="inline-start" />
             </Button>
           )}
         </div>
