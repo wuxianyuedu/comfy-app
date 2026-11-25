@@ -69,6 +69,9 @@ function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorCon
     toggleExpanded: vi.fn(),
     detailLoading: false,
     paramRows: [],
+    paused: false,
+    pauseBusy: false,
+    togglePause: vi.fn(),
     isBusy: () => false,
     refresh: vi.fn(),
     cancel: vi.fn(),
@@ -320,5 +323,27 @@ describe("QueueMonitor", () => {
     monitorMock.mockReturnValue(controller({ loadError: "读不到任务记录，后端可能刚重启" }));
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText(/^读不到任务记录/)).toBeInTheDocument();
+  });
+});
+
+describe("生图暂停 / 恢复（ISSUE #5055）", () => {
+  it("运行中显示「暂停生成」按钮，点击走 controller 的 togglePause", async () => {
+    const togglePause = vi.fn();
+    const user = userEvent.setup();
+    monitorMock.mockReturnValue(controller({ paused: false, togglePause }));
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "暂停生成" }));
+    expect(togglePause).toHaveBeenCalledTimes(1);
+    /* 未暂停时不显示「生图已暂停」角标。 */
+    expect(screen.queryByText("生图已暂停")).toBeNull();
+  });
+
+  it("暂停中显示「恢复生成」按钮与「生图已暂停」角标", () => {
+    monitorMock.mockReturnValue(controller({ paused: true }));
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "恢复生成" })).toBeInTheDocument();
+    expect(screen.getByText("生图已暂停")).toBeInTheDocument();
   });
 });

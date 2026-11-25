@@ -33,7 +33,8 @@
 import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { TERMINAL_TASK_STATUSES } from "../task-state";
-import { task, taskImage } from "~/server/db/schema";
+import { isVideoMode } from "~/lib/workflow/workflow-exposed-params";
+import { generationControl, GENERATION_CONTROL_ID, task, taskImage } from "~/server/db/schema";
 import { createTaskLogSection } from "./repository-task-impl-logs";
 
 import type { TaskRepoDb } from "./repository-task-impl-types";
@@ -48,6 +49,25 @@ import type { TaskRepoDb } from "./repository-task-impl-types";
  * 两边只是各自的 `[...tuple]`，语义与来源同步。
  */
 const TERMINAL_STATES: Array<string> = [...TERMINAL_TASK_STATUSES];
+
+/** 生图暂停状态（ISSUE #5055）：视图（队列页）与执行器闸门共用的形状。 */
+export type GenerationPauseState = {
+  /** true = 暂停中：不领取新的生图任务。 */
+  paused: boolean;
+  /** 最近一次暂停的时刻；null = 未暂停。 */
+  pausedAt: Date | null;
+};
+
+/** 音频类模式码（T2A / T2M / T2S，见 `model-mode-contract` 的音频三档）：
+ *  暂停是「生图」闸，不该拦住音频生成。 */
+const AUDIO_MODE_RE = /^(?:t2a|t2m|t2s)$/i;
+
+/** 该任务类型是否属于**生图**（暂停闸的作用面）：视频 / 音频之外的模式
+ *  （T2I / I2I 这类）都算生图。判据只看模式码——视频族复用 `isVideoMode`，
+ *  不另抄一份前缀表。 */
+export function isImageTaskType(type: string): boolean {
+  return !isVideoMode(type) && !AUDIO_MODE_RE.test(type.trim());
+}
 
 /** `claimedBy` 列的值域（ADR §6 的两种执行器归属）。提交侧（tRPC `generate`，
  *  3-B 接线）按 `COMFY_EXECUTOR` env 决定写哪个值；NULL 语义归 inline。 */
@@ -147,6 +167,50 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
         .where(inArray(task.id, candidates))
         .returning({ id: task.id });
       return claimed.map((row) => row.id);
+    },
+
+    /** 看一眼队首（**不领取**）：生图暂停闸（ISSUE #5055）用它判断「下一条
+     *  是不是生图任务」再决定这一拍领不领。与 `claimNextQueued` 同一归属谓词、
+     *  同一排序（createdAt），只是不写 RUNNING。 */
+    async peekNextQueued(mode: TaskClaimMode): Promise<{ id: string; type: string } | null> {
+      const rows = await db
+        .select({ id: task.id, type: task.type })
+        .from(task)
+        .where(and(eq(task.status, "QUEUED"), ownedBy(mode)))
+        .orderBy(task.createdAt)
+        .limit(1);
+      return rows[0] ?? null;
+    },
+
+    /** 生图暂停状态（ISSUE #5055）：单行表，没行 = 未暂停。派发闸门每拍读一次
+     *  （单键点查，量可忽略）；应用重启后仍是库里那份，直到显式恢复。 */
+    async getGenerationPauseState(): Promise<GenerationPauseState> {
+      const rows = await db
+        .select({
+          paused: generationControl.paused,
+          pausedAt: generationControl.pausedAt,
+        })
+        .from(generationControl)
+        .where(eq(generationControl.id, GENERATION_CONTROL_ID))
+        .limit(1);
+      const row = rows[0];
+      return row === undefined
+        ? { paused: false, pausedAt: null }
+        : { paused: row.paused, pausedAt: row.pausedAt };
+    },
+
+    /** 写生图暂停状态（upsert 单行）：暂停记时刻，恢复清掉。 */
+    async setGenerationPaused(paused: boolean): Promise<GenerationPauseState> {
+      const now = new Date();
+      const pausedAt = paused ? now : null;
+      await db
+        .insert(generationControl)
+        .values({ id: GENERATION_CONTROL_ID, paused, pausedAt, updatedAt: now })
+        .onConflictDoUpdate({
+          target: generationControl.id,
+          set: { paused, pausedAt, updatedAt: now },
+        });
+      return { paused, pausedAt };
     },
 
     /** host 领取后重建 Job 的行读（P3 §5 ADR §13-3B1 决定 1）：执行载荷取

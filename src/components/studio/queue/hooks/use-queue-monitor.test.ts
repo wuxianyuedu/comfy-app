@@ -72,6 +72,12 @@ vi.mock("~/trpc/react", () => ({
        * 工厂即可，数据态由上面替掉的 useQuery 统一给。 */
       detail: { queryOptions: () => ({ queryKey: ["task", "detail"] }) },
     },
+    /* 生图暂停（ISSUE #5055）：同样只给能对上 queryKey / mutationKey 的工厂，
+     * 数据态由替掉的 useQuery / useMutation 统一给。 */
+    generationControl: {
+      pauseState: { queryOptions: () => ({ queryKey: ["generationControl", "pauseState"] }) },
+      setPaused: { mutationOptions: () => ({ mutationKey: ["generationControl", "setPaused"] }) },
+    },
   }),
 }));
 
@@ -85,6 +91,9 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
       isError: false,
       refetch,
     }),
+    /* 暂停切换的 mutation 不在本文件题目里（读写逻辑由路由 / 仓储用例覆盖）：
+     * 给一个惰性桩，让挂载期不要求 QueryClient 上下文。 */
+    useMutation: () => ({ mutateAsync: vi.fn(() => Promise.resolve(undefined)), isPending: false }),
   };
 });
 

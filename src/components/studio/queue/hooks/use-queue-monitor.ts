@@ -7,7 +7,7 @@
 // 轮询成本：状态栏已挂 useComfyQueue，本视图再挂一次即每 2s 两次（服务端量小）；重复消费未修，收口方向是模块级单例订阅（COMFY_QUEUE_POLL_MS 改动会同步影响成本）。
 
 import { useCallback, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { COMFY_QUEUE_POLL_MS, useComfyQueue } from "~/components/studio/hooks/use-comfy-queue";
 import { useCopyResult } from "~/components/ui/use-copy-feedback";
@@ -72,6 +72,10 @@ export type QueueMonitorController = {
   openLog: (task: QueueTaskLogTarget) => void;
   /** 展开那条的输入参数行（task.detail → 纯派生）；未展开 / 拉取中为空。 */
   paramRows: Array<ReturnType<typeof queueTaskParamRows>[number]>;
+  /** 暂停 / 恢复切换进行中（防连点）。 */
+  pauseBusy: boolean;
+  /** 生图暂停中（落库的持久状态，应用重启不丢，ISSUE #5055）。 */
+  paused: boolean;
   /** 排队项，`position` 从 1 起（1 = 下一个开跑）。 */
   queued: Array<{ position: number; row: QueueRow }>;
   /** 最近结果（已截到窗口上限，新的在前）。 */
@@ -86,6 +90,8 @@ export type QueueMonitorController = {
   stats: QueueStats;
   /** 点同一行收起、点另一行切换。 */
   toggleExpanded: (id: string) => void;
+  /** 点一下：暂停 ↔ 恢复（暂停语义见执行器闸门，ISSUE #5055）。 */
+  togglePause: () => void;
   /** 本应用排队 + ComfyUI 自己排队，与状态栏那格同一算法；离线时退回
    * 「库里在跑 + 排队的行数」（`/api/comfy/queue` 读不到，不能报 0）。 */
   waitingCount: number;
@@ -192,6 +198,28 @@ export function useQueueMonitor(): QueueMonitorController {
     [action, listQ, report],
   );
 
+  /* 生图暂停（ISSUE #5055）：状态在库里（应用重启不丢），队列页用播放 / 暂停
+   * 图标切换。暂停语义在执行器闸门（executor-dispatch）：当前任务照常跑完，
+   * 之后不再领取生图任务；恢复后按队列序继续。 */
+  const pauseQ = useQuery(
+    trpc.generationControl.pauseState.queryOptions(undefined, { enabled: isTabActive }),
+  );
+  const setPausedM = useMutation(
+    trpc.generationControl.setPaused.mutationOptions({
+      onSuccess: () => {
+        void pauseQ.refetch();
+      },
+    }),
+  );
+  const togglePause = useCallback(() => {
+    const next = !(pauseQ.data?.paused ?? false);
+    void runAsyncAction(() => setPausedM.mutateAsync({ paused: next }), {
+      report,
+      successText: next ? "已暂停：当前任务跑完后不再领取新的生图任务" : "已恢复：按队列序继续生成",
+      failureText: next ? "暂停失败，请稍后重试" : "恢复失败，请稍后重试",
+    });
+  }, [pauseQ.data, setPausedM, report]);
+
   const openFolder = useCallback(
     async (row: QueueRow) => {
       await action.run(row.id, async () => {
@@ -251,6 +279,9 @@ export function useQueueMonitor(): QueueMonitorController {
     cancel,
     openFolder,
     copyForReprint,
+    paused: pauseQ.data?.paused ?? false,
+    pauseBusy: setPausedM.isPending,
+    togglePause,
     openLog: (task) => {
       setLogRow(task);
     },

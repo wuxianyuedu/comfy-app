@@ -662,6 +662,16 @@ export class TaskRepository extends DrizzleRepository<Task> {
   claimNextQueued: TaskRepoImpl["claimNextQueued"] = (mode, take) =>
     impl.claimNextQueued(mode, take);
 
+  peekNextQueued: TaskRepoImpl["peekNextQueued"] = (mode) => impl.peekNextQueued(mode);
+
+  /* 生图暂停（ISSUE #5055）：状态读写也走同一份 impl（host / inline 各自的
+   * 仓储实例都带这两条，派发闸门因此两宿主同形）。 */
+  getGenerationPauseState: TaskRepoImpl["getGenerationPauseState"] = () =>
+    impl.getGenerationPauseState();
+
+  setGenerationPaused: TaskRepoImpl["setGenerationPaused"] = (paused) =>
+    impl.setGenerationPaused(paused);
+
   findExecJob: TaskRepoImpl["findExecJob"] = (taskId) => impl.findExecJob(taskId);
 
   listStaleUnownedQueued: TaskRepoImpl["listStaleUnownedQueued"] = (cutoff, take) =>

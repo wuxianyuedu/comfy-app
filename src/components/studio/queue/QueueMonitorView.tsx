@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   ListChecks,
   ListOrdered,
+  Pause,
+  Play,
   RefreshCcw,
   WifiOff,
   X,
@@ -123,6 +125,28 @@ export function QueueMonitorView({
         <span className="text-ink-faint text-xs tabular-nums">
           {`待执行 ${String(c.waitingCount)}`}
         </span>
+        {/* 生图暂停态角标 + 播放 / 暂停按钮（ISSUE #5055）：暂停语义在执行器
+            闸门——当前任务照常跑完，之后不再领取生图任务；图标随状态切换。 */}
+        {c.paused ? (
+          <span className="bg-warning/10 text-warning-strong rounded-full px-2.5 py-0.5 text-xs font-medium">
+            生图已暂停
+          </span>
+        ) : null}
+        <Button
+          aria-label={c.paused ? "恢复生成" : "暂停生成"}
+          className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+          disabled={c.pauseBusy}
+          onClick={c.togglePause}
+          size="xs"
+          variant="outline"
+        >
+          {c.paused ? (
+            <Play aria-hidden className="size-3" data-icon="inline-start" />
+          ) : (
+            <Pause aria-hidden className="size-3" data-icon="inline-start" />
+          )}
+          {c.paused ? "恢复生成" : "暂停生成"}
+        </Button>
         <Button
           aria-label="立即重新读取队列"
           className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"

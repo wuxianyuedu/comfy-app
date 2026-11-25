@@ -10,25 +10,19 @@ import {
   real,
   index,
   uniqueIndex,
-  customType,
   primaryKey,
 } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
-import { cuid, dateNotNull, user } from "./schema-common";
+import { cuid, dateNotNull, dateNull, user } from "./schema-common";
 import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 
 // ── 自定义 DateTime 列（库文件里存 ISO 字符串）──────────────────
-// `dateNotNull` 与 `cuid` 在 schema-common.ts（schema.ts 与 schema-series.ts
-// 共用的叶子模块；拆分件先于本模块体求值，构造器必须放在零依赖处）。
-const dateNull = customType<{ data: Date | null; driverData: string | null }>({
-  dataType() {
-    return "text";
-  },
-  fromDriver: (v) => (v === null || v === undefined ? null : new Date(v)),
-  toDriver: (v) => (v === null || v === undefined ? null : v.toISOString()),
-});
+// `dateNotNull` / `dateNull` / `cuid` 都在 schema-common.ts（schema.ts 与
+// schema-series.ts 共用的叶子模块；拆分件先于本模块体求值，构造器必须放在
+// 零依赖处）。dateNull 也住叶子：拆分件（schema-generation-control）同样在
+// 求值期就要调用它。
 
 // ── Better Auth 表（表名单数，对齐 better-auth 的默认命名）─────────
 // `user` 表本体在 schema-common.ts（零依赖叶子）；本文件其余表与 schema-series.ts
@@ -883,3 +877,6 @@ export * from "./schema-series";
 
 // ── 角色库（ISSUE #5009）：跨项目二次元角色档案池，拆出独立文件同理（900 行文件行数硬闸）──
 export * from "./schema-character";
+
+// ── 生图暂停控制（ISSUE #5055）：单行表，拆出独立文件同理（900 行文件行数硬闸）──
+export * from "./schema-generation-control";
