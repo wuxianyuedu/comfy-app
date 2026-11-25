@@ -43,13 +43,11 @@ import {
 } from "./model-test-config";
 import { InputRow } from "./ModelTestInputRow";
 import { ModelTestProgressPanel } from "./ModelTestProgressPanel";
-import { ModelTestQueuePanel } from "./ModelTestQueuePanel";
 import { ModelTestSizeField } from "./ModelTestSizeField";
 import { ModelTestTree } from "./ModelTestTree";
 import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
 import { SectionCard } from "./ModelTestSectionCard";
 import { useModelTest } from "./hooks/use-model-test";
-import { useModelTestQueue } from "./hooks/use-model-test-queue";
 import { useModelTestTree } from "./hooks/use-model-test-tree";
 import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
 
@@ -181,9 +179,6 @@ export function ModelTestView({
   pendingReprint?: ModelTestRetryPayload | null;
 }) {
   const c = useModelTest();
-  /* 生成队列总览（#5010）：与「队列」页同一份 controller；日志弹窗与测试格
-   * 共享同一个 logTarget 态（一次只看一份日志）。 */
-  const queue = useModelTestQueue();
   /* 选中的本地工作流声明「尺寸取自首图」时，尺寸口不可配置（工坊链路本就不下发
    * 尺寸值），改为只读展示第一张参考图的实际像素。远端通道没有工作流声明，不受影响。 */
   const sizeFromReference =
@@ -525,12 +520,6 @@ export function ModelTestView({
               ) : (
                 <OnboardingPanel c={c} />
               )}
-
-              {/* 生成队列总览（#5010）：与「队列」页同一份数据（task.list +
-              /api/comfy/queue），全局任务（工坊 / 画布 / 工作流库 / 本页）
-              都在这里；排队 / 任意一条可就地展开看输入参数。不依赖是否已选
-              模型 —— 没选模型时它就是这页的全局读数。 */}
-              <ModelTestQueuePanel c={queue} onOpenLog={setLogTarget} />
             </div>
 
             {/* ── 右栏：产物 / 请求与响应（选中模型后才出现）── */}

@@ -33,6 +33,7 @@ import {
   type QueueRow,
   type QueueStats,
 } from "../queue-monitor-config";
+import { queueTaskParamRows } from "../queue-task-params";
 
 /** 正在跑那条的展示卡（数值都已算成字符串或百分比，视图只渲染）。 */
 export type RunningCardView = {
@@ -53,6 +54,10 @@ export type QueueMonitorController = {
   cancel: (id: string, label: string) => Promise<void>;
   closeLog: () => void;
   copyForReprint: (row: QueueRow) => Promise<void>;
+  /** 展开那条的详情是否还在拉取。 */
+  detailLoading: boolean;
+  /** 展开的那条（输入参数表）；null = 全部收起。 */
+  expandedId: string | null;
   /** 这一条正在被操作吗（判据在出口里，视图不再自己比 id）。 */
   isBusy: (id: string) => boolean;
   /** 拉取失败的一句话；null 表示查询本身没问题（动作失败走 toast，不落这里）。 */
@@ -65,6 +70,8 @@ export type QueueMonitorController = {
   online: boolean;
   openFolder: (row: QueueRow) => Promise<void>;
   openLog: (task: QueueTaskLogTarget) => void;
+  /** 展开那条的输入参数行（task.detail → 纯派生）；未展开 / 拉取中为空。 */
+  paramRows: Array<ReturnType<typeof queueTaskParamRows>[number]>;
   /** 排队项，`position` 从 1 起（1 = 下一个开跑）。 */
   queued: Array<{ position: number; row: QueueRow }>;
   /** 最近结果（已截到窗口上限，新的在前）。 */
@@ -77,6 +84,8 @@ export type QueueMonitorController = {
   runningRows: Array<QueueRow>;
   /** 顶部指标带四格（运行中 / 排队中 / 今日完成 / 失败）。 */
   stats: QueueStats;
+  /** 点同一行收起、点另一行切换。 */
+  toggleExpanded: (id: string) => void;
   /** 本应用排队 + ComfyUI 自己排队，与状态栏那格同一算法；离线时退回
    * 「库里在跑 + 排队的行数」（`/api/comfy/queue` 读不到，不能报 0）。 */
   waitingCount: number;
@@ -91,6 +100,22 @@ export function useQueueMonitor(): QueueMonitorController {
   /* 日志弹窗的目标行：openLog 那一刻的快照（不是从 listQ 派生）——否则每 2s
    * 一次的轮询都会换掉对象身份，弹窗会被误重挂、SSE 反复重订。 */
   const [logRow, setLogRow] = useState<QueueTaskLogTarget | null>(null);
+  /* 展开看输入参数的那条（ISSUE #5019）：展开才拉 task.detail（enabled 门控），
+   * 参数行由纯派生 queueTaskParamRows 算出。 */
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const detailQ = useQuery(
+    trpc.task.detail.queryOptions(
+      { id: expandedId ?? "" },
+      { enabled: expandedId !== null && expandedId !== "" },
+    ),
+  );
+  const paramRows = useMemo(
+    () => (detailQ.data === undefined ? [] : queueTaskParamRows(detailQ.data)),
+    [detailQ.data],
+  );
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedId((current) => (current === id ? null : id));
+  }, []);
 
   /* 页签隐藏时不轮询（ISSUE #4598）：disabled 期间 React Query 不发请求、
    * refetchInterval 停摆；切回当前页且数据过 staleTime 时自动补拉一次。 */
@@ -215,6 +240,10 @@ export function useQueueMonitor(): QueueMonitorController {
     loading: listQ.isPending,
     loadError: listQ.isError ? "读不到任务记录，后端可能刚重启" : null,
     logRow,
+    expandedId,
+    toggleExpanded,
+    detailLoading: detailQ.isFetching,
+    paramRows,
     isBusy: (id: string) => action.isBusy(id),
     refresh: () => {
       void listQ.refetch();
