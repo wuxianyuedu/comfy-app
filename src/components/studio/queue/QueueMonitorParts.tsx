@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Activity, ChevronDown, Copy, FileText, FolderOpen, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { TimeAgo } from "~/components/ui/time-ago";
@@ -64,15 +65,15 @@ export function QueueParamTable({
   if (paramRows.length === 0) {
     return <p className="text-ink-fainter px-0.5 text-xs">没有读到可展示的输入参数。</p>;
   }
+  /* 键值行走 `ui/key-value-rows` 基元（P17：视图不自写键值行）。 */
   return (
-    <dl className="border-border-subtle bg-canvas-deep grid gap-x-4 gap-y-1 rounded-lg border p-2.5 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)]">
-      {paramRows.map((row) => (
-        <div className="contents" key={`${row.label}-${row.value}`}>
-          <dt className="text-ink-fainter text-2xs truncate pt-0.5">{row.label}</dt>
-          <dd className="text-ink-strong min-w-0 text-xs break-words">{row.value}</dd>
-        </div>
-      ))}
-    </dl>
+    <KeyValueRows
+      bordered
+      className="border-border-subtle bg-canvas-deep p-2.5"
+      items={paramRows.map((row) => ({ id: row.label, key: row.label, value: row.value }))}
+      layout="rows"
+      mono={false}
+    />
   );
 }
 
