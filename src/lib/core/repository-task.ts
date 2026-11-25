@@ -176,6 +176,20 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return Number(rows[0]?.count ?? 0);
   }
 
+  /** 按状态分组的行数（历史页状态筛选枚上的真实计数，服务端 GROUP BY，
+   *  与 listByUser 同一套过滤）——不是「已拉取的行」的计数。 */
+  async countByStatusByUser(
+    userId: string,
+    opts?: { projectId?: string; statusList?: Array<string> },
+  ): Promise<Record<string, number>> {
+    const rows = await db
+      .select({ status: task.status, count: sql<number>`count(*)` })
+      .from(task)
+      .where(taskListWhere(userId, opts))
+      .groupBy(task.status);
+    return Object.fromEntries(rows.map((row) => [row.status, Number(row.count)]));
+  }
+
   async createQueued(input: {
     /** 执行归属（P3 §5 ADR §6）：提交侧按 `resolveExecutorClaim()` 显式传
      *  `'inline'|'host'`；缺省 null 只服务「调用方尚未接入灰度」的兼容路径
