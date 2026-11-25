@@ -30,10 +30,10 @@ export function WorkflowLibraryAppModePanel({ workflowId }: WorkflowLibraryAppMo
   } = useAppModeActions(workflowId);
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <div className="border-border-subtle rounded-lg border p-4 text-sm">
         <div className="mb-2 font-medium">用 ComfyUI App Mode 勾选对外引脚</div>
-        <ol className="text-muted-foreground list-decimal space-y-1 pl-5">
+        <ol className="text-muted-foreground list-decimal pl-5 [&>li+li]:mt-1">
           <li>把这条工作流导出到 ComfyUI 的工作流目录（已有源文件可跳过）；</li>
           <li>在 ComfyUI 原生前端里打开它，左上角菜单选「进入应用模式」；</li>
           <li>点「构建应用」，在画布上勾选要暴露的输入 / 输出，Ctrl+S 保存；</li>
@@ -45,7 +45,7 @@ export function WorkflowLibraryAppModePanel({ workflowId }: WorkflowLibraryAppMo
         <div className="text-muted-foreground text-sm">加载 App Mode 状态…</div>
       ) : (
         <>
-          <div className="border-border-subtle space-y-2 rounded-lg border p-4 text-sm">
+          <div className="border-border-subtle flex flex-col gap-2 rounded-lg border p-4 text-sm">
             <div className="flex gap-2">
               <span className="text-muted-foreground w-28 flex-none">本地源文件</span>
               {info.sourcePath === null ? (

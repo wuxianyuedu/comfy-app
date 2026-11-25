@@ -17,6 +17,7 @@ import { TRPCError } from "@trpc/server";
 import { authedProcedure } from "~/server/api/trpc";
 import { workflowTemplateRepository } from "~/lib/core/repository";
 import { asRawWorkflow } from "~/lib/comfyui/raw";
+import { errorText } from "~/lib/error-message";
 import { checksum, readLocalFile } from "~/lib/comfyui/importSource";
 import { invalidateWorkflowDetailCache } from "~/lib/comfyui/workflow-detail";
 import { persistEnrichedWorkflowIO } from "~/lib/comfyui/workflow-detail-io";
@@ -176,7 +177,7 @@ export const workflowAppModeProcedures = {
       } catch (error) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `读取源文件失败：${error instanceof Error ? error.message : String(error)}`,
+          message: errorText(error, "读取源文件失败"),
         });
       }
       if (linearData === null) {
