@@ -51,14 +51,30 @@ function readEnabled(): CategoryEnabled {
 export type LogCategoryState = {
   /** 每个分类的开关状态（true = 在面板显示）。 */
   enabled: CategoryEnabled;
-  /** 某分类当前是否开启（避免调用方直接读 `enabled[c]` 再判 undefined）。 */
+  /** 挂载后从 localStorage 恢复持久化的开关（只生效一次）。 */
+  hydrate: () => void;
+  /** 是否已从 localStorage 恢复（只恢复一次，见 `hydrate`）。 */
+  hydrated: boolean;
+  /** 某个分类当前是否开启（避免调用方直接读 `enabled[c]` 再判 undefined）。 */
   isEnabled: (category: LogCategoryFilter) => boolean;
   /** 切换某个分类的显示开关；副作用是把新状态写回 localStorage。 */
   setEnabled: (category: LogCategoryFilter, value: boolean) => void;
 };
 
 export const useLogCategoryStore = create<LogCategoryState>((set, get) => ({
-  enabled: readEnabled(),
+  /* 水合安全（ISSUE #5011）：创建期只给**默认值**（全开），localStorage 里的
+   * 自定义值等挂载后由 `hydrate()` 恢复。本 store 在模块创建期求值，而
+   * LogPanel 是全局常驻组件——在这里读 storage，「设置 → 日志」改过开关的
+   * 用户就会撞上「SSR 默认值 vs 客户端首帧自定义值」的水合不匹配
+   * （与 message-center-store 文件内记录的是同一族坑）。 */
+  enabled: defaultEnabled(),
+  hydrate: () => {
+    if (get().hydrated) {
+      return;
+    }
+    set({ enabled: readEnabled(), hydrated: true });
+  },
+  hydrated: false,
   setEnabled: (category, value) => {
     set((state) => ({ enabled: { ...state.enabled, [category]: value } }));
     // 记忆是增强不是功能：写失败（隐私模式 / 配额满）仅内存态生效。

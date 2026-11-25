@@ -13,6 +13,7 @@ import {
   type LogPanelState,
 } from "./log-store";
 import { useLogPanel } from "./LogProvider";
+import { useLogCategoryStore } from "./log-category-store";
 import { FILTER_LABELS } from "./LogFilterBar";
 import { ORIGIN_TEXT } from "./LogPanelOriginSelect";
 import { useLogPanelPin } from "./use-log-panel-pin";
@@ -274,6 +275,13 @@ export function LogPanel() {
   /* 显示偏好（ISSUE #4567）：行密度（间隔大小）与精简列（隐藏时刻/级别/来源）。
    * 跨会话记忆在 `log-display-prefs`（localStorage），多实例共享同一份真相。 */
   const displayPrefs = useLogDisplayPrefs();
+  /* 日志分类开关的持久化值在挂载后恢复（ISSUE #5011）：store 创建期不读
+   * localStorage，否则「设置 → 日志」改过开关的用户会撞水合不匹配。本面板
+   * 全局常驻，由它挂载时触发一次恢复。 */
+  const hydrateCategories = useLogCategoryStore((state) => state.hydrate);
+  useEffect(() => {
+    hydrateCategories();
+  }, [hydrateCategories]);
   /* 完整列（时刻 / 级别 / 来源）或精简正文：精简档下行首类别前缀一并隐藏（ISSUE #4717）。 */
   const showDetails = displayPrefs.columns === "full";
   /* 直接取 `toggle` 交给行：它的引用稳定（`useExpansionSet` 内 `useCallback([])`），
