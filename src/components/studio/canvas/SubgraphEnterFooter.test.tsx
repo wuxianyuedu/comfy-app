@@ -21,16 +21,21 @@ describe("SubgraphEnterFooter", () => {
   it("点击触发 onEnter，且事件不冒泡到外层", async () => {
     const onEnter = vi.fn();
     const onOuterClick = vi.fn();
-    const { container } = render(
-      /* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- 测试用外层监听，非交互语义 */
-      <div onClick={onOuterClick}>
-        <SubgraphEnterFooter onEnter={onEnter} />
-      </div>,
-    );
-    await userEvent.click(screen.getByRole("button"));
-    expect(onEnter).toHaveBeenCalledOnce();
-    expect(onOuterClick).not.toHaveBeenCalled();
-    expect(container).toBeInTheDocument();
+    /* 原生监听挂在 body（React 根容器的祖先）：按钮的 React onClick 里
+     *  stopPropagation 后，冒泡到不了 body —— 用原生冒泡验证比 JSX 父级
+     *  onClick 更强（不依赖 React 合成事件的可视性约定）。 */
+    const outer = document.createElement("div");
+    document.body.append(outer);
+    document.body.addEventListener("click", onOuterClick);
+    try {
+      render(<SubgraphEnterFooter onEnter={onEnter} />, { container: outer });
+      await userEvent.click(screen.getByRole("button"));
+      expect(onEnter).toHaveBeenCalledOnce();
+      expect(onOuterClick).not.toHaveBeenCalled();
+    } finally {
+      document.body.removeEventListener("click", onOuterClick);
+      outer.remove();
+    }
   });
 
   it("未传 onEnter 时不渲染", () => {
