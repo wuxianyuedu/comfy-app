@@ -5,7 +5,7 @@
  * use-workflow-viewport-fit（画布聚焦）、use-workflow-graph-derivation（detail →
  * 图节点）、use-io-modes-commit（IO 模式落库）；过渡屏与浮层在 Overlays。 */
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useReactFlow, type Node, type Edge } from "@xyflow/react";
+import { useReactFlow, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { refreshCustomNodes } from "~/config/custom-nodes";
 import { SourceModal } from "../SourceModal";
@@ -32,6 +32,7 @@ import { WorkflowEditorTopBar } from "./WorkflowEditorTopbar";
 import { WorkflowIoPreviewPanel } from "../WorkflowIOPreviewPanel";
 import { WorkflowEditorCanvas } from "./WorkflowEditorCanvas";
 import { useWorkflowDetailLoader } from "./hooks/use-workflow-detail-loader";
+import { useRfTableWriters } from "./hooks/use-rf-table-writers";
 import { useWorkflowGraphDerivation } from "./hooks/use-workflow-graph-derivation";
 import { useWorkflowViewportFit } from "./hooks/use-workflow-viewport-fit";
 import { useIoModesCommit } from "./hooks/use-io-modes-commit";
@@ -273,21 +274,12 @@ function WorkflowEditorBody({
    *  （顶栏 / 浮层 / 画布外壳）每帧重渲染一遍 —— 那正是拖拽掉帧到 ~20fps
    *  的根源（ISSUE #4536）。图数据的同步（detail 到达 / 切子图 / 重置布局）
    *  走下方 effect 的 `rf.setNodes` / `rf.setEdges`；选中高亮等写回走同一对
-   *  rf 包装 setter（引用稳定，依赖 rf 实例）。
+   *  rf 包装 setter（引用稳定，依赖 rf 实例）。包装器必须**透传 updater**、
+   *  不在调用点急切解析旧 store 快照 —— 否则下钻子图那拍新图会被同批的
+   *  旧快照写回覆盖（ISSUE #5037，机制见 use-rf-table-writers 文件头）。
    *  画布挂载发生在 detail 就绪之后（loading 档先返回），`defaultNodes` /
    *  `defaultEdges` 拿到的就是当帧的派生图；此后同步全走 effect。 */
-  const rfSetNodes = useCallback(
-    (updater: (nodes: Array<Node>) => Array<Node>) => {
-      rf.setNodes(updater(rf.getNodes()));
-    },
-    [rf],
-  );
-  const rfSetEdges = useCallback(
-    (updater: (edges: Array<Edge>) => Array<Edge>) => {
-      rf.setEdges(updater(rf.getEdges()));
-    },
-    [rf],
-  );
+  const { rfSetNodes, rfSetEdges } = useRfTableWriters(rf);
 
   /* ── 参考图挂载编辑态（ISSUE #4534）── 逻辑收在 hook（规范 §17.2 第②层）：
    * 顶栏按钮进入 / 退出；编辑态里点击节点即标记 / 取消多参考图挂载点（即时
