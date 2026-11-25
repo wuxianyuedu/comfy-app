@@ -803,7 +803,16 @@
 - 需求：独立「队列」视图看在跑与排队的任务。
 - 行为与验收：与 ComfyUI 内部队列对账展示（不另造一份假队列）；
   切走再切回保留滚动与筛选。
-- 落点：`src/components/studio/queue/QueueMonitor.tsx`
+  左栏有「用途 / 模式 / 模型」候选树（ISSUE #5019：与测试模型页同一份
+  候选装配 `useModelTestTree`，含布局切换）——选中一片叶子即按那个模型
+  过滤跑动中 / 排队中 / 最近结果三段列表（位次保持真实队列序），再点同一片
+  取消筛选，筛选态有明示与清除入口。列表逐条带**模型徽标**（来自工作流上挂
+  的模型标签），当前在队列中的是哪些模型一眼可见。排队 / 最近行可**就地展开
+  看输入参数**（展开才拉 `task.detail`，经 `queue-task-params` 纯派生成
+  中文标签键值行；内部键剔除、长值截断）。
+- 落点：`src/components/studio/queue/QueueMonitor.tsx`、
+  `src/components/studio/queue/hooks/use-queue-model-tree.ts`（左树与过滤）、
+  `src/components/studio/queue/queue-task-params.ts`（参数派生）
 
 #### FR-QE-02 执行器 inline / host 两档
 

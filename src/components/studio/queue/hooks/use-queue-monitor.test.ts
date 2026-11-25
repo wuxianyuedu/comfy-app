@@ -66,7 +66,12 @@ let queueResult: ComfyQueueModule.ComfyQueueView = queueView();
  * 数据态由下面替掉的 `useQuery` 直接给。 */
 vi.mock("~/trpc/react", () => ({
   useTRPC: () => ({
-    task: { list: { queryOptions: () => ({ queryKey: ["task", "list"] }) } },
+    task: {
+      list: { queryOptions: () => ({ queryKey: ["task", "list"] }) },
+      /* 展开看参数（#5019）会挂 detail 查询：这里给一个能对上 queryKey 的
+       * 工厂即可，数据态由上面替掉的 useQuery 统一给。 */
+      detail: { queryOptions: () => ({ queryKey: ["task", "detail"] }) },
+    },
   }),
 }));
 

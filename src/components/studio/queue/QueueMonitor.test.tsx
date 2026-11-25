@@ -2,9 +2,11 @@
 //（任务在本地库，整页换「未连接」空态会让人以为丢了，横幅只说「不会开始」）；
 // 失败行必须写出原因；屏面不出现「重试」（后端无此端点）。
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QueueMonitor } from "./QueueMonitor";
+import type { QueueModelTreeController } from "./hooks/use-queue-model-tree";
 import type { QueueMonitorController } from "./hooks/use-queue-monitor";
 import type { QueueRow } from "./queue-monitor-config";
 import type { TaskWatchHandlers } from "~/lib/workshop/generation-client";
@@ -14,6 +16,12 @@ import type { TaskWatchHandlers } from "~/lib/workshop/generation-client";
 const monitorMock = vi.hoisted(() => vi.fn());
 vi.mock("./hooks/use-queue-monitor", () => ({
   useQueueMonitor: monitorMock,
+}));
+/* 左树控制器一并打桩：树条目 / 选中态 / 过滤判据由它给出（#5019）。
+ * 默认「未筛选」（filterRows 原样返回），树相关用例再覆盖。 */
+const treeMock = vi.hoisted(() => vi.fn());
+vi.mock("./hooks/use-queue-model-tree", () => ({
+  useQueueModelTree: treeMock,
 }));
 /* 弹窗里的 watchTask 会真开 EventSource（jsdom 没有）——日志弹窗的行为由它
  * 自己的 hook 测试覆盖，这里只锁「容器把它挂上 / 传对任务」。mock 刻意带上
@@ -44,7 +52,9 @@ function row(over: Partial<QueueRow> & Pick<QueueRow, "id" | "status">): QueueRo
 }
 
 function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorController {
-  return {
+  /* base 先按完整类型落定，再并入 over：TS7 对「Partial 展开」的收窄会把手写
+   * 夹具判成可选属性不全（CI typecheck 实测），显式标注后两侧一致。 */
+  const base: QueueMonitorController = {
     online: true,
     running: null,
     runningRows: [],
@@ -55,6 +65,10 @@ function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorCon
     loading: false,
     loadError: null,
     logRow: null,
+    expandedId: null,
+    toggleExpanded: vi.fn(),
+    detailLoading: false,
+    paramRows: [],
     isBusy: () => false,
     refresh: vi.fn(),
     cancel: vi.fn(),
@@ -62,12 +76,27 @@ function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorCon
     copyForReprint: vi.fn(),
     openLog: vi.fn(),
     closeLog: vi.fn(),
-    ...over,
   };
+  return { ...base, ...over };
+}
+
+function treeController(over: Partial<QueueModelTreeController> = {}): QueueModelTreeController {
+  const base: QueueModelTreeController = {
+    activeLabel: null,
+    clear: vi.fn(),
+    entries: [],
+    filterIds: (rows: ReadonlyArray<QueueRow>) => new Set(rows.map((r) => r.id)),
+    filterRows: (rows: ReadonlyArray<QueueRow>) => [...rows],
+    loading: false,
+    select: vi.fn(),
+    selection: null,
+  };
+  return { ...base, ...over };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  treeMock.mockReturnValue(treeController());
 });
 
 afterEach(cleanup);
@@ -206,9 +235,69 @@ describe("QueueMonitor", () => {
     expect(screen.queryByRole("button", { name: /重试/ })).not.toBeInTheDocument();
   });
 
+  it("排队 / 最近行带模型徽标，展开参数表就地铺开（#5019）", async () => {
+    const user = userEvent.setup();
+    monitorMock.mockReturnValue(
+      controller({
+        queued: [
+          {
+            row: row({ id: "q1", modelName: "MiniMax H3", status: "QUEUED" }),
+            position: 1,
+          },
+        ],
+        expandedId: "q1",
+        paramRows: [
+          { label: "提示词", value: "未来感电动跑车" },
+          { label: "种子", value: "731030653625918" },
+        ],
+      }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByText("MiniMax H3")).toBeInTheDocument();
+    const toggle = screen.getByRole("button", { name: "查看这一条的输入参数" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("未来感电动跑车")).toBeInTheDocument();
+    expect(screen.getByText("731030653625918")).toBeInTheDocument();
+    await user.click(toggle);
+    /* toggle 收起走 controller（容器把 expandedId 传回来，这里只验上抛）。 */
+    expect(screen.getAllByRole("button", { name: "查看这一条的输入参数" }).length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it("左树选中模型：三段列表只留该模型的行，筛选提示与清除入口在场", () => {
+    const clear = vi.fn();
+    treeMock.mockReturnValue(
+      treeController({
+        selection: { kind: "image", mode: "T2I", value: "wf::1" },
+        activeLabel: "wan2.2",
+        clear,
+        filterRows: (rows) => rows.filter((r) => r.modelName === "wan2.2-only"),
+        filterIds: (rows) =>
+          new Set(rows.filter((r) => r.modelName === "wan2.2-only").map((r) => r.id)),
+      }),
+    );
+    monitorMock.mockReturnValue(
+      controller({
+        queued: [
+          { row: row({ id: "mine", modelName: "wan2.2-only", status: "QUEUED" }), position: 1 },
+          { row: row({ id: "other", modelName: "别的模型", status: "QUEUED" }), position: 2 },
+        ],
+      }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByText("已按模型筛选：wan2.2")).toBeInTheDocument();
+    expect(screen.getByText(/^工作流 mine$/)).toBeInTheDocument();
+    expect(screen.queryByText(/^工作流 other$/)).not.toBeInTheDocument();
+    screen.getByRole("button", { name: "清除模型筛选" }).click();
+    expect(clear).toHaveBeenCalledTimes(1);
+  });
+
   it("进度未回报时剩余时间写「估算中」，不给一个看起来像数的值", () => {
     monitorMock.mockReturnValue(
       controller({
+        /* 富卡的任务行也在 RUNNING 桶里（keepIds 才会放行它）。 */
+        runningRows: [row({ id: "r1", status: "RUNNING", progress: 0 })],
         running: {
           id: "r1",
           workflowName: "正在跑的工作流",

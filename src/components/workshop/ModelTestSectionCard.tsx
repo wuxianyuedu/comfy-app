@@ -2,7 +2,7 @@
 
 // ── 测试模型页的卡片外壳（§12.18：≥2 处消费 → 抽成一份）───────────────
 // 标题行（图标 + 名称 + 右侧弱化说明 / 动作）+ 内容。ModelTestView 的各分区
-// 与「生成队列」总览卡（ModelTestQueuePanel）共用这一个壳，排版不再各写一份。
+// 与「队列」页的左树面板（QueueMonitorView）共用这一个壳，排版不再各写一份。
 
 import type { ReactNode } from "react";
 
