@@ -173,8 +173,11 @@ describe("折叠态侧栏的关闭按钮（ISSUE #4981）", () => {
     /* #5040：不再是右上角盖图标的 top-0.5/right-0.5，改为垂直居中靠右缘外移。 */
     expect(close.className).not.toContain("group-data-[collapsible=icon]:top-0.5");
     expect(close.className).toContain("group-data-[collapsible=icon]:top-1/2");
-    expect(close.className).toContain("group-data-[collapsible=icon]:right-[-6px]");
+    /* #5059：收回 48px 轨内（right-0），落进悬浮拉宽的胶片，不再探出轨外压住气泡。 */
+    expect(close.className).toContain("group-data-[collapsible=icon]:right-0");
     expect(close.className).toContain("group-data-[collapsible=icon]:size-3");
+    /* #5059：关闭钮比底片拉宽晚 100ms 淡入，节奏是「底片先展开、按钮再落位」。 */
+    expect(close.className).toContain("group-data-[collapsible=icon]:delay-100");
   });
 
   it("折叠态打开态胶片铺满按钮，图标与未打开项同列中心（#5040）", () => {
@@ -191,6 +194,33 @@ describe("折叠态侧栏的关闭按钮（ISSUE #4981）", () => {
     expect(glyph!.className).toContain("group-data-[collapsible=icon]:absolute");
     expect(glyph!.className).toContain("group-data-[collapsible=icon]:inset-0");
     expect(glyph!.className).toContain("group-data-[collapsible=icon]:size-full");
+    /* #5059：悬浮 / 聚焦时底片向左扩到整条 48px 轨，给关闭钮让出停靠背景。 */
+    expect(glyph!.className).toContain(
+      "group-hover/menu-item:group-data-[collapsible=icon]:-left-2",
+    );
+    expect(glyph!.className).toContain(
+      "group-hover/menu-item:group-data-[collapsible=icon]:w-[calc(100%+16px)]",
+    );
+    expect(glyph!.className).toContain(
+      "group-focus-within/menu-item:group-data-[collapsible=icon]:-left-2",
+    );
+  });
+
+  it("折叠态打开项放开按钮 overflow 并隐藏名称，拉宽胶片不被裁、文字不漏出轨外（#5059）", () => {
+    renderShell({
+      active: "models",
+      tabs: tabsOf("models"),
+      defaultSidebarOpen: false,
+    });
+    expectCollapsedContext();
+    const button = screen.getByRole("button", { name: "模型" });
+    expect(button.className).toContain("group-data-[collapsible=icon]:overflow-visible");
+    const label = [...button.querySelectorAll("span")].find(
+      (el) => el.textContent?.trim() === "模型",
+    );
+    expect(label, "名称 span 应存在").toBeDefined();
+    /* 视觉上藏掉，但必须保留可访问名 —— 折叠态仍要能被读屏器/E2E 按名称定位。 */
+    expect(label!.className).toContain("group-data-[collapsible=icon]:sr-only");
   });
 
   it("折叠态点关闭按钮仍走 pointerdown → onCloseViewTab（链路不回退）", () => {

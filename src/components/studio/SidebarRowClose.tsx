@@ -4,7 +4,7 @@
 // 三处同形（全局导航项 / 项目分组行 / 临时页签组）共用这一份：展开态挂在行右缘
 // 居中、悬停 / 聚焦浮现；折叠成图标轨时不再隐藏（基元 menu-action 的默认行为是
 // 折叠即藏，此前关页签必须先展开侧栏）—— 收成图标右侧的一枚实底小圆徽
-// （#5040：此前压在图标右上角会盖住图标），落在打开态胶片右缘仍可读。
+// （#5040：此前压在图标右上角会盖住图标），#5059 再收回轨内、落进悬浮拉宽的打开态胶片。
 // 关闭交互走 pointerdown（ISSUE #3789）：行级 tooltip
 // 收起引发的重渲染会让 click 落到行 <li> 上关不掉页签，pointerdown 阶段目标
 // 稳定是这枚按钮本身。
@@ -44,11 +44,16 @@ export function SidebarRowClose({
         "opacity-0 transition-opacity",
         hover,
         "focus-visible:opacity-100",
-        /* 折叠态（图标轨）：关闭按钮移到图标**右侧**（#5040）——此前压在图标右上角
-         * 盖住图标中心。行宽 32px、图标占 x=8..24，按钮垂直居中靠行右缘，右移 6px
-         * 落在 x≈22..38：与图标主体分离、仍在 48px 轨内不越界。缩到 size-3 减少占用。 */
-        "group-data-[collapsible=icon]:top-1/2 group-data-[collapsible=icon]:right-[-6px]",
+        /* 折叠态（图标轨）：关闭按钮垂直居中、贴在 48px 轨的右缘（#5059）——
+         * #5040 曾右移 6px 落在 x≈42..54，半个身子探出轨外，正好压在折叠气泡的
+         * 起点上（气泡离轨仅 4px），点不到。收回 right-0（x≈36..48）后落在打开态
+         * 悬浮拉宽的紫色胶片里（#5059 把胶片从 32px 扩到整条 48px 轨），与气泡
+         * 不再相交；pointerdown 关页签的链路不变。 */
+        "group-data-[collapsible=icon]:top-1/2 group-data-[collapsible=icon]:right-0",
         "group-data-[collapsible=icon]:-translate-y-1/2 group-data-[collapsible=icon]:size-3",
+        /* #5059：折叠态先让底片拉宽（150ms），关闭按钮再淡入（延迟 100ms），
+         * 视觉上是「底片展开出一块位置，然后关闭按钮落进去」。 */
+        "group-data-[collapsible=icon]:delay-100",
         "group-data-[collapsible=icon]:rounded-full group-data-[collapsible=icon]:p-0",
         "group-data-[collapsible=icon]:bg-sidebar group-data-[collapsible=icon]:text-sidebar-foreground",
         "group-data-[collapsible=icon]:ring-1 group-data-[collapsible=icon]:ring-sidebar-border",
