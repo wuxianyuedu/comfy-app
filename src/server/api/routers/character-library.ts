@@ -21,7 +21,16 @@ import {
   ROSTER_COUNT_MIN,
 } from "~/lib/character/roster-seed";
 import { buildPortraitPrompt, PORTRAIT_NEGATIVE_PROMPT } from "~/lib/character/portrait-prompt";
-import { copyIntoCharacterStore, removeCharacterStoreDir } from "~/lib/character/character-store";
+import {
+  copyIntoCharacterStore,
+  readArtifactBytes,
+  removeCharacterStoreDir,
+} from "~/lib/character/character-store";
+import {
+  needsRegeneration,
+  PORTRAIT_REGENERATE_THRESHOLD,
+  scorePortraitPng,
+} from "~/lib/character/quality-check";
 import { prepareWorkflowRun, buildWorkflowRunParams } from "~/lib/workshop/workflow-run.server";
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
@@ -75,6 +84,57 @@ function normalizePortraits(
 }
 
 const statusSchema = z.enum(["all", ...CHARACTER_PROFILE_STATUSES]).default("all");
+
+/** 逐个角色入队生图任务（批量生图与「重生成有问题的立绘」共用的同一条链）。 */
+async function enqueueCharacters(
+  characters: Array<{
+    archetype: string;
+    description: string;
+    id: string;
+    name: string;
+  }>,
+  runCtx: NonNullable<Awaited<ReturnType<typeof prepareWorkflowRun>>>,
+  userId: string,
+): Promise<number> {
+  const executorClaim = resolveExecutorClaim();
+  let enqueued = 0;
+  for (const character of characters) {
+    const prompt = buildPortraitPrompt({
+      name: character.name,
+      archetype: character.archetype,
+      description: character.description,
+    });
+    const params = buildWorkflowRunParams(runCtx, {
+      prompt,
+      negativePrompt: PORTRAIT_NEGATIVE_PROMPT,
+      /* 尺寸不传：工作流（如 minimax h3）的 aspect_ratio 是枚举口
+       * （「3:4 (Portrait Standard)」这类带说明的标签），按场景表折算的
+       * 宽高 / 比例值落不进枚举，会在执行前校验被打回。角色立绘直接用
+       * 工作流作者烘在图里的默认档。 */
+    });
+    // oxlint-disable-next-line no-await-in-loop -- 先入队成功再标记生成中，顺序依赖
+    const task = await taskRepository.createQueued({
+      userId,
+      type: runCtx.tpl.taskType,
+      prompt,
+      negativePrompt: PORTRAIT_NEGATIVE_PROMPT,
+      params,
+      workflowName: runCtx.tpl.name,
+      projectId: null,
+      shotId: null,
+      claimedBy: executorClaim,
+      execPayload: runCtx.tpl.rawJson,
+      parentId: null,
+    });
+    // oxlint-disable-next-line no-await-in-loop -- 先入队成功再标记生成中，顺序依赖
+    await characterProfileRepository.markGenerating(character.id, userId, task.id, params);
+    enqueued += 1;
+  }
+  if (enqueued > 0) {
+    kickQueue();
+  }
+  return enqueued;
+}
 
 export const characterLibraryRouter = createTRPCRouter({
   /**
@@ -324,43 +384,7 @@ export const characterLibraryRouter = createTRPCRouter({
         targets = [...draft, ...failed].slice(0, input.limit);
       }
 
-      const executorClaim = resolveExecutorClaim();
-      let enqueued = 0;
-      for (const character of targets) {
-        const prompt = buildPortraitPrompt({
-          name: character.name,
-          archetype: character.archetype,
-          description: character.description,
-        });
-        const params = buildWorkflowRunParams(runCtx, {
-          prompt,
-          negativePrompt: PORTRAIT_NEGATIVE_PROMPT,
-          /* 尺寸不传：工作流（如 minimax h3）的 aspect_ratio 是枚举口
-           * （「3:4 (Portrait Standard)」这类带说明的标签），按场景表折算的
-           * 宽高 / 比例值落不进枚举，会在执行前校验被打回。角色立绘直接用
-           * 工作流作者烘在图里的默认档。 */
-        });
-        // oxlint-disable-next-line no-await-in-loop -- 先入队成功再标记生成中，顺序依赖
-        const task = await taskRepository.createQueued({
-          userId: ctx.user.id,
-          type: runCtx.tpl.taskType,
-          prompt,
-          negativePrompt: PORTRAIT_NEGATIVE_PROMPT,
-          params,
-          workflowName: runCtx.tpl.name,
-          projectId: null,
-          shotId: null,
-          claimedBy: executorClaim,
-          execPayload: runCtx.tpl.rawJson,
-          parentId: null,
-        });
-        // oxlint-disable-next-line no-await-in-loop -- 先入队成功再标记生成中，顺序依赖
-        await characterProfileRepository.markGenerating(character.id, ctx.user.id, task.id, params);
-        enqueued += 1;
-      }
-      if (enqueued > 0) {
-        kickQueue();
-      }
+      const enqueued = await enqueueCharacters(targets, runCtx, ctx.user.id);
       return { enqueued, workflowName: runCtx.tpl.name };
     }),
 
@@ -432,4 +456,120 @@ export const characterLibraryRouter = createTRPCRouter({
     }
     return { ready, failed, pending, scanned: generating.length };
   }),
+
+  /**
+   * 质量打分（单张）：对角色的当前立绘做**确定性**质量检查（纯色 / 空白 /
+   * 低分辨率 / 文件异常等规则，见 `~/lib/character/quality-check`），分数与
+   * 问题清单落库。打分不依赖外部模型，同一张图结果恒定。
+   */
+  scoreQuality: authedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const row = await characterProfileRepository.findOwned(input.id, ctx.user.id);
+      if (row === null) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "角色不存在" });
+      }
+      if (row.status !== "ready" || row.portraitUrl === null || row.portraitUrl === "") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "该角色还没有已生成的立绘可打分" });
+      }
+      const file = await readArtifactBytes(row.portraitUrl);
+      if (file === null) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "立绘文件不存在（可能已被清理）" });
+      }
+      const quality = scorePortraitPng(file);
+      await characterProfileRepository.updateQuality(
+        row.id,
+        ctx.user.id,
+        quality.score,
+        quality.issues,
+      );
+      return {
+        id: row.id,
+        name: row.name,
+        score: quality.score,
+        issues: quality.issues,
+        metrics: quality.metrics,
+        needsRegeneration: needsRegeneration(quality),
+      };
+    }),
+
+  /**
+   * 质量打分（批量）：**依次**给每张已就绪立绘打分并落库，返回低于阈值的
+   * 「有问题」清单（需要重新生成的候选）。
+   */
+  scoreAllQuality: authedProcedure.mutation(async ({ ctx }) => {
+    const rows = await characterProfileRepository.listReadyWithPortraits(ctx.user.id);
+    const flagged: Array<{ id: string; issues: Array<string>; name: string; score: number }> = [];
+    let scored = 0;
+    let unscored = 0;
+    for (const row of rows) {
+      if (row.portraitUrl === null || row.portraitUrl === "") {
+        unscored += 1;
+        continue;
+      }
+      /* 逐张读文件 → 打分 → 落库：一张失败不影响其余（部分成功语义）。 */
+      // oxlint-disable-next-line no-await-in-loop -- 逐张打分落库，SQLite 单写者并行无收益
+      const file = await readArtifactBytes(row.portraitUrl);
+      if (file === null) {
+        unscored += 1;
+        continue;
+      }
+      const quality = scorePortraitPng(file);
+      // oxlint-disable-next-line no-await-in-loop -- 与上面的读取同一条串行链
+      await characterProfileRepository.updateQuality(
+        row.id,
+        ctx.user.id,
+        quality.score,
+        quality.issues,
+      );
+      scored += 1;
+      if (needsRegeneration(quality)) {
+        flagged.push({ id: row.id, issues: quality.issues, name: row.name, score: quality.score });
+      }
+    }
+    return { scored, unscored, flagged, threshold: PORTRAIT_REGENERATE_THRESHOLD };
+  }),
+
+  /**
+   * 重新生成有问题的立绘：把质量分低于阈值的就绪角色退回待生成，并按
+   * 「批量生图」同一条链重新入队（旧立绘保留为候选，不先删）。
+   */
+  regenerateFlagged: authedProcedure
+    .input(
+      z.object({
+        workflowId: z.string().min(1),
+        minScore: z
+          .number()
+          .int()
+          .min(0)
+          .max(100)
+          .optional()
+          .default(PORTRAIT_REGENERATE_THRESHOLD),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const runCtx = await prepareWorkflowRun(ctx.user.id, input.workflowId);
+      if (runCtx === null) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "工作流不存在" });
+      }
+      if (!hasExecutableWorkflow(runCtx.tpl)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "工作流没有可执行内容（rawJson 为空）：请重新导入该工作流",
+        });
+      }
+      const flagged = await characterProfileRepository.listFlaggedLowQuality(
+        ctx.user.id,
+        input.minScore,
+      );
+      if (flagged.length === 0) {
+        return { regenerated: 0, flagged: 0, workflowName: runCtx.tpl.name };
+      }
+      for (const row of flagged) {
+        // oxlint-disable-next-line no-await-in-loop -- 逐行退档，SQLite 单写者并行无收益
+        await characterProfileRepository.resetToDraft(row.id, ctx.user.id);
+      }
+      const regenerated = await enqueueCharacters(flagged, runCtx, ctx.user.id);
+      return { regenerated, flagged: flagged.length, workflowName: runCtx.tpl.name };
+    }),
 });

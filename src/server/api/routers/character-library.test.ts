@@ -17,12 +17,52 @@ vi.mock("~/server/better-auth", () => ({
 vi.mock("~/lib/core/logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-vi.mock("~/lib/character/character-store", () => ({
-  copyIntoCharacterStore: vi.fn((_sourceUrl: string, characterId: string) => {
-    return Promise.resolve(`/api/generated/character-library/${characterId}/out.png`);
-  }),
-  removeCharacterStoreDir: vi.fn(() => Promise.resolve(undefined)),
-}));
+vi.mock("~/lib/character/character-store", async () => {
+  /* readArtifactBytes 返回一张 8×8 纯色 PNG（确定性低分样张）：打分规则本身
+   * 在 quality-check 的单测里覆盖，这里只验路由的接线与落库。 */
+  const { deflateSync } = await import("node:zlib");
+  const size = 8;
+  const ihdr = new Uint8Array(13);
+  const ihdrView = new DataView(ihdr.buffer);
+  ihdrView.setUint32(0, size);
+  ihdrView.setUint32(4, size);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  const idat = deflateSync(new Uint8Array((size * 3 + 1) * size));
+  const parts = [
+    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    new Uint8Array([0, 0, 0, 13, 73, 72, 68, 82, ...ihdr, 0, 0, 0, 0]),
+    new Uint8Array([
+      (idat.length >>> 24) & 0xff,
+      (idat.length >>> 16) & 0xff,
+      (idat.length >>> 8) & 0xff,
+      idat.length & 0xff,
+      73,
+      68,
+      65,
+      84,
+      ...idat,
+      0,
+      0,
+      0,
+      0,
+    ]),
+    new Uint8Array([0, 0, 0, 0, 73, 69, 78, 68, 0, 0, 0, 0]),
+  ];
+  const flatPng = new Uint8Array(parts.reduce((sum, p) => sum + p.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    flatPng.set(part, offset);
+    offset += part.length;
+  }
+  return {
+    copyIntoCharacterStore: vi.fn((_sourceUrl: string, characterId: string) => {
+      return Promise.resolve(`/api/generated/character-library/${characterId}/out.png`);
+    }),
+    removeCharacterStoreDir: vi.fn(() => Promise.resolve(undefined)),
+    readArtifactBytes: vi.fn(() => Promise.resolve(flatPng)),
+  };
+});
 vi.mock("~/lib/workshop/workflow-run.server", () => ({
   prepareWorkflowRun: vi.fn((_userId: string, workflowId: string) => {
     if (workflowId !== "wf-1") {
@@ -87,6 +127,23 @@ beforeEach(() => {
   seedUser(tdb, { id: "user-a", email: "a@test.dev" });
   seedUser(tdb, { id: "user-b", email: "b@test.dev" });
 });
+
+/** 造一个「已入队生图」的角色 + 对应任务行（status 可指定终态）。 */
+async function seedGeneratingCharacter(taskId: string, status = "QUEUED"): Promise<string> {
+  const created = await caller().create({
+    name: `对账角色 ${taskId}`,
+    description: "银白色的长发，猫耳。",
+  });
+  await caller().enqueueGeneration({ workflowId: "wf-1", ids: [created.id] });
+  await tdb.update(characterProfile).set({ taskId }).where(eq(characterProfile.id, created.id));
+  seedTask(tdb, {
+    id: taskId,
+    userId: "user-a",
+    status,
+    images: status === "SUCCEEDED" ? [{ localPath: "/api/generated/x/out.png" }] : [],
+  });
+  return created.id;
+}
 
 describe("characterLibrary.seed —— 预置入库", () => {
   it("按数量产出角色，标签随描述提取，状态都是 draft", async () => {
@@ -272,22 +329,6 @@ describe("characterLibrary.enqueueGeneration —— 批量生图入队", () => {
 });
 
 describe("characterLibrary.syncGeneration —— 生成对账回写", () => {
-  async function seedGeneratingCharacter(taskId: string, status = "QUEUED"): Promise<string> {
-    const created = await caller().create({
-      name: `对账角色 ${taskId}`,
-      description: "银白色的长发，猫耳。",
-    });
-    await caller().enqueueGeneration({ workflowId: "wf-1", ids: [created.id] });
-    await tdb.update(characterProfile).set({ taskId }).where(eq(characterProfile.id, created.id));
-    seedTask(tdb, {
-      id: taskId,
-      userId: "user-a",
-      status,
-      images: status === "SUCCEEDED" ? [{ localPath: "/api/generated/x/out.png" }] : [],
-    });
-    return created.id;
-  }
-
   it("任务成功：产物复制进角色目录，立绘入候选，状态 ready", async () => {
     const id = await seedGeneratingCharacter("task-ok", "SUCCEEDED");
     const res = await caller().syncGeneration();
@@ -308,5 +349,60 @@ describe("characterLibrary.syncGeneration —— 生成对账回写", () => {
     expect(failed.status).toBe("failed");
     const queued = await caller().detail({ id: queuedId });
     expect(queued.status).toBe("generating");
+  });
+});
+
+describe("characterLibrary.scoreQuality / scoreAllQuality / regenerateFlagged —— 质量打分", () => {
+  it("单张打分：读立绘文件，分数与问题落库，低分判为需要重新生成", async () => {
+    const id = await seedGeneratingCharacter("task-score", "SUCCEEDED");
+    await caller().syncGeneration();
+    const res = await caller().scoreQuality({ id });
+    expect(res.score).toBeLessThan(60);
+    expect(res.needsRegeneration).toBe(true);
+    expect(res.issues.length).toBeGreaterThan(0);
+    const detail = await caller().detail({ id });
+    expect(detail.qualityScore).toBe(res.score);
+    expect(detail.qualityIssues).toEqual(res.issues);
+  });
+
+  it("未生成 / 无立绘的角色打分 → BAD_REQUEST；不存在的角色 → NOT_FOUND", async () => {
+    const created = await caller().create({ name: "无立绘角色", description: "黑发。" });
+    await expect(caller().scoreQuality({ id: created.id })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    await expect(caller().scoreQuality({ id: "missing-id" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+
+  it("批量打分：依次给每张就绪立绘打分，低分的进 flagged 清单", async () => {
+    await seedGeneratingCharacter("task-score-a", "SUCCEEDED");
+    await seedGeneratingCharacter("task-score-b", "SUCCEEDED");
+    await caller().syncGeneration();
+    const res = await caller().scoreAllQuality();
+    expect(res.scored).toBe(2);
+    expect(res.flagged).toHaveLength(2);
+    expect(res.threshold).toBe(60);
+    for (const item of res.flagged) {
+      expect(item.score).toBeLessThan(60);
+      expect(item.issues.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("regenerateFlagged：低分角色退回待生成并按原链重新入队", async () => {
+    const id = await seedGeneratingCharacter("task-regen", "SUCCEEDED");
+    await caller().syncGeneration();
+    await caller().scoreAllQuality();
+    const before = await caller().detail({ id });
+    expect(before.status).toBe("ready");
+    const res = await caller().regenerateFlagged({ workflowId: "wf-1" });
+    expect(res.regenerated).toBe(1);
+    const after = await caller().detail({ id });
+    expect(after.status).toBe("generating");
+    /* 旧立绘保留为候选，不先删。 */
+    expect(after.portraits.length).toBe(1);
+    /* 新任务已入队（QUEUED）。 */
+    const tasks = await db.select().from(task);
+    expect(tasks.some((row) => row.status === "QUEUED")).toBe(true);
   });
 });

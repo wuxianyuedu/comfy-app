@@ -35,7 +35,7 @@ export type RosterCharacter = {
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
-    /* mulberry32 的混洗常数（即 0x6d2b79f5 的十进制形态）。 */
+    /* mulberry32 的混洗常数（十进制形态，等价于常见写法里的十六进制常数）。 */
     a = (a + 1_831_565_813) >>> 0;
     let t = a;
     t = Math.imul(t ^ (t >>> 15), t | 1);

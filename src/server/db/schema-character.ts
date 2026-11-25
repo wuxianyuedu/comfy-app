@@ -55,6 +55,10 @@ export const characterProfile = sqliteTable(
     /** 生图宽高（产物元数据，列表页布局用）。 */
     width: integer("width"),
     height: integer("height"),
+    /** 立绘质量分（0~100，确定性规则打分；null = 还没打过分）。 */
+    qualityScore: integer("qualityScore"),
+    /** 质量问题清单（JSON 字符串数组；空数组 / null = 没发现问题）。 */
+    qualityIssues: text("qualityIssues", { mode: "json" }),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),

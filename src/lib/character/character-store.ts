@@ -65,3 +65,16 @@ export async function removeCharacterStoreDir(
 ): Promise<void> {
   await fs.rm(characterStoreDir(characterId, root), { recursive: true, force: true });
 }
+
+/** 读一份产物地址的字节（质量打分要拿原始 PNG 解析）；失败返回 null。 */
+export async function readArtifactBytes(url: string): Promise<Uint8Array | null> {
+  const source = artifactDiskPath(url);
+  if (source === null || !isWithinGeneratedRoot(source)) {
+    return null;
+  }
+  try {
+    return new Uint8Array(await fs.readFile(source));
+  } catch {
+    return null;
+  }
+}
