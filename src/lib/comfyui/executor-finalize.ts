@@ -33,6 +33,7 @@ import { describeZeroOutputFailure } from "./zero-output-reason";
 import { friendlyError } from "./executor-errors";
 import { taskOutputDir, taskOutputUrl } from "~/lib/media/output-paths";
 import { isRecord } from "~/lib/is-record";
+import { getWorkflowType, parseModesJson } from "~/lib/workflow/workflow-types";
 import { fetchHistoryEntry, traceComfyQueue, type ComfyHistoryEntry } from "./executor-history";
 import { historyTraceSummary, historyOutputKeys, trace } from "./trace";
 import { kickQueue } from "./executor-continuation";
@@ -159,6 +160,59 @@ export async function complete(taskId: string, promptId: string) {
     // 下载 / 落盘 / 写库任何一步炸了，都必须把任务收口，否则队列同样会卡死。
     const failureMessage = isRecord(error) ? error.message : undefined;
     await finalizeFailure(taskId, promptId, failureMessage ?? "结果处理失败");
+  }
+}
+
+/* ── manifest（归档件）辅助 ────────────────────────────────────── */
+
+/** 北京时间（UTC+8）的 ISO 带偏移格式：`2026-11-25T02:53:44.915+08:00`。
+ *  manifest 是给人对照时钟的归档件，时间一律落北京时间（ISSUE #5009 反馈）；
+ *  带偏移的 ISO 机器可读、排序不乱，也不会被误读成 UTC。 */
+const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
+function beijingIso(value: Date | string | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    return null;
+  }
+  return new Date(d.getTime() + BEIJING_OFFSET_MS).toISOString().replace("Z", "+08:00");
+}
+
+/** 工坊元数据的**尽力而为**读取：工坊模型名称（工作流上挂的模型标签）与模式。
+ *  manifest 是归档件——查不到（宿主未注入该仓储且 dynamic import 失败）就给
+ *  null，绝不阻塞收口。 */
+async function loadWorkshopMeta(
+  userId: string | null,
+  templateId: string | null,
+): Promise<{
+  defaultMode: string | null;
+  modeCode: string | null;
+  modelName: string | null;
+  modeName: string | null;
+  modes: Array<string>;
+} | null> {
+  if (userId === null || templateId === null || templateId === "") {
+    return null;
+  }
+  try {
+    const repo = await import("../core/repository");
+    const tpl = await repo.workflowTemplateRepository.findByIdForUser(userId, templateId);
+    if (tpl === null) {
+      return null;
+    }
+    const tagRows = await repo.workflowModelTagRepository.getTemplateTagRows([templateId]);
+    const modeCode = tpl.defaultMode ?? tpl.taskType ?? null;
+    return {
+      defaultMode: tpl.defaultMode ?? null,
+      modeCode,
+      modelName: tagRows[0]?.name ?? null,
+      modeName: modeCode === null ? null : (getWorkflowType(modeCode)?.label ?? null),
+      modes: parseModesJson(tpl.modes),
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -480,22 +534,46 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   }
 
   // 项目级产出：写一份可复现的 manifest，便于「按项目归档 + 一键还原」。
+  // 结构分五块（ISSUE #5009 反馈：此前混在一起，每部分要清晰）：
+  //   time     —— 北京时间（任务创建 / manifest 写入）
+  //   files    —— 产物清单
+  //   workshop —— 工坊模型名称 / 模式名称
+  //   params   —— 工坊参数（本次提交的对外参数）
+  //   workflow —— 工作流参数（模板信息 + 本次实际执行的采样参数）
   const referenceImagesRaw: unknown = taskRow?.referenceImages;
   const referenceImages: Array<string> = isStringArray(referenceImagesRaw)
     ? referenceImagesRaw
     : [];
+  const templateId = typeof taskParams.workflow === "string" ? taskParams.workflow : null;
+  const workshopMeta = await loadWorkshopMeta(taskRow?.userId ?? null, templateId);
   const manifest = {
     taskId,
     projectId,
-    workflowName: taskRow?.workflowName ?? null,
-    prompt: taskRow?.prompt ?? null,
-    negativePrompt: taskRow?.negativePrompt ?? null,
-    seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
-    size: sizeStr || null,
-    referenceImages,
-    params: taskParams,
-    createdAt: taskRow?.createdAt ?? null,
+    time: {
+      createdAt: beijingIso(taskRow?.createdAt ?? null),
+      writtenAt: beijingIso(new Date()),
+    },
     files: saved,
+    workshop: {
+      modelName: workshopMeta?.modelName ?? null,
+      modeCode: workshopMeta?.modeCode ?? null,
+      modeName: workshopMeta?.modeName ?? null,
+    },
+    params: {
+      prompt: taskRow?.prompt ?? null,
+      negativePrompt: taskRow?.negativePrompt ?? null,
+      seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
+      size: sizeStr || null,
+      referenceImages,
+      workflowInputs: Array.isArray(taskParams.workflowInputs) ? taskParams.workflowInputs : [],
+    },
+    workflow: {
+      id: templateId,
+      name: taskRow?.workflowName ?? null,
+      modes: workshopMeta?.modes ?? [],
+      defaultMode: workshopMeta?.defaultMode ?? null,
+      runtime,
+    },
   };
   await fs
     .writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8")

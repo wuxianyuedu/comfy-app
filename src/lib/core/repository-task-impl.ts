@@ -441,7 +441,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
   return {
     ...createQueueScanSection(db, owner),
     /** executor-finalize 收口时读归属与请求参数（projectId / params / prompt /
-     *  negativePrompt / workflowName / referenceImages / createdAt）。 */
+     *  negativePrompt / workflowName / referenceImages / createdAt / userId）。 */
     async findExecutionMeta(taskId: string): Promise<{
       createdAt: Date;
       negativePrompt: string | null;
@@ -449,6 +449,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
       projectId: string | null;
       prompt: string;
       referenceImages: unknown;
+      userId: string;
       workflowName: string;
     } | null> {
       const rows = await db
@@ -460,6 +461,7 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
           workflowName: task.workflowName,
           referenceImages: task.referenceImages,
           createdAt: task.createdAt,
+          userId: task.userId,
         })
         .from(task)
         .where(eq(task.id, taskId))
