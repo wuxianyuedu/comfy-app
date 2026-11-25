@@ -19,9 +19,11 @@ export type CharacterGenerateDialogProps = {
   onClose: () => void;
   /** 只对这一个角色重跑（详情页「重新生图」）；空 = 面向全部待生成角色。 */
   onlyCharacterName?: string | null;
-  onSubmit: (workflowId: string, limit: number) => void;
+  onSubmit: (workflowId: string, limit: number, ids: Array<string>) => void;
   open: boolean;
   pending: boolean;
+  /** 显式点名的角色 id（单角色重跑 / 卡片多选）；空 = 全部待生成角色。 */
+  targetIds?: Array<string>;
   workflows: Array<WorkflowRow>;
   workflowsLoading: boolean;
 };
@@ -53,6 +55,7 @@ export function CharacterGenerateDialog({
   onSubmit,
   open,
   pending,
+  targetIds = [],
   workflows,
   workflowsLoading,
 }: CharacterGenerateDialogProps) {
@@ -70,20 +73,25 @@ export function CharacterGenerateDialog({
   const selected = candidates.find((workflow) => workflow.id === effectiveWorkflowId) ?? null;
   const forSingle = onlyCharacterName !== undefined && onlyCharacterName !== null;
 
+  /* 文案按「单角色重跑 / 多选重跑 / 全部待生成」三档说清本次范围；重跑明确
+   * 告知已有立绘也会出新候选（不覆盖），避免用户以为会替换旧图。 */
+  let scopeHint = "；已有立绘的角色本轮跳过。";
+  if (forSingle) {
+    scopeHint = `；将重跑「${onlyCharacterName}」。`;
+  } else if (targetIds.length > 0) {
+    scopeHint = `；将重跑选中的 ${targetIds.length} 个角色。`;
+  }
+  const rerunning = forSingle || targetIds.length > 0;
+  const rerunHint = rerunning ? "已有立绘也会出新候选，不覆盖旧图。" : "";
+  const descriptionText = `从工作流库选一条图片工作流（如 minimax_h3_image），按角色描述逐个生成${scopeHint}${rerunHint}`;
+
   return (
     <CharacterDialogShell
-      description={
-        <>
-          从工作流库选一条图片工作流（如 minimax_h3_image），按角色描述逐个生成
-          {forSingle
-            ? "；新生成的立绘会作为新候选加入，不覆盖旧图。"
-            : "；已有立绘的角色本轮跳过。"}
-        </>
-      }
+      description={descriptionText}
       onClose={onClose}
       onSubmit={() => {
         if (selected !== null) {
-          onSubmit(selected.id, forSingle ? 1 : limit);
+          onSubmit(selected.id, forSingle ? 1 : limit, targetIds);
         }
       }}
       open={open}

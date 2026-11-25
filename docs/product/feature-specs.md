@@ -1970,7 +1970,9 @@
   （名字 / 原型 / 描述）+ 按特征标签筛选（多选取交集，标签带命中数角标）。
 - 行为与验收：① 侧栏「角色库」可点开，页头显示「角色库」，出厂为独立标签页
   （切走不关）；② 关键词 / 标签 / 状态三维过滤可组合，结果实时收窄；
-  ③ 空库给出「先预置角色」的引导与动作按钮，不是白屏。
+  ③ 空库给出「先预置角色」的引导与动作按钮，不是白屏；④ 卡片上**所有特征标签尽量完整展示**
+  （自动换行，不再只露前几枚加 `+N`），原型 / 职业与名字同行，长名字不把职业挤掉；
+  ⑤ 卡片可勾选，勾选后的集合作为批量生图目标。
 - 落点：`src/components/studio/characters/CharacterLibrary.tsx`（视图）、
   `src/components/studio/characters/hooks/use-character-library.ts`（逻辑层）、
   `src/components/studio/NavItems.tsx` + `WorkspaceViewStack.tsx` + `LazyViews.tsx`（导航 / 渲染）
@@ -2007,13 +2009,30 @@
 - 需求：接工作流库（如 minimax_h3_image），对全部待生成（或点名的）角色逐个
   入队生图任务；产物复制进角色库自有目录；生成状态可追踪，失败不阻断其余角色。
 - 行为与验收：① 入参封装与工坊批量同一条链（`prepareWorkflowRun` +
-  `buildWorkflowRunParams`），提示词由角色描述折算（`buildPortraitPrompt`）；
+  `buildWorkflowRunParams`），提示词由角色描述折算（`buildPortraitPrompts`）；
   ② 自动模式只取 draft / failed，已就绪角色仅显式点名时重跑（新候选不覆盖旧图）；
-  ③ 对账（`syncGeneration`）按任务终态回写：SUCCEEDED → 产物复制进
-  `generated/character-library/<id>/`、立绘入候选（最新在前）、状态 ready；
-  FAILED / CANCELED / 任务丢失 → 状态 failed（保留原立绘）；④ 界面在存在
-  生成中角色时每 5 秒自动对账，也可手动触发。
+  同一角色可用**同一模型或不同模型重复生成**多次：每次在弹窗重新选工作流并对
+  指定 / 勾选的 ids 入队，新候选不覆盖旧图；③ 对账（`syncGeneration`）按任务终态
+  回写：SUCCEEDED → 产物复制进 `generated/character-library/<id>/`、立绘入候选
+  （最新在前）、状态 ready；FAILED / CANCELLED / 任务丢失 → 状态 failed（保留原立绘）；
+  ④ 界面在存在生成中角色时每 5 秒自动对账，也可手动触发；⑤ **负面提示词两套**：
+  工作流接负向口时走负向词表；不接负向口（如 minimax_h3_image）时不传负向，改把
+  「除角色服饰上的装饰文字以外，其他地方不要出现文字 / 字幕 / 标题 / 人名 / 水印 /
+  签名」以正向表述拼在正向提示词末尾，避免机械折成「无文字」误禁服饰装饰字。
+  能力判据是作者是否把 `negative` 契约口连到工作流端口，不新增模型元数据。
 - 落点：`src/server/api/routers/character-library.ts`（`enqueueGeneration` / `syncGeneration`）、
   `src/lib/character/portrait-prompt.ts`（提示词）、`src/lib/character/character-store.ts`（落盘）、
   `src/lib/core/repository-character-profile.ts`（状态机回写）、
   `src/components/studio/characters/CharacterGenerateDialog.tsx`（弹窗）
+
+#### FR-CL-05 角色详情：候选历史与勾选删除（#5068）
+
+- 状态：已上线
+- 需求：每个角色图片的详情能看到该角色对应的**所有历史**生成记录，且生成内容可勾选删除。
+- 行为与验收：① 详情列出全部候选立绘（最多 12 张，与落库上限一致），点选一张即显示其对应任务的
+  模型名 / 工作流 / 状态 / 时刻 / 提示词摘要 / 错误，并可在历史列表里切换查看；查不到任务的历史项跳过，不报错；
+  ② 候选可多选并「删除选中」，服务端只删命中的候选，若删掉当前展示图则把剩余第一张提升为新的主立绘，
+  磁盘文件只删该角色目录内的对应文件（防路径穿越），不影响来源任务；③ 删除有非阻塞确认，成功后刷新详情与列表。
+- 落点：`src/server/api/routers/character-library.ts`（`history` / `deletePortraits`）、
+  `src/lib/character/character-store.ts`（单张安全删除）、
+  `src/components/studio/characters/CharacterDetailModal.tsx`、`hooks/use-character-library.ts`
