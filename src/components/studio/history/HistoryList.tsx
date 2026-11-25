@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 
@@ -128,6 +128,31 @@ export function HistoryList({
    * 详情只在弹层（HistoryDetailModal，挂在本视图内）里看。曾经的独立详情路由
    * /create/[id] 已退役（#2422），别再把这条路由当在役出口写进注释。 */
   const c = useHistoryList({ onReprintToModelTest });
+
+  /* 滚动到底自动加载下一页（ISSUE #5009 反馈：别再一页页手点「加载更多」）。
+   * 列表尾部的哨兵元素进视口（预留 120px）且有下一页时自动触发；正在拉取
+   * 时不重复触发。jsdom / 老环境没有 IntersectionObserver 时退回手点按钮。 */
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const { canLoadMore, loadingMore, loadMore } = c;
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (el === null || !canLoadMore || loadingMore || typeof IntersectionObserver === "undefined") {
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          loadMore();
+        }
+      },
+      { rootMargin: "120px" },
+    );
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+    };
+  }, [canLoadMore, loadingMore, loadMore]);
+
   /* 「加入资产库」弹窗的目标行（ISSUE #4868）：open 那一刻的快照。 */
   const [libraryTask, setLibraryTask] = useState<TaskItem | null>(null);
 
@@ -243,24 +268,27 @@ export function HistoryList({
             </section>
           ))}
 
-          {/* ── 分页 footer ── */}
+          {/* ── 分页 footer（滚动到底自动加载；按钮留给显式补拉） ── */}
           <div className="border-border-subtle flex items-center justify-center gap-3 border-t pt-6">
             <span className="text-ink-muted text-xs">
-              已加载 {c.visibleTotal} / {c.filteredCount} 个任务
+              已加载 {c.visibleTotal} / {c.total ?? c.filteredCount} 个任务
             </span>
             {c.canLoadMore ? (
               <Button
                 className="border-border bg-subtle text-ink-strong hover:bg-surface-2 h-auto rounded-lg px-4 py-1.5"
+                disabled={c.loadingMore}
                 onClick={c.loadMore}
                 size="xs"
                 variant="outline"
               >
-                加载更多
+                {c.loadingMore ? "加载中…" : "加载更多"}
               </Button>
             ) : (
               <span className="text-ink-fainter text-2xs">已全部加载</span>
             )}
           </div>
+          {/* 哨兵：滚到它附近就自动加载下一页。 */}
+          <div aria-hidden className="h-px w-full" ref={sentinelRef} />
         </div>
       )}
 

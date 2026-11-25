@@ -87,6 +87,8 @@ export type HistoryListController = {
   /** 这一条的动作（输出目录 / 复制去重投）正在进行吗。 */
   isRowBusy: (id: string) => boolean;
   loading: boolean;
+  /** 正在拉取下一页（滚动到底自动加载的请求在飞）。 */
+  loadingMore: boolean;
   loadMore: () => void;
   /** 正在查看执行日志的那条（快照）；null = 弹窗关着。 */
   logTarget: QueueTaskLogTarget | null;
@@ -113,6 +115,9 @@ export type HistoryListController = {
   sort: SortKey;
   switchFilter: (filter: FilterKey) => void;
   tasks: Array<TaskItem>;
+  /** 终态任务总数（服务端随页回带；首页还没拉到时为 null）。
+   *  历史页「已加载 X / 总数 Y」的 Y。 */
+  total: number | null;
   /** 当前可见的日期分组（已拉取各页的并集；翻页走服务端 skip，#4044）。 */
   visibleGroups: Array<{ items: Array<TaskItem>; key: string }>;
   visibleTotal: number;
@@ -171,6 +176,9 @@ export function useHistoryList(args: {
     ),
   );
   const hasMore = tasksQ.data?.pages.at(-1)?.hasMore ?? false;
+  /* 终态任务总数（服务端随页回带，各页同值）：历史页「已加载 X / 总数 Y」的 Y。
+   * 一页都没拉到（加载中）时为 null。 */
+  const total = tasksQ.data?.pages.at(-1)?.total ?? null;
 
   /* 各页并集（按 id 去重、保持「新到旧」的页序）：渲染期从查询结果派生，
    * 不在 effect 里 setState（规范 8.6 / 2.4）。 */
@@ -447,6 +455,8 @@ export function useHistoryList(args: {
     visibleGroups,
     visibleTotal,
     filteredCount: filtered.length,
+    total,
+    loadingMore: tasksQ.isFetchingNextPage,
     canLoadMore,
     empty,
     progressMap,
