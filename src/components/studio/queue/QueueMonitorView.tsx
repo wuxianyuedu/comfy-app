@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import {
   Activity,
   AlertCircle,
+  Ban,
   Boxes,
   CheckCircle2,
   ListChecks,
@@ -21,6 +22,7 @@ import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ViewActions } from "~/components/studio/ViewActions";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -75,6 +77,9 @@ export function QueueMonitorView({
   /* 空态判据看**未筛选**的全量：筛到一个不剩时不能误报「一条任务都没有」。 */
   const hasAny =
     running !== null || c.runningRows.length > 0 || c.queued.length > 0 || c.recent.length > 0;
+  /* 「取消全部」的判据只看**还能取消**的行：终态任务留在「最近结果」里不算。
+   * 用 `hasAny` 会让只有历史记录时也亮着按钮，点了只回一句「已取消 0 条」。 */
+  const hasActive = running !== null || c.runningRows.length > 0 || c.queued.length > 0;
   const empty = offlineEmptyText();
   const banner = offlineBannerText();
   const runningHint = runningHintText(c.online, c.waitingCount);
@@ -146,6 +151,19 @@ export function QueueMonitorView({
             <Pause aria-hidden className="size-3" data-icon="inline-start" />
           )}
           {c.paused ? "恢复生成" : "暂停生成"}
+        </Button>
+        {/* 「取消全部」整表动作（ISSUE #5064）：danger 变体 + 二次确认，
+            与删除项目同一口径；单条取消在跑时一并禁用，免得两边互抢槽位。 */}
+        <Button
+          aria-label="打开取消全部确认"
+          className="border-destructive/40 h-auto gap-1.5 rounded-lg px-3 py-1.5"
+          disabled={!hasActive || c.cancelAllBusy}
+          onClick={c.requestCancelAll}
+          size="xs"
+          variant="danger"
+        >
+          <Ban aria-hidden className="size-3" data-icon="inline-start" />
+          取消全部
         </Button>
         <Button
           aria-label="立即重新读取队列"
@@ -456,6 +474,22 @@ export function QueueMonitorView({
           </div>
         </div>
       ) : null}
+
+      {/* 「取消全部」二次确认（ISSUE #5064）：破坏面写在弹窗里 ——
+          正在生成的一条会被中断、排队行全部作废且不可恢复；已产出的文件不删。 */}
+      <ConfirmDialog
+        cancelLabel="返回"
+        confirmLabel="取消全部任务"
+        danger
+        description="将取消当前所有未结束的任务：正在生成的这一条会被中断，排队中的条目一并作废且不可恢复。已经生成的文件不会删除，可在「历史」里查到取消记录。"
+        onClose={c.closeCancelAll}
+        onConfirm={() => {
+          void c.confirmCancelAll();
+        }}
+        open={c.cancelAllOpen}
+        pending={c.cancelAllBusy}
+        title="取消全部任务？"
+      />
     </DocumentFrame>
   );
 }

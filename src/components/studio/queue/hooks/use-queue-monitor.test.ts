@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as ComfyQueueModule from "~/components/studio/hooks/use-comfy-queue";
 import { revealTaskFolder } from "~/lib/history-detail-actions";
-import { cancelTask } from "~/lib/task-cancel-client";
+import { cancelAllTasks, cancelTask } from "~/lib/task-cancel-client";
 
 import type { QueueRow } from "../queue-monitor-config";
 import { useQueueMonitor } from "./use-queue-monitor";
@@ -107,13 +107,14 @@ vi.mock("~/components/studio/hooks/use-comfy-queue", async (importOriginal) => {
 vi.mock("~/components/studio/ToastProvider", () => ({
   useToast: () => toast,
 }));
-vi.mock("~/lib/task-cancel-client", () => ({ cancelTask: vi.fn() }));
+vi.mock("~/lib/task-cancel-client", () => ({ cancelTask: vi.fn(), cancelAllTasks: vi.fn() }));
 vi.mock("~/lib/history-detail-actions", () => ({ revealTaskFolder: vi.fn() }));
 vi.mock("~/components/ui/use-copy-feedback", () => ({
   useCopyResult: () => copyResult,
 }));
 
 const mockedCancel = vi.mocked(cancelTask);
+const mockedCancelAll = vi.mocked(cancelAllTasks);
 const mockedReveal = vi.mocked(revealTaskFolder);
 
 beforeEach(() => {
@@ -224,6 +225,43 @@ describe("useQueueMonitor", () => {
       await result.current.cancel("early", "先提交的工作流");
     });
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("先提交的工作流"));
+  });
+
+  it("取消全部：确认后打到一个出口、关弹窗、刷新，并如实报出取消条数", async () => {
+    mockedCancelAll.mockResolvedValue({ cancelled: 5, failed: 0, total: 5 });
+    const { result } = renderHook(() => useQueueMonitor());
+    act(() => {
+      result.current.requestCancelAll();
+    });
+    expect(result.current.cancelAllOpen).toBe(true);
+
+    await act(async () => {
+      await result.current.confirmCancelAll();
+    });
+    expect(mockedCancelAll).toHaveBeenCalledTimes(1);
+    expect(mockedCancel).not.toHaveBeenCalled();
+    expect(result.current.cancelAllOpen).toBe(false);
+    expect(refetch).toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalledWith("已取消 5 条任务");
+  });
+
+  it("取消全部部分失败：条数照实报出来，不把没取消掉的藏起来", async () => {
+    mockedCancelAll.mockResolvedValue({ cancelled: 3, failed: 2, total: 5 });
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.confirmCancelAll();
+    });
+    expect(toast.info).toHaveBeenCalledWith(expect.stringContaining("3 条，2 条未能取消"));
+  });
+
+  it("取消全部失败也刷新并把原因给用户", async () => {
+    mockedCancelAll.mockRejectedValue(new Error("后端无响应"));
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.confirmCancelAll();
+    });
+    expect(refetch).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("后端无响应");
   });
 
   it("复制去重投：浏览器拒绝访问剪贴板时报错，而不是当成成功", async () => {

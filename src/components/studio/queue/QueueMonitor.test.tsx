@@ -72,6 +72,11 @@ function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorCon
     paused: false,
     pauseBusy: false,
     togglePause: vi.fn(),
+    cancelAllOpen: false,
+    cancelAllBusy: false,
+    confirmCancelAll: vi.fn(),
+    requestCancelAll: vi.fn(),
+    closeCancelAll: vi.fn(),
     isBusy: () => false,
     refresh: vi.fn(),
     cancel: vi.fn(),
@@ -345,5 +350,58 @@ describe("生图暂停 / 恢复（ISSUE #5055）", () => {
 
     expect(screen.getByRole("button", { name: "恢复生成" })).toBeInTheDocument();
     expect(screen.getByText("生图已暂停")).toBeInTheDocument();
+  });
+});
+
+describe("取消全部（ISSUE #5064）", () => {
+  it("有任务时显示「取消全部」按钮，点击打开确认弹窗", () => {
+    const requestCancelAll = vi.fn();
+    monitorMock.mockReturnValue(
+      controller({
+        queued: [{ row: row({ id: "q1", status: "QUEUED" }), position: 1 }],
+        requestCancelAll,
+      }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    screen.getByRole("button", { name: "打开取消全部确认" }).click();
+    expect(requestCancelAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("没有任务时「取消全部」禁用，不给一个点了没反应的按钮", () => {
+    monitorMock.mockReturnValue(controller());
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "打开取消全部确认" })).toBeDisabled();
+  });
+
+  it("只有终态任务（最近结果）时也禁用：按钮不该亮着却一条都取消不了", () => {
+    monitorMock.mockReturnValue(controller({ recent: [row({ id: "done", status: "FAILED" })] }));
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "打开取消全部确认" })).toBeDisabled();
+  });
+
+  it("确认弹窗打开时写出破坏面：会中断当前、作废排队，文件不删", () => {
+    monitorMock.mockReturnValue(controller({ cancelAllOpen: true }));
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByText("取消全部任务？")).toBeInTheDocument();
+    expect(screen.getByText(/正在生成的这一条会被中断/)).toBeInTheDocument();
+    expect(screen.getByText(/已经生成的文件不会删除/)).toBeInTheDocument();
+  });
+
+  it("弹窗确认按钮点击走 controller 的 confirmCancelAll", () => {
+    const confirmCancelAll = vi.fn();
+    monitorMock.mockReturnValue(controller({ cancelAllOpen: true, confirmCancelAll }));
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    screen.getByRole("button", { name: "取消全部任务" }).click();
+    expect(confirmCancelAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("pending 时弹窗确认禁用，防连点重复发取消", () => {
+    const confirmCancelAll = vi.fn();
+    monitorMock.mockReturnValue(
+      controller({ cancelAllOpen: true, cancelAllBusy: true, confirmCancelAll }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /取消全部任务/ })).toBeDisabled();
+    expect(confirmCancelAll).not.toHaveBeenCalled();
   });
 });
