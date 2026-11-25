@@ -13,12 +13,13 @@
 // 默认不同的格子（`diffSizePresetTable`），与侧栏页签行为 / 模式契约同一口径 ——
 // 项目默认后续改动能穿透到存过覆盖的机器，「改回默认」= 该格从覆盖里消失。
 //
-// 「保存到项目代码库」写的是 ① 那份 JSON（ISSUE #3948）：提交后每个检出与每个
-// 桌包都是这一份 —— 只有开发检出有可写的目标文件。
+// 项目默认那份 JSON 是**编译期基线**（ISSUE #5001 起运行期不再写它）：改它走
+// 改代码 / 提 PR 那条路；开发检出里现读磁盘只是让「改了代码 / 手改了 JSON」
+// 不必重启就生效。
 //
 // **读取侧在 `size-preset-fs.server.ts`**（ISSUE #3972 起拆出）：MCP stdio 等
 // 纯 Node 宿主要读生效表（出图链路的换算），不能碰 `server-only`；本文件保留
-// 「写」（保存 / 还原 / 保存项目默认）并 re-export 读取口，既有消费方
+// 「写」（保存 / 还原，只落本机覆盖）并 re-export 读取口，既有消费方
 // （`/api/size-presets`）的 import 路径不变。
 
 import "server-only";
@@ -28,14 +29,8 @@ import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
 import { AsyncMutex } from "~/lib/async-mutex";
-import { atomicWriteTextIfChanged } from "~/lib/workshop/atomic-write.server";
-import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import { diffSizePresetTable } from "~/lib/media/size-presets-diff";
-import {
-  mergeSizePresetTable,
-  parseSizePresetDefaults,
-  type SizePresetTable,
-} from "~/lib/media/size-presets";
+import { mergeSizePresetTable, type SizePresetTable } from "~/lib/media/size-presets";
 import {
   loadSizePresetLayers,
   loadSizePresetProjectDefaults,
@@ -129,33 +124,4 @@ export async function resetSizePresetSceneOverride(
     }
     return loadSizePresetTable(root);
   });
-}
-
-/**
- * 「保存为项目默认（跟代码走）」：把当前这份表**全量**写进入库的项目默认 JSON。
- *
- * 只有开发检出可以调：正式包没有源码可写，这格调用本身就是错用 —— 大声失败而不是
- * 假装成功。写完后读取侧现读磁盘（`loadSizePresetProjectDefaults`），**写完即生效**；
- * 提交之后别的检出与桌包才是这一份（桌包要重新构建才带上）。
- */
-export async function saveSizePresetTableAsProjectDefaults(
-  raw: unknown,
-  root: string = process.cwd(),
-): Promise<{ file: string; table: SizePresetTable }> {
-  if (!isDevCheckout(root)) {
-    throw new Error(
-      "保存为项目默认只在开发检出可用（这份检出里没有 scripts/dev-launcher.mjs）——" +
-        "正式包的改动请改一格即存（只落本机）。",
-    );
-  }
-  const table = parseSizePresetDefaults(raw);
-  const file = path.join(/*turbopackIgnore: true*/ root, SIZE_PRESET_DEFAULTS_REL_PATH);
-  try {
-    /* 内容相同就跳过（ISSUE #4253）：这份文件在 src/ 树内，每次写入都会
-     * 触发 Turbopack 增量重编译。 */
-    await atomicWriteTextIfChanged(file, `${JSON.stringify(table, null, 2)}\n`);
-  } catch (error) {
-    throw new Error(errorText(error, `尺寸配置表项目默认写入失败（${file}）`), { cause: error });
-  }
-  return { file, table };
 }

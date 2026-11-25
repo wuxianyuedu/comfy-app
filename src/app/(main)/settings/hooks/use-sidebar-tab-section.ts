@@ -5,14 +5,14 @@
 // 界面页签的行为（ISSUE #3623 / #3798）：每个全局视图点开后是**独立标签页**（常驻）还是**共享
 // 标签页**（切走即关），按项配置、落在 JSON 里。
 //
-// 这一层只管**编辑态**：草稿（改到哪了）、三个动作（改一档即存本机 / 写项目默认 / 还原
-// 默认）与状态提示。读写的出口在 `~/components/studio/hooks/use-sidebar-tab-config`
+// 这一层只管**编辑态**：草稿（改到哪了）、两个动作（改一档即存本机 / 还原默认）
+// 与状态提示。读写的出口在 `~/components/studio/hooks/use-sidebar-tab-config`
 // （工作区与设置页共用同一份 React Query 缓存 —— 保存后自动回读）。
 //
 // **本机覆盖是「改一档即存」**（ISSUE #3948）：此前配好要再点一次「保存」，改完没点
 // 就切走 = 白改（配置面与「尺寸配置表」那一族的口径不一致）。于是这一层不再有
-// 「保存」按钮：改一档直接落本机（`data/sidebar-tab-behavior.json`），只有「写项目
-// 默认（跟代码走）」才是一个显式动作 —— 那一份进代码库，不能顺手就改。
+// 「保存」按钮：改一档直接落本机（`data/sidebar-tab-behavior.json`）。项目默认那份
+// 入库 JSON 运行期只读不写（ISSUE #5001）—— 改它走改代码 / 提 PR 那条路。
 //
 // **草稿不从查询回读重新播种**（只播种一次，之后只由用户的动作改）：自动保存期间
 // 服务端会回读两次（前一票的响应可能落后于用户刚改的那一格），拿它播种会把用户
@@ -36,18 +36,12 @@ export type SidebarTabSectionController = {
   customized: boolean;
   /** 草稿：每一项当前的档位（null = 还没取回）。 */
   draft: SidebarTabConfig | null;
-  /** 这份检出能不能「保存为项目默认」（正式包为 false，入口随之隐藏）。 */
-  projectDefaultEditable: boolean;
   /** 「还原默认」进行中。 */
   resetBusy: boolean;
   /** 还原默认：删掉本机覆盖，生效值回落项目默认。 */
   resetToDefault: () => Promise<void>;
-  /** 「保存为项目默认（跟代码走）」：写进入库那份 JSON。 */
-  saveAsProjectDefaults: () => Promise<void>;
   /** 改一档即存本机（进行中）。 */
   saving: boolean;
-  /** 「保存为项目默认」进行中。 */
-  savingProjectDefaults: boolean;
   /** 改一项的档位（草稿态 + 立刻落本机）。 */
   setMode: (view: string, mode: SidebarTabMode) => void;
   /** 上一次动作的结果 / 失败原因（界面念它）。 */
@@ -104,22 +98,6 @@ export function useSidebarTabSection(): SidebarTabSectionController {
     [persistLocal],
   );
 
-  const saveAsProjectDefaults = useCallback(async () => {
-    const current = draftRef.current;
-    if (!current) {
-      return;
-    }
-    try {
-      const file = await actions.saveAsProjectDefaults(current);
-      setStatus(
-        `已写入项目默认（${file ?? ""}），提交后每个检出与桌包都是这一份；` +
-          "桌面包要把这份 JSON 重新构建才会带上。",
-      );
-    } catch (error) {
-      setStatus(errorText(error, "写入失败"));
-    }
-  }, [actions]);
-
   const resetToDefault = useCallback(async () => {
     try {
       /* 还原后服务端回的是**生效值**（项目默认那份）—— 草稿按它重种，
@@ -139,12 +117,9 @@ export function useSidebarTabSection(): SidebarTabSectionController {
   return {
     customized: isSidebarTabCustomized(query.data?.config, query.data?.projectDefaults),
     draft,
-    projectDefaultEditable: query.data?.projectDefaultEditable === true,
     resetToDefault,
     resetBusy: actions.resetBusy,
-    saveAsProjectDefaults,
     saving: actions.saving,
-    savingProjectDefaults: actions.savingProjectDefaults,
     setMode,
     status,
   };

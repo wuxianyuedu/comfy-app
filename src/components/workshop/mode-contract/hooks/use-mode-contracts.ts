@@ -19,7 +19,6 @@ export function useModeContracts() {
   const query = useQuery(trpc.llm.modeContractsGet.queryOptions());
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const saveBusy = useBusyAction();
-  const saveDefaultsBusy = useBusyAction();
   const resetBusy = useBusyAction();
 
   /* 成品配置基准（判「已改」用）：服务端**现读**项目默认那份，读数没到时由
@@ -29,14 +28,7 @@ export function useModeContracts() {
   const contracts: Array<ModeContract> = parseModeContracts(query.data?.contracts);
 
   const saveMutation = useMutation(trpc.llm.modeContractsSave.mutationOptions());
-  const saveDefaultsMutation = useMutation(
-    trpc.llm.modeContractsSaveProjectDefaults.mutationOptions(),
-  );
   const resetMutation = useMutation(trpc.llm.modeContractReset.mutationOptions());
-
-  /** 这份检出能不能「保存为项目默认」：只有开发检出有可写的目标文件
-   *  （ISSUE #3396，服务端判据 `isDevCheckout`）。 */
-  const projectDefaultEditable = query.data?.projectDefaultEditable === true;
 
   const save = useCallback(
     async (contracts: Array<ModeContract>) => {
@@ -46,23 +38,6 @@ export function useModeContracts() {
       });
     },
     [saveMutation, query, saveBusy],
-  );
-
-  /** 「保存为项目默认（跟代码走）」：编辑器现状**全量**写进入库 JSON（#3603 起该
-   *  文件是完整基线，不再是「与推导的差集」）。返回写盘的绝对路径（界面转告
-   *  「提交后生效」）；非开发检出服务端会拒。
-   *
-   *  写完**立刻重读**：服务端现读那份文件 ⇒ 重读回来的就是新口径，界面这一跳
-   *  就生效，不必重启应用（#3634）。 */
-  const saveAsProjectDefaults = useCallback(
-    async (contracts: Array<ModeContract>): Promise<string | null> => {
-      return saveDefaultsBusy.run(async () => {
-        const res = await saveDefaultsMutation.mutateAsync({ contracts });
-        await query.refetch();
-        return res.file;
-      });
-    },
-    [saveDefaultsMutation, query, saveDefaultsBusy],
   );
 
   /** 「还原默认」：把一个模式从本机覆盖里移除（生效值回落成品配置）。
@@ -84,15 +59,10 @@ export function useModeContracts() {
     /** 成品配置基准（项目默认；判「已改」用它）。 */
     configured,
     loading: query.isLoading,
-    /** 这份检出能不能「保存为项目默认」（正式包为 false，界面隐藏该入口）。 */
-    projectDefaultEditable,
     save,
-    saveAsProjectDefaults,
     /** 还原一个模式到默认（从本机覆盖移除）。 */
     resetToDefault,
     saving: saveBusy.busy,
-    /** 「保存为项目默认」进行中（与 `saving` 分开：两个按钮各自转圈）。 */
-    savingProjectDefaults: saveDefaultsBusy.busy,
     /** 「还原默认」进行中。 */
     resetting: resetBusy.busy,
     refetch: query.refetch,

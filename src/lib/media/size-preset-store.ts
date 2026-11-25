@@ -44,21 +44,16 @@ export const SIZE_PRESET_LEGACY_STORAGE_KEY = "comfyapp:size-presets:v1";
 /** 本机覆盖在服务端的落点（应用数据文件，经 `/api/size-presets` 读写）。 */
 const SIZE_PRESETS_ENDPOINT = "/api/size-presets";
 
-/** 「保存到项目代码库」的落点（入库那份 JSON，经 `/api/size-presets/project-default` 写）。 */
-const SIZE_PRESET_PROJECT_DEFAULT_ENDPOINT = "/api/size-presets/project-default";
-
 export type Listener = () => void;
 
 /* ── 模块状态：快照 + 订阅者 + 水合进度 ── */
 let snapshot: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE;
 /** 项目默认那份（跟代码走的那份基线，水合后从服务端取）：「恢复默认」的基准。
  *
- *  为什么要单独存一份：项目默认能被「保存到项目代码库」改过（ISSUE #3948），而
- *  编译进包的那份快照要等重新构建才更新 —— 拿它当还原基准，用户会看到「还原」把
- *  表还原成**旧**的值。 */
+ *  为什么要单独存一份：项目默认会随代码改动（改 JSON / 提 PR），而编译进包的
+ *  那份快照要等重新构建才更新 —— 拿它当还原基准，用户会看到「还原」把表还原成
+ *  **旧**的值。 */
 let defaultsSnapshot: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE;
-/** 这份检出能不能「保存到项目代码库」（正式包没有源码可写，入口随之隐藏）。 */
-let projectDefaultEditable = false;
 const listeners = new Set<Listener>();
 let hydrateStarted = false;
 let hydrated = false;
@@ -82,11 +77,6 @@ export function getSizePresetServerSnapshot(): SizePresetTable {
 /** 服务端渲染的项目默认快照：水合前一律给默认表。 */
 export function getSizePresetDefaultsServerSnapshot(): SizePresetTable {
   return DEFAULT_SIZE_PRESET_TABLE;
-}
-
-/** 这份检出能不能「保存到项目代码库」。 */
-export function getSizePresetProjectDefaultEditable(): boolean {
-  return projectDefaultEditable;
 }
 
 export function subscribeSizePresetTable(listener: Listener): () => void {
@@ -132,9 +122,9 @@ async function persist(table: SizePresetTable): Promise<void> {
  * 旧 localStorage 键里还留着的自定义表一次性迁移过来（旧键随后清除）。
  * 幂等：重复调用只水合一次。
  *
- * 服务端回的是**两层**（`{ defaults, table, projectDefaultEditable }`，ISSUE #3948）：
- * 项目默认那份（还原基准）与生效表。本机覆盖是相对项目默认算的，所以合并也要
- * 拿那份当基准 —— 拿编译进包的旧快照当基准会把项目默认刚改过的值顶掉。
+ * 服务端回的是**两层**（`{ defaults, table }`）：项目默认那份（还原基准）与
+ * 生效表。本机覆盖是相对项目默认算的，所以合并也要拿那份当基准 —— 拿编译进包的
+ * 旧快照当基准会把项目默认刚改过的值顶掉。
  */
 export async function hydrateSizePresetsFromServer(): Promise<void> {
   if (typeof window === "undefined" || typeof fetch === "undefined" || hydrateStarted) {
@@ -154,7 +144,6 @@ export async function hydrateSizePresetsFromServer(): Promise<void> {
          服务端回的是**完整表**，归一后缺行缺档都回落到基准，不会带坏形状进来。 */
       serverDefaults = defaultsRaw === undefined ? null : mergeSizePresetTable(defaultsRaw);
       serverTable = tableRaw === undefined ? null : mergeSizePresetTable(tableRaw);
-      projectDefaultEditable = payload?.projectDefaultEditable === true;
     }
   } catch {
     /* 服务端读不到（应用服务未起等）：保持默认表，不影响生成。 */
@@ -221,31 +210,4 @@ export function resetSizePresetScene(scene: SizeScene): void {
   commit(
     scene === "image" ? { ...snapshot, image: fresh.image } : { ...snapshot, video: fresh.video },
   );
-}
-
-/**
- * 「保存为项目默认（跟代码走）」：把当前这份表写进入库那份 JSON（ISSUE #3948）。
- *
- * 与本机覆盖是**两件事**：那一件写应用数据目录（改一格即存），这一件写代码库
- * （提交后每个检出与每个桌包都是这一份）。只有开发检出有可写的目标文件，服务端
- * 在正式包里会大声失败 —— 返回写盘的路径与落盘后的表。
- */
-export async function saveSizePresetTableToProjectDefaults(
-  table: SizePresetTable,
-): Promise<{ file: string; table: SizePresetTable }> {
-  const response = await fetchWithTimeout(SIZE_PRESET_PROJECT_DEFAULT_ENDPOINT, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(table),
-  });
-  if (!response.ok) {
-    throw new Error(`尺寸配置表写入项目默认失败（HTTP ${response.status}）`);
-  }
-  const raw: unknown = await response.json();
-  const payload = isRecord(raw) ? raw : {};
-  const tableRaw = payload.table;
-  return {
-    file: typeof payload.file === "string" ? payload.file : "",
-    table: tableRaw === undefined ? table : mergeSizePresetTable(tableRaw),
-  };
 }

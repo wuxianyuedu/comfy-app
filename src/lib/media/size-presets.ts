@@ -81,18 +81,18 @@ const dims = (width: number, height: number): SizeDims => ({ width, height });
  *          4K UHD = 3840×2160；超宽档按行业常见值单列。
  *
  * 这份基线**住在入库的 JSON 里**（`size-preset-defaults.json`，ISSUE #3948）：
- * 设置页「保存到项目代码库」写的就是它，提交后每个检出与每个桌包都是同一份。
- * 静态 import（不走 fs）—— 编译进产物后读到的就是这份快照，与写回侧
- * （`size-preset.server.ts` 落 `SIZE_PRESET_DEFAULTS_REL_PATH`）指向同一份文件，
- * 与「侧栏页签行为」「模式契约」的项目默认同一套口径。 */
+ * 提交后每个检出与每个桌包都是同一份。静态 import（不走 fs）—— 编译进产物后
+ * 读到的就是这份快照，与开发检出里现读磁盘的那份（`size-preset.server.ts` 按
+ * `SIZE_PRESET_DEFAULTS_REL_PATH` 读）指向同一份文件，与「侧栏页签行为」「模式
+ * 契约」的项目默认同一套口径。运行期只读不写（ISSUE #5001）。 */
 import defaultsJson from "./size-preset-defaults.json";
 
 /** 项目默认那份（跟代码走的那份基线）：由入库 JSON 解析而来，逐格校验过。
  *
  *  它同时是**编译进产物的快照**（正式包没有源码，读到的就是这份）与**本机覆盖的
- *  基准**（`mergeSizePresetTable` 的默认基准）。开发检出里磁盘上那份可能被
- *  「保存到项目代码库」改过 —— 那时读侧现读磁盘（`size-preset.server.ts`），
- *  写完即生效，不必重启进程（与「模式契约」#3634 同一口径）。 */
+ *  基准**（`mergeSizePresetTable` 的默认基准）。开发检出里磁盘上那份可能随代码
+ *  改动（改 JSON / 提 PR）—— 那时读侧现读磁盘（`size-preset.server.ts`），改完
+ *  即生效，不必重启进程（与「模式契约」#3634 同一口径）。 */
 export const DEFAULT_SIZE_PRESET_TABLE: SizePresetTable = parseSizePresetDefaults(defaultsJson);
 
 /** 场景的显示名。 */
@@ -717,8 +717,8 @@ export function parseRatioFromText(text: string): number | null {
 
 /** 某场景的表相对默认值是否被改过（配置界面据此显示「已改」与恢复入口）。
  *
- *  基准**可传**（默认是项目默认那份）：项目默认被「保存到项目代码库」改过之后，
- *  「已改」的判据要跟着那份新基线走，否则界面会把没改过的格子也标成已改。
+ *  基准**可传**（默认是项目默认那份）：项目默认随代码更新之后，「已改」的判据
+ *  要跟着那份新基线走，否则界面会把没改过的格子也标成已改。
  */
 export function sceneIsModified(
   scene: SizeScene,
@@ -830,8 +830,8 @@ const EMPTY_TABLE: SizePresetTable = { image: {}, video: {} };
  * 一除就是那一格 —— 与 `resolutionDims` 的兜底同一条口径。于是文件被手改坏时界面
  * 仍有可用的宽高，而不是整张表空掉。
  *
- * 这份 JSON 是**项目默认的唯一出处**（ISSUE #3948：设置页「保存到项目代码库」
- * 写的就是它），所以它坏掉的概率不为零 —— 读侧与写侧都要能扛住。
+ * 这份 JSON 是**项目默认的唯一出处**（ISSUE #3948 起基线落在文件里），所以它
+ * 坏掉的概率不为零 —— 读侧要能扛住（坏格回退算出的默认值）。
  */
 export function parseSizePresetDefaults(raw: unknown): SizePresetTable {
   const record = isPlainRecord(raw) ? raw : {};
@@ -868,7 +868,7 @@ export function parseSizePresetDefaults(raw: unknown): SizePresetTable {
  *  （ISSUE #3788）。
  *
  *  基准**可传**（默认是项目默认那份）：本机覆盖是相对**当前项目默认**算的 —— 项目
- *  默认被「保存到项目代码库」改过之后，基准必须跟着变，否则还原会回到旧值。
+ *  默认随代码更新之后，基准必须跟着变，否则还原会回到旧值。
  */
 export function mergeSizePresetTable(
   raw: unknown,

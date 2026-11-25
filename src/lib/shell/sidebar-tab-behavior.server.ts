@@ -26,8 +26,6 @@ import path from "node:path";
 
 import { errorText } from "~/lib/error-message";
 import { AsyncMutex } from "~/lib/async-mutex";
-import { atomicWriteTextIfChanged } from "~/lib/workshop/atomic-write.server";
-import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 
 import {
   diffSidebarTabConfig,
@@ -40,11 +38,12 @@ import {
 /** 本机覆盖相对**仓库根**（= 运行期的 `process.cwd()`）的路径。 */
 export const SIDEBAR_TAB_LOCAL_REL_PATH = "data/sidebar-tab-behavior.json";
 
-/** 项目默认显式覆盖 —— 相对**仓库根**的路径，入库、跟代码走。
+/** 项目默认 —— 相对**仓库根**的路径，入库、跟代码走。
  *
  *  与 {@link SIDEBAR_TAB_LOCAL_REL_PATH} 的分工：那份是「这台机器上的额外改动」
- *  （不入库），这份是「界面里点『保存为项目默认』写出来的默认」（提交后每个检出
- *  与每个桌包都是它）。只有开发检出有写它的入口（正式包载荷里没有源码）。 */
+ *  （不入库），这份是**编译期基线**（提交后每个检出与每个桌包都是它）。运行期
+ *  只读不写 —— 改它走改代码 / 提 PR 那条路（ISSUE #5001：入库的 defaults 文件
+ *  不是运行期写回目标）。 */
 export const SIDEBAR_TAB_DEFAULTS_REL_PATH = "src/lib/shell/sidebar-tab-defaults.json";
 
 /** 生效配置：项目默认 + 本机覆盖（覆盖逐项压过默认）。
@@ -122,31 +121,6 @@ export async function saveSidebarTabConfig(
     }
     return diff;
   });
-}
-
-/**
- * 把「当前编辑的配置」**全量**写进入库的项目默认（跟代码走的那份 JSON）。
- *
- * 只有开发检出可以调：正式包没有源码可写，这格调用本身就是错用 —— 大声失败而不是
- * 假装成功。写完后读取侧（静态 import 的那份快照）要**重启进程**才会变。
- */
-export async function saveSidebarTabConfigAsProjectDefaults(
-  config: SidebarTabConfig,
-  root: string = process.cwd(),
-): Promise<{ config: SidebarTabConfig; file: string }> {
-  if (!isDevCheckout(root)) {
-    throw new Error(
-      "保存为项目默认只在开发检出可用（这份检出里没有 scripts/dev-launcher.mjs）——" +
-        "正式包的改动请改一档即存（只落本机）。",
-    );
-  }
-  const full = parseSidebarTabConfig(config);
-  const file = path.join(/*turbopackIgnore: true*/ root, SIDEBAR_TAB_DEFAULTS_REL_PATH);
-  /* 原子写 + 内容相同就跳过（ISSUE #4253）：这份文件在 src/ 树内，每次写入都会
-   * 触发 Turbopack 增量重编译——同内容点按钮不该再付一波重编译；tmp+rename
-   * 保证进程死在写入中途也不留半截 JSON。 */
-  await atomicWriteTextIfChanged(file, `${JSON.stringify(full, null, 2)}\n`);
-  return { config: full, file };
 }
 
 /**

@@ -64,8 +64,8 @@ type EventLoopWatchState = {
  * Turbopack 热重载会把 `event-loop-watch.server.ts` 这个模块**重新实例化**，而
  * `instrumentation.register()` 每个进程只跑一次 —— 模块级 `timer` / `blocks` 随旧
  * 实例一起变成孤儿，新实例里 `timer === null`、`blocks === []`。结果是一次普通的
- * 运行期源码写入（如侧栏偏好落盘改了 `src/lib/shell/sidebar-tab-defaults.json`）
- * 之后，`GET /api/dev/loop-blocks` 永远回 `running:false, blocks:[]`，「应用服务已
+ * 模块图重编译（dev 下改任何被引到的 src 文件都会触发）之后，
+ * `GET /api/dev/loop-blocks` 永远回 `running:false, blocks:[]`，「应用服务已
  * 恢复」那条消息读不到阻塞事实，只能又写「多半是短暂无响应」—— 观测在 dev 里
  * 静默失效。挂到 `globalThis` 后新旧模块实例共享同一份状态：旧实例的定时器继续
  * 往同一份 `blocks` 里记，新实例的端点也读得到。 */

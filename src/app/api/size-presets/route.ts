@@ -6,23 +6,22 @@
 // 经这里同读同写。鉴权沿用 requireRequestUser（未开启登录门槛时回落本地
 // 演示用户，单机照常可用）。
 //
-// GET 回**两层**（`defaults` = 项目默认那份、`table` = 生效表）与「能不能写项目
-// 默认」那个开关：客户端的「恢复默认」要以项目默认为基准（项目默认能被「保存到
-// 项目代码库」改过），而「保存到项目代码库」这个入口只在开发检出出现。
+// GET 回**两层**（`defaults` = 项目默认那份、`table` = 生效表）：客户端的
+// 「恢复默认」要以项目默认为基准。项目默认是编译期基线，运行期只读不写
+// （ISSUE #5001）—— 改它走改代码 / 提 PR 那条路。
 import { type NextRequest, NextResponse } from "next/server";
 
 import { requireRequestUser } from "~/server/auth/request-user";
 import { isErrorResponse, readJsonRecord } from "~/server/lib/request-body";
 import { apiErrorBody } from "~/lib/api-error";
 import { unauthorizedResponse } from "~/server/lib/error-response";
-import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import { loadSizePresetLayers, saveSizePresetTable } from "~/lib/media/size-preset.server";
 import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** 项目默认那份 + 生效表 + 「能不能写项目默认」那个开关。 */
+/** 项目默认那份 + 生效表。 */
 export async function GET() {
   const user = await requireRequestUser();
   if (!user) {
@@ -30,7 +29,7 @@ export async function GET() {
   }
   try {
     const { defaults, table } = await loadSizePresetLayers();
-    return NextResponse.json({ defaults, table, projectDefaultEditable: isDevCheckout() });
+    return NextResponse.json({ defaults, table });
   } catch (error) {
     return NextResponse.json(apiErrorBody(error, "读取尺寸配置表失败"), { status: 500 });
   }
