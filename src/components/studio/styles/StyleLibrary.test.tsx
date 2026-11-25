@@ -90,7 +90,13 @@ vi.mock("~/components/ui/select-menu", () => ({
     onChange: (value: string) => void;
     value: string;
   }) => (
-    <select aria-label={label} onChange={(e) => onChange(e.target.value)} value={value}>
+    <select
+      aria-label={label}
+      onChange={(e) => {
+        onChange(e.target.value);
+      }}
+      value={value}
+    >
       <option value="">不选</option>
       <option value="silver-mage">银发魔法少女</option>
     </select>

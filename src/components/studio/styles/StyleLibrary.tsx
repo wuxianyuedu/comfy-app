@@ -19,10 +19,12 @@ import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { Input } from "~/components/ui/input";
+import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { PageHeader } from "~/components/ui/page-header";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { Textarea } from "~/components/ui/textarea";
 import { Toggle } from "~/components/ui/toggle";
+import { cn } from "~/lib/utils";
 
 import {
   useStyleLibrary,
@@ -56,7 +58,7 @@ function StyleRow({
         {style.description}
       </span>
       {style.tags.length > 0 && (
-        <span className="text-muted-foreground block w-full truncate text-[11px]">
+        <span className="text-muted-foreground text-2xs block w-full truncate">
           {style.tags.join(" · ")}
         </span>
       )}
@@ -115,60 +117,78 @@ function NewStyleForm({
       <p className="text-sm font-medium">新建画风（写进画风库，所有页面共享）</p>
       <div className="grid gap-2 sm:grid-cols-2">
         <FormField label="画风名字">
-          <Input
-            onChange={(event) => {
-              onChange({ name: event.target.value });
-            }}
-            placeholder="如：水彩童书风"
-            value={draft.name}
-          />
+          {(a11y) => (
+            <Input
+              {...a11y}
+              onChange={(event) => {
+                onChange({ name: event.target.value });
+              }}
+              placeholder="如：水彩童书风"
+              value={draft.name}
+            />
+          )}
         </FormField>
         <FormField label="画风标识">
-          <Input
-            onChange={(event) => {
-              onChange({ slug: event.target.value });
-            }}
-            placeholder="watercolor-storybook"
-            value={draft.slug}
-          />
+          {(a11y) => (
+            <Input
+              {...a11y}
+              onChange={(event) => {
+                onChange({ slug: event.target.value });
+              }}
+              placeholder="watercolor-storybook"
+              value={draft.slug}
+            />
+          )}
         </FormField>
       </div>
       <FormField label="画风说明">
-        <Input
-          onChange={(event) => {
-            onChange({ description: event.target.value });
-          }}
-          placeholder="一句话说明这种画风"
-          value={draft.description}
-        />
+        {(a11y) => (
+          <Input
+            {...a11y}
+            onChange={(event) => {
+              onChange({ description: event.target.value });
+            }}
+            placeholder="一句话说明这种画风"
+            value={draft.description}
+          />
+        )}
       </FormField>
       <FormField label="画风提示词描述">
-        <Textarea
-          onChange={(event) => {
-            onChange({ promptTemplate: event.target.value });
-          }}
-          placeholder="英文画风词，可用 {subject} 指代主体"
-          rows={3}
-          value={draft.promptTemplate}
-        />
+        {(a11y) => (
+          <Textarea
+            {...a11y}
+            onChange={(event) => {
+              onChange({ promptTemplate: event.target.value });
+            }}
+            placeholder="英文画风词，可用 {subject} 指代主体"
+            rows={3}
+            value={draft.promptTemplate}
+          />
+        )}
       </FormField>
       <FormField label="画风负向词">
-        <Input
-          onChange={(event) => {
-            onChange({ negativePrompt: event.target.value });
-          }}
-          placeholder="选填：这种画风要排除的词"
-          value={draft.negativePrompt}
-        />
+        {(a11y) => (
+          <Input
+            {...a11y}
+            onChange={(event) => {
+              onChange({ negativePrompt: event.target.value });
+            }}
+            placeholder="选填：这种画风要排除的词"
+            value={draft.negativePrompt}
+          />
+        )}
       </FormField>
       <FormField label="画风标签">
-        <Input
-          onChange={(event) => {
-            onChange({ tags: event.target.value });
-          }}
-          placeholder="选填：逗号分隔，便于搜索"
-          value={draft.tags}
-        />
+        {(a11y) => (
+          <Input
+            {...a11y}
+            onChange={(event) => {
+              onChange({ tags: event.target.value });
+            }}
+            placeholder="选填：逗号分隔，便于搜索"
+            value={draft.tags}
+          />
+        )}
       </FormField>
       {createError !== "" && <p className="text-destructive text-xs">{createError}</p>}
       <div className="flex gap-2">
@@ -281,7 +301,9 @@ export function StyleLibrary() {
             />
           )}
 
-          <div className="flex max-h-[60vh] flex-col gap-1 overflow-y-auto pr-1">
+          <div
+            className={cn("flex flex-col gap-1 overflow-y-auto pr-1", EMBEDDED_SCROLL_MAX_HEIGHT)}
+          >
             {c.loading && <p className="text-muted-foreground text-xs">正在读取画风…</p>}
             {!c.loading && c.loadError !== "" && (
               <p className="text-destructive text-xs">{c.loadError}</p>
@@ -306,51 +328,58 @@ export function StyleLibrary() {
         <section className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="border-border bg-subtle/40 flex flex-col gap-3 rounded-xl border p-4">
             <FormField label="基础提示词">
-              <Textarea
-                onChange={(event) => {
-                  c.setUserPrompt(event.target.value);
-                }}
-                placeholder="描述你想要的画面主体与动作"
-                rows={3}
-                value={c.userPrompt}
-              />
+              {(a11y) => (
+                <Textarea
+                  {...a11y}
+                  onChange={(event) => {
+                    c.setUserPrompt(event.target.value);
+                  }}
+                  placeholder="描述你想要的画面主体与动作"
+                  rows={3}
+                  value={c.userPrompt}
+                />
+              )}
             </FormField>
             <div className="grid gap-3 sm:grid-cols-2">
               <FormField label="动漫角色形象">
-                <SelectMenu
-                  aria-label="选择动漫角色形象"
-                  fullWidth
-                  labels={Object.fromEntries(
-                    ANIME_CHARACTER_PRESETS.map((preset) => [preset.id, preset.name]),
-                  )}
-                  onChange={c.setCharacterId}
-                  options={ANIME_CHARACTER_PRESETS.map((preset) => preset.id)}
-                  popoverMinWidth={240}
-                  value={c.characterId}
-                />
+                {(a11y) => (
+                  <SelectMenu
+                    {...a11y}
+                    fullWidth
+                    labels={Object.fromEntries(
+                      ANIME_CHARACTER_PRESETS.map((preset) => [preset.id, preset.name]),
+                    )}
+                    onChange={c.setCharacterId}
+                    options={ANIME_CHARACTER_PRESETS.map((preset) => preset.id)}
+                    popoverMinWidth={240}
+                    value={c.characterId}
+                  />
+                )}
               </FormField>
               <FormField label="场景">
-                <SelectMenu
-                  aria-label="选择场景"
-                  fullWidth
-                  labels={Object.fromEntries(
-                    SCENE_PRESETS.map((preset) => [preset.id, preset.name]),
-                  )}
-                  onChange={c.setSceneId}
-                  options={SCENE_PRESETS.map((preset) => preset.id)}
-                  popoverMinWidth={240}
-                  value={c.sceneId}
-                />
+                {(a11y) => (
+                  <SelectMenu
+                    {...a11y}
+                    fullWidth
+                    labels={Object.fromEntries(
+                      SCENE_PRESETS.map((preset) => [preset.id, preset.name]),
+                    )}
+                    onChange={c.setSceneId}
+                    options={SCENE_PRESETS.map((preset) => preset.id)}
+                    popoverMinWidth={240}
+                    value={c.sceneId}
+                  />
+                )}
               </FormField>
             </div>
-            <FormField label="生图模型（只列支持文生图的）">
-              <ModelCascadeSelect
-                kind="image"
-                modes={["T2I"]}
-                onSelectionChange={c.setModelSelection}
-                selection={c.modelSelection}
-              />
-            </FormField>
+            {/* 级联选择器自带「选择模型」的 aria-label，这里只借 FormField 的标签行。 */}
+            <FormField label="生图模型（只列支持文生图的）" />
+            <ModelCascadeSelect
+              kind="image"
+              modes={["T2I"]}
+              onSelectionChange={c.setModelSelection}
+              selection={c.modelSelection}
+            />
             {c.preview !== "" && (
               <p className="text-muted-foreground bg-muted/50 rounded-lg px-3 py-2 text-xs leading-relaxed">
                 拼好的基础提示词：{c.preview}
