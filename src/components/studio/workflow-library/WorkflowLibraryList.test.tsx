@@ -152,20 +152,21 @@ describe("列表侧栏的拖入导入提示", () => {
   });
 });
 
-// 列表项的空间预算（ISSUE #716）：名称 + 徽标必须排在一行，且每个徽标都对应
-// 用户要看的那个事实。名称过长会撑破行、徽标被侧栏 `overflow-hidden` 裁掉。
-// 判据两条：① 名称有显式最大宽度（可截断块有下限，徽标不被压）；② 对外参数
-// 只留 1 字状态标记，完整口径在 `title` 里。
-describe("列表项：名称限长 + 对外参数精简显示", () => {
+// 列表项的空间预算（ISSUE #716 / #5058）：名称 + 徽标必须排在一行，且每个徽标都
+// 对应用户要看的那个事实。名称过长会撑破行、徽标被侧栏 `overflow-hidden` 裁掉。
+// 判据两条：① 名称吃行内剩余宽度（flex-1 + min-w-0 + truncate，徽标 shrink-0
+// 不被压、也不被挤出）；② 对外参数只留 1 字状态标记，完整口径在 `title` 里。
+describe("列表项：名称占满剩余宽 + 对外参数精简显示", () => {
   const longName = "22WorkflowsI2VSVI2_fastfidelityCAIoV88";
 
-  it("名称有显式最大宽度，不会把右侧徽标挤出侧栏", async () => {
+  it("名称吃行内剩余宽度并截断，不会把右侧徽标挤出侧栏", async () => {
     const user = userEvent.setup();
     renderList({ workflows: [row({ name: longName })] });
 
     const name = screen.getByText(longName);
     expect(name.className).toContain("truncate");
-    expect(name.className).toMatch(/\bmax-w-\d/);
+    expect(name.className).toContain("flex-1");
+    expect(name.className).toContain("min-w-0");
     /* 原生 title= 撤干净：完整名称走 <Hint>，悬停出完整名。 */
     expect(name).not.toHaveAttribute("title");
     await user.hover(name);
@@ -330,5 +331,22 @@ describe("列表只单行显示（#4667）", () => {
     renderList({ workflows: [row({ name: "image_z_image_int8_t2i", taskType: "T2I" })] });
 
     expect(screen.getByText("文生图")).toBeInTheDocument();
+  });
+});
+
+describe("搜索清空钮（ISSUE #5058）", () => {
+  it("有输入时出现清空钮，点击回调 onSearchChange(空串)", async () => {
+    const onSearchChange = vi.fn();
+    const user = userEvent.setup();
+    renderList({ search: "minimax", onSearchChange });
+
+    await user.click(screen.getByRole("button", { name: "清空搜索" }));
+    expect(onSearchChange).toHaveBeenCalledWith("");
+  });
+
+  it("无输入时不显示清空钮", () => {
+    renderList({ search: "" });
+
+    expect(screen.queryByRole("button", { name: "清空搜索" })).not.toBeInTheDocument();
   });
 });

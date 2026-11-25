@@ -22,20 +22,24 @@ export function ActionButton({
   label: string;
   onClick: () => void;
   title?: string;
-  variant?: "default" | "danger";
+  /** primary = 实心品牌色主按钮（一屏只有一个，当前是「编辑」）；
+   *  danger = 危险操作；default = 描边次级。 */
+  variant?: "default" | "danger" | "primary";
 }) {
   return (
     <Hint label={title ?? label} wrap>
       <Button
         className={[
-          "text-2xs h-auto gap-1.5 rounded-lg border px-2.5 py-1.5 font-medium",
+          "text-2xs h-auto gap-1.5 rounded-lg px-2.5 py-1.5 font-medium",
           variant === "danger"
-            ? "border-destructive/20 disabled:opacity-40"
-            : "border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright disabled:opacity-40",
+            ? "border-destructive/20 border disabled:opacity-40"
+            : variant === "primary"
+              ? "disabled:opacity-40"
+              : "border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright border disabled:opacity-40",
         ].join(" ")}
         disabled={disabled}
         onClick={onClick}
-        variant={variant === "danger" ? "danger" : "outline"}
+        variant={variant === "danger" ? "danger" : variant === "primary" ? "default" : "outline"}
       >
         {icon}
         {label}

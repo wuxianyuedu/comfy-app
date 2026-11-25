@@ -3,7 +3,7 @@
 import { useState, type DragEventHandler } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { textHandler } from "~/lib/form-props";
-import { AlertTriangle, Search, Download } from "lucide-react";
+import { AlertTriangle, Search, Download, X } from "lucide-react";
 import {
   deriveFormatFlags,
   deriveSyncFlags,
@@ -123,12 +123,26 @@ export function WorkflowLibraryList({
         <div className="relative">
           <Search className="text-ink-fainter pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
           <Input
-            className="border-border bg-subtle text-ink-bright placeholder:text-ink-fainter focus-visible:border-primary-500/40 h-8 w-full rounded-lg border pr-3 pl-8 text-xs"
+            className="border-border bg-subtle text-ink-bright placeholder:text-ink-fainter focus-visible:border-primary-500/40 h-8 w-full rounded-lg border pr-8 pl-8 text-xs"
             onChange={textHandler(onSearchChange)}
             placeholder="搜索工作流名称…"
             type="text"
             value={search}
           />
+          {/* 清空钮只在有输入时出现（#5058）：点一下回到全量列表，不必全选删除。 */}
+          {search !== "" && (
+            <Button
+              aria-label="清空搜索"
+              className="text-ink-fainter hover:text-ink-bright absolute top-1/2 right-1.5 size-6 -translate-y-1/2 rounded-md p-0"
+              onClick={() => {
+                onSearchChange("");
+              }}
+              size="icon-xs"
+              variant="ghost"
+            >
+              <X className="size-3.5" />
+            </Button>
+          )}
         </div>
         {/* 列表里的工作流有两个来源（ISSUE #3625）：原件在用户自己配的磁盘目录里、
             导入后的记录在库里。徽标把两处落点说清 —— 换机器时两样都得搬，
@@ -326,11 +340,10 @@ export function WorkflowLibraryList({
 }
 
 /**
- * 列表项的名称最大显示宽度（px）：侧栏 `w-80` 减内边距与 gap 约 280px 可用，而磁盘
- * 文件名可长到 40+ 字符。不设上限会 ① 名称吃掉整行、徽标被挤出裁掉；② 名称折成两行、
- * 行高翻倍。`truncate` + `max-w-33` 钉住可截断块，徽标 `shrink-0`（规范 03 §3.8.1）。
- */
-const NAME_MAX_WIDTH_CLASS = "max-w-33";
+ * 列表行的名称空间策略（#5058）：名称占**行内剩余全部宽度**（`flex-1` +
+ * `min-w-0` + `truncate`），徽标一律 `shrink-0` —— 侧栏约 400px 宽，名称
+ * 可读到 20+ 字符才截断，比早年钉死 132px 的 `max-w-33` 可读性好得多；
+ * 徽标不会被挤出（它们不参与收缩）。 */
 
 function WorkflowListItem({
   workflow,
@@ -371,8 +384,7 @@ function WorkflowListItem({
         <Hint label={workflow.name}>
           <span
             className={[
-              NAME_MAX_WIDTH_CLASS,
-              "shrink truncate text-xs leading-tight font-medium",
+              "min-w-0 flex-1 truncate text-xs leading-tight font-medium",
               isTech ? "text-ink-strong font-mono" : "text-ink-bright",
             ].join("")}
           >
