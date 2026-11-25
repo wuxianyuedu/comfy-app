@@ -32,6 +32,7 @@
  */
 import { and, asc, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
+import { compareText } from "~/lib/ordered-set";
 import { TERMINAL_TASK_STATUSES } from "../task-state";
 import { task, taskImage } from "~/server/db/schema";
 import { createTaskLogSection } from "./repository-task-impl-logs";
@@ -147,7 +148,7 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
         .where(inArray(task.id, candidates))
         .returning({ createdAt: task.createdAt, id: task.id });
       return claimed
-        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || compareText(a.id, b.id))
         .map((row) => row.id);
     },
 

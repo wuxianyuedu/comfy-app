@@ -589,7 +589,9 @@ describe("comfy-queue-store", () => {
       expect(mod.getComfyQueueSnapshot().queued).toBe(0);
 
       fresh.resolve(queueRes(onlinePayload(222)));
-      await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().queued).toBe(222));
+      await vi.waitFor(() => {
+        expect(mod.getComfyQueueSnapshot().queued).toBe(222);
+      });
       off();
     });
 

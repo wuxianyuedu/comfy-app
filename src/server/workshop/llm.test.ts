@@ -26,9 +26,13 @@ describe("completeWorkshopLLM 取消传播", () => {
     safeFetchMock.mockImplementation(
       (_url, init) =>
         new Promise((_resolve, reject) => {
-          init.signal?.addEventListener("abort", () => reject(new Error("upstream aborted")), {
-            once: true,
-          });
+          init.signal?.addEventListener(
+            "abort",
+            () => {
+              reject(new Error("upstream aborted"));
+            },
+            { once: true },
+          );
         }),
     );
 

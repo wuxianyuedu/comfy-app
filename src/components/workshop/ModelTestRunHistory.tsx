@@ -5,28 +5,43 @@ import { History, RotateCcw, Trash2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table";
 import { cn } from "~/lib/utils";
+import { displayValue } from "~/lib/display-value";
+import { fixed } from "~/lib/number-format";
+import { unique } from "~/lib/ordered-set";
+import { tailWindow } from "~/lib/page-window";
+import { clampText } from "~/lib/text-clamp";
 import { classifyModelTestError, type ModelTestRun } from "./model-test-runs";
 import { MODEL_TEST_KIND_LABELS } from "./model-test-config";
 import { isWorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
 function durationText(ms: number): string {
-  return ms < 1000 ? `${String(ms)} ms` : `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
+  return ms < 1000 ? `${String(ms)} ms` : `${fixed(ms / 1000, ms < 10_000 ? 1 : 0)} s`;
 }
+
+const VALUE_PREVIEW_MAX = 160;
 
 function valueText(value: string | undefined): string {
   if (value === undefined || value === "") {
-    return "—";
+    return displayValue(value);
   }
   if (value.startsWith("data:")) {
     return `[内嵌文件 · ${Math.ceil(value.length / 1024)} KB]`;
   }
-  return value.length > 160 ? `${value.slice(0, 160)}…` : value;
+  return clampText(value, { maxLength: VALUE_PREVIEW_MAX });
 }
 
 function referenceValueText(images: Array<string> | undefined): string {
   if (images === undefined || images.length === 0) {
-    return "—";
+    return displayValue(images?.[0]);
   }
   return `${String(images.length)} 张 · ${valueText(images[0])}`;
 }
@@ -55,9 +70,7 @@ export function ModelTestRunHistory({
   }, [runs, selected]);
   const parameterKeys = useMemo(
     () =>
-      [
-        ...new Set(compared.flatMap((run) => Object.keys(run.values).filter(isWorkshopInputType))),
-      ].sort(),
+      unique(compared.flatMap((run) => Object.keys(run.values).filter(isWorkshopInputType))).sort(),
     [compared],
   );
   const changedCount =
@@ -69,7 +82,9 @@ export function ModelTestRunHistory({
     );
   const toggle = (id: string) => {
     setSelected((previous) =>
-      previous.includes(id) ? previous.filter((item) => item !== id) : [...previous.slice(-1), id],
+      previous.includes(id)
+        ? previous.filter((item) => item !== id)
+        : [...tailWindow(previous, 1), id],
     );
   };
   if (runs.length === 0) {
@@ -103,7 +118,9 @@ export function ModelTestRunHistory({
               aria-label={`对比 ${new Date(run.startedAt).toLocaleTimeString()} 的运行`}
               checked={selected.includes(run.id)}
               className="size-3.5"
-              onCheckedChange={() => toggle(run.id)}
+              onCheckedChange={() => {
+                toggle(run.id);
+              }}
             />
             <span
               className={cn(
@@ -132,7 +149,9 @@ export function ModelTestRunHistory({
             <Button
               className="ml-auto h-auto px-2 py-1"
               disabled={generating}
-              onClick={() => onRetry(run)}
+              onClick={() => {
+                onRetry(run);
+              }}
               size="sm"
               variant="outline"
             >
@@ -151,51 +170,55 @@ export function ModelTestRunHistory({
             A / B 参数对比 · {String(changedCount)} 项不同
           </div>
           <div className="overflow-x-auto">
-            <table className="text-2xs w-full text-left">
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 font-medium">参数</th>
-                  <th className="px-3 py-2 font-medium">运行 A</th>
-                  <th className="px-3 py-2 font-medium">运行 B</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="text-2xs w-full text-left">
+              <TableHeader className="text-muted-foreground">
+                <TableRow>
+                  <TableHead className="px-3 py-2 font-medium">参数</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">运行 A</TableHead>
+                  <TableHead className="px-3 py-2 font-medium">运行 B</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {parameterKeys.map((key) => {
                   const rawA = compared[0]?.values[key];
                   const rawB = compared[1]?.values[key];
                   const a = valueText(rawA);
                   const b = valueText(rawB);
                   return (
-                    <tr
+                    <TableRow
                       className={cn(
                         "border-border border-t",
                         (rawA ?? "") !== (rawB ?? "") && "bg-warning/5",
                       )}
                       key={key}
                     >
-                      <td className="px-3 py-2 font-mono font-medium">{key}</td>
-                      <td className="max-w-64 px-3 py-2 break-all whitespace-pre-wrap">{a}</td>
-                      <td className="max-w-64 px-3 py-2 break-all whitespace-pre-wrap">{b}</td>
-                    </tr>
+                      <TableCell className="px-3 py-2 font-mono font-medium">{key}</TableCell>
+                      <TableCell className="max-w-64 px-3 py-2 break-all whitespace-pre-wrap">
+                        {a}
+                      </TableCell>
+                      <TableCell className="max-w-64 px-3 py-2 break-all whitespace-pre-wrap">
+                        {b}
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-                <tr
+                <TableRow
                   className={cn(
                     "border-border border-t",
                     JSON.stringify(compared[0]?.referenceImages) !==
                       JSON.stringify(compared[1]?.referenceImages) && "bg-warning/5",
                   )}
                 >
-                  <td className="px-3 py-2 font-mono font-medium">参考图组</td>
-                  <td className="max-w-64 px-3 py-2 break-all whitespace-pre-wrap">
+                  <TableCell className="px-3 py-2 font-mono font-medium">参考图组</TableCell>
+                  <TableCell className="max-w-64 px-3 py-2 break-all whitespace-pre-wrap">
                     {referenceValueText(compared[0]?.referenceImages)}
-                  </td>
-                  <td className="max-w-64 px-3 py-2 break-all whitespace-pre-wrap">
+                  </TableCell>
+                  <TableCell className="max-w-64 px-3 py-2 break-all whitespace-pre-wrap">
                     {referenceValueText(compared[1]?.referenceImages)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
         </div>
       )}

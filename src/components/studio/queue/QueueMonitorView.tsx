@@ -15,6 +15,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { StatusBadge } from "~/components/ui/status-badge";
+import { Spinner } from "~/components/ui/spinner";
 import { TimeAgo } from "~/components/ui/time-ago";
 import { SectionCard } from "~/components/workshop/ModelTestSectionCard";
 import { ModelTestTree } from "~/components/workshop/ModelTestTree";
@@ -134,11 +135,11 @@ export function QueueMonitorView({
           size="xs"
           variant="outline"
         >
-          <RefreshCcw
-            aria-hidden
-            className={`size-3 ${c.refreshing ? "animate-spin" : ""}`}
-            data-icon="inline-start"
-          />
+          {c.refreshing ? (
+            <Spinner aria-hidden className="size-3" />
+          ) : (
+            <RefreshCcw aria-hidden className="size-3" data-icon="inline-start" />
+          )}
           刷新
         </Button>
       </ViewActions>

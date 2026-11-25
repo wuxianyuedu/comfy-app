@@ -49,6 +49,9 @@ describe("ModelTestRunHistory", () => {
       fireEvent.click(box);
     }
     expect(screen.getByText(/A \/ B 参数对比 · 1 项不同/)).toBeTruthy();
+    const referenceRow = screen.getByText("参考图组").closest("tr");
+    expect(referenceRow?.textContent).toContain("—");
+    expect(referenceRow?.textContent).not.toContain("[object");
     expect(screen.getByText("第一条")).toBeTruthy();
     expect(screen.getByText("第二条")).toBeTruthy();
   });

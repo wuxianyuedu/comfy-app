@@ -24,6 +24,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
+import { displayValue } from "~/lib/display-value";
 import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import { classifyModelTestError } from "./model-test-runs";
 import type { useModelTest } from "./hooks/use-model-test";
@@ -222,11 +223,11 @@ function ResultCard({ c }: { c: ResultCardController }) {
           <dt className="text-muted-foreground">耗时</dt>
           <dd className="tabular-nums">
             {latestResponse.durationMs === undefined
-              ? "—"
+              ? displayValue(latestResponse.durationMs)
               : `${String(latestResponse.durationMs)} ms`}
           </dd>
           <dt className="text-muted-foreground">HTTP</dt>
-          <dd className="tabular-nums">{latestResponse.status ?? "—"}</dd>
+          <dd className="tabular-nums">{displayValue(latestResponse.status)}</dd>
         </dl>
       )}
 

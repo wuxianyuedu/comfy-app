@@ -73,10 +73,12 @@ function queuedRow(id: string, workflowName: string): QueueRow {
 }
 
 const refetch = vi.fn();
-const resetListQueries = vi.fn();
-const getListQueryState = vi.fn();
+const fetchListFirstPage = vi.fn();
+const setListQueryData = vi.fn();
+const removeListQueries = vi.fn();
 const listQueryKeyMock = vi.fn();
 const summaryRefetch = vi.fn();
+const listFirstPageQuery = vi.fn();
 const fetchNextPage = vi.fn();
 const listInputMock = vi.hoisted(() => vi.fn());
 const infiniteOptionsMock = vi.hoisted(() => vi.fn<(options: InfiniteOptions) => void>());
@@ -99,6 +101,7 @@ let queueResult: ComfyQueueModule.ComfyQueueView = queueView();
  * 算法，不是 TanStack —— 所以 `useTRPC` 只给一个能对上 queryKey 的工厂，
  * 数据态由下面替掉的 `useQuery` 直接给。 */
 vi.mock("~/trpc/react", () => ({
+  useTRPCClient: () => ({ task: { list: { query: listFirstPageQuery } } }),
   useTRPC: () => ({
     task: {
       list: {
@@ -145,7 +148,11 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof TanStackQuery>();
   return {
     ...actual,
-    useQueryClient: () => ({ getQueryState: getListQueryState, resetQueries: resetListQueries }),
+    useQueryClient: () => ({
+      fetchQuery: fetchListFirstPage,
+      removeQueries: removeListQueries,
+      setQueryData: setListQueryData,
+    }),
     useQuery: (options: { queryKey: Array<string> }) =>
       options.queryKey[1] === "summary"
         ? {
@@ -212,10 +219,14 @@ beforeEach(() => {
   queueResult = queueView();
   refetch.mockImplementation(() => Promise.resolve({ isError: listRefetchError }));
   summaryRefetch.mockImplementation(() => Promise.resolve({ isError: summaryRefetchError }));
-  resetListQueries.mockResolvedValue(undefined);
-  getListQueryState.mockImplementation(() => ({
-    status: listRefetchError ? "error" : "success",
-  }));
+  fetchListFirstPage.mockImplementation(
+    ({ queryFn }: { queryFn: (context: { signal: AbortSignal }) => Promise<TaskPage> }) =>
+      queryFn({ signal: new AbortController().signal }),
+  );
+  removeListQueries.mockResolvedValue(undefined);
+  listFirstPageQuery.mockImplementation(() =>
+    listRefetchError ? Promise.reject(new Error("list unavailable")) : Promise.resolve(pages[0]),
+  );
   mockedRefreshComfyQueue.mockResolvedValue(undefined);
 });
 
@@ -296,7 +307,7 @@ describe("useQueueMonitor", () => {
       await result.current.cancel("early", "先提交的工作流");
     });
     expect(mockedCancel).toHaveBeenCalledWith("early");
-    expect(resetListQueries).toHaveBeenCalled();
+    expect(fetchListFirstPage).toHaveBeenCalled();
     expect(summaryRefetch).toHaveBeenCalled();
     expect(mockedRefreshComfyQueue).toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
@@ -308,7 +319,7 @@ describe("useQueueMonitor", () => {
     await act(async () => {
       await result.current.cancel("early", "先提交的工作流");
     });
-    expect(resetListQueries).toHaveBeenCalled();
+    expect(fetchListFirstPage).toHaveBeenCalled();
     expect(summaryRefetch).toHaveBeenCalled();
     expect(mockedRefreshComfyQueue).toHaveBeenCalled();
     /* 报的是原因而不是「哪一条」：`runAsyncAction` 里抛出的 message 优先于
@@ -420,7 +431,9 @@ describe("useQueueMonitor", () => {
     const options = infiniteOptionsMock.mock.lastCall?.[0];
     expect(options?.getNextPageParam(pages[0]!)).toBe(60);
     expect(options?.getNextPageParam({ ...pages[0]!, hasMore: false })).toBeUndefined();
-    act(() => result.current.loadMore());
+    act(() => {
+      result.current.loadMore();
+    });
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
   });
 
@@ -428,16 +441,25 @@ describe("useQueueMonitor", () => {
     const { result } = renderHook(() => useQueueMonitor());
     const options = infiniteOptionsMock.mock.lastCall?.[0];
     expect(options?.refetchInterval).toBeUndefined();
-    expect(resetListQueries).not.toHaveBeenCalled();
+    expect(fetchListFirstPage).not.toHaveBeenCalled();
 
     await act(async () => {
       result.current.refresh();
       await Promise.resolve();
     });
 
-    expect(resetListQueries).toHaveBeenCalledWith({
-      queryKey: [["task", "list"], { type: "infinite" }],
+    expect(fetchListFirstPage).toHaveBeenCalledWith({
+      queryFn: expect.any(Function) as unknown,
+      queryKey: [
+        ["task", "list"],
+        { input: { take: 60, status: undefined }, type: "infinite" },
+        "manual-refresh",
+      ],
     });
+    expect(setListQueryData).toHaveBeenCalledWith(
+      [["task", "list"], { input: { take: 60, status: undefined }, type: "infinite" }],
+      { pageParams: [0], pages: [pages[0]] },
+    );
     expect(listQueryKeyMock).toHaveBeenLastCalledWith({ take: 60, status: undefined });
   });
 
@@ -445,7 +467,9 @@ describe("useQueueMonitor", () => {
     pages = [{ tasks: listTasks, hasMore: true, nextScanCursor: 60, total: 61 }];
     isFetchingNextPage = true;
     const { result } = renderHook(() => useQueueMonitor());
-    act(() => result.current.loadMore());
+    act(() => {
+      result.current.loadMore();
+    });
     expect(fetchNextPage).not.toHaveBeenCalled();
     expect(result.current.loadingMore).toBe(true);
   });
@@ -453,9 +477,13 @@ describe("useQueueMonitor", () => {
   it("状态筛选把同一份分页查询切成服务端口径", () => {
     const { result } = renderHook(() => useQueueMonitor());
     expect(listInputMock).toHaveBeenLastCalledWith({ take: 60, status: undefined });
-    act(() => result.current.setStatusFilter("active"));
+    act(() => {
+      result.current.setStatusFilter("active");
+    });
     expect(listInputMock).toHaveBeenLastCalledWith({ take: 60, status: "QUEUED,RUNNING" });
-    act(() => result.current.setStatusFilter("terminal"));
+    act(() => {
+      result.current.setStatusFilter("terminal");
+    });
     expect(listInputMock).toHaveBeenLastCalledWith({
       take: 60,
       status: "SUCCEEDED,FAILED,CANCELLED",
@@ -465,10 +493,14 @@ describe("useQueueMonitor", () => {
   it("搜索只过滤已加载行，并给出匹配数", () => {
     pages = [{ tasks: listTasks, hasMore: true, nextScanCursor: 60, total: 100 }];
     const { result } = renderHook(() => useQueueMonitor());
-    act(() => result.current.setSearch("先提交"));
+    act(() => {
+      result.current.setSearch("先提交");
+    });
     expect(result.current.matchedCount).toBe(1);
     expect(result.current.queued.map((entry) => entry.row.id)).toEqual(["early"]);
-    act(() => result.current.setSearch("更早但尚未加载"));
+    act(() => {
+      result.current.setSearch("更早但尚未加载");
+    });
     expect(result.current.matchedCount).toBe(0);
   });
 
@@ -488,15 +520,35 @@ describe("useQueueMonitor", () => {
     expect(midnight.getMilliseconds()).toBe(0);
   });
 
-  it("手动刷新同时刷新任务、全局统计与 ComfyUI 真值", () => {
+  it("手动刷新同时刷新任务、全局统计与 ComfyUI 真值", async () => {
     const { result } = renderHook(() => useQueueMonitor());
-    act(() => result.current.refresh());
-    expect(resetListQueries).toHaveBeenCalledTimes(1);
-    expect(resetListQueries).toHaveBeenCalledWith({
-      queryKey: [["task", "list"], { type: "infinite" }],
+    act(() => {
+      result.current.refresh();
     });
+    expect(fetchListFirstPage).toHaveBeenCalledTimes(1);
+    await expect.poll(() => setListQueryData).toHaveBeenCalledTimes(1);
+    expect(removeListQueries).toHaveBeenCalledTimes(1);
     expect(summaryRefetch).toHaveBeenCalledTimes(1);
     expect(mockedRefreshComfyQueue).toHaveBeenCalledTimes(1);
+  });
+
+  it("第一页刷新失败时不覆盖正式分页缓存并清理临时查询", async () => {
+    listRefetchError = true;
+    const { result } = renderHook(() => useQueueMonitor());
+    act(() => {
+      result.current.refresh(true);
+    });
+    await expect.poll(() => result.current.refreshing).toBe(false);
+
+    expect(setListQueryData).not.toHaveBeenCalled();
+    expect(removeListQueries).toHaveBeenCalledWith({
+      queryKey: [
+        ["task", "list"],
+        { input: { take: 60, status: undefined }, type: "infinite" },
+        "manual-refresh",
+      ],
+    });
+    expect(result.current.refreshError).toContain("未完整同步");
   });
 
   it("ComfyUI 真值回包前保持刷新态，回包后解除", async () => {
@@ -508,7 +560,9 @@ describe("useQueueMonitor", () => {
         }),
     );
     const { result } = renderHook(() => useQueueMonitor());
-    act(() => result.current.refresh());
+    act(() => {
+      result.current.refresh();
+    });
     expect(result.current.refreshing).toBe(true);
     await act(async () => {
       finish?.();

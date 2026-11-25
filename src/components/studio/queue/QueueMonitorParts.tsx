@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { SelectChip } from "~/components/ui/select-chip";
@@ -93,14 +94,17 @@ export function QueueOverview({
   return (
     <>
       <div className="border-border bg-card flex flex-col gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center">
-        <label className="relative min-w-0 flex-1">
-          <span className="sr-only">搜索已加载的任务</span>
+        <div className="relative min-w-0 flex-1">
+          <FieldLabel className="sr-only" htmlFor="queue-search">
+            搜索已加载的任务
+          </FieldLabel>
           <Search
             aria-hidden
             className="text-ink-faint pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
           />
           <Input
             className="bg-surface-1 pl-9"
+            id="queue-search"
             onChange={(event) => {
               onSearchChange(event.currentTarget.value);
             }}
@@ -108,7 +112,7 @@ export function QueueOverview({
             type="search"
             value={search}
           />
-        </label>
+        </div>
         <div aria-label="按任务状态筛选" className="flex flex-wrap gap-1.5" role="radiogroup">
           {(
             [

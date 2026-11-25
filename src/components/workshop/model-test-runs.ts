@@ -67,6 +67,8 @@ export function useModelTestRuns() {
       });
     });
   }, []);
-  const clearRuns = useCallback(() => setRuns([]), []);
+  const clearRuns = useCallback(() => {
+    setRuns([]);
+  }, []);
   return { clearRuns, recordRun, runs };
 }

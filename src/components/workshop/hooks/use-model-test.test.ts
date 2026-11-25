@@ -372,7 +372,7 @@ describe("useModelTest：生成前的请求预览（ISSUE #3995）", () => {
     expect(result.current.runs[0]?.values).toEqual(historicalValues);
     expect(result.current.runs[0]?.referenceImages).toEqual(historicalImages);
   });
-  it.each(["image", "video"] as const)("%s 取消后迟到成功不写结果", async (kind) => {
+  it.for(["image", "video"] as const)("%s 取消后迟到成功不写结果", async (kind) => {
     configData = {
       config: {
         extraModels: [
@@ -388,7 +388,9 @@ describe("useModelTest：生成前的请求预览（ISSUE #3995）", () => {
     };
     let settle!: () => void;
     const pending = new Promise<string>((resolve) => {
-      settle = () => resolve("https://media.example/late.png");
+      settle = () => {
+        resolve("https://media.example/late.png");
+      };
     });
     const requestMock = kind === "image" ? apiGenerateImageMock : apiSubmitVideoMock;
     requestMock.mockReturnValue(pending);
@@ -498,13 +500,14 @@ describe("useModelTest：本地模型与对话测试（ISSUE #4080）", () => {
     mutateAsyncSpy.mockImplementation(
       () =>
         new Promise((resolve) => {
-          settle = () =>
+          settle = () => {
             resolve({
               reply: "迟到的回复",
               durationMs: 9999,
               endpoint: "http://127.0.0.1:11434/v1/chat/completions",
               model: "qwen3-8b",
             });
+          };
         }),
     );
     const { result } = renderModelTest();

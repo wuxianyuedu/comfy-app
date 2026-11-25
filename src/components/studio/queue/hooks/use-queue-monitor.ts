@@ -18,7 +18,7 @@ import { revealTaskFolder } from "~/lib/history-detail-actions";
 import { refreshComfyQueue } from "~/lib/comfy/comfy-queue-store";
 import { formatSampleRateText, formatStepsText } from "~/lib/progress";
 import { cancelTask } from "~/lib/task-cancel-client";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC, useTRPCClient } from "~/trpc/react";
 
 import { useToast } from "../../ToastProvider";
 import type { QueueTaskLogTarget } from "../QueueTaskLogModal";
@@ -120,6 +120,7 @@ export type QueueMonitorController = {
 /** 队列与运行的全部逻辑。容器与视图只消费这一份 controller。 */
 export function useQueueMonitor(): QueueMonitorController {
   const trpc = useTRPC();
+  const trpcClient = useTRPCClient();
   const queryClient = useQueryClient();
   const toast = useToast();
   const queue = useComfyQueue();
@@ -224,12 +225,22 @@ export function useQueueMonitor(): QueueMonitorController {
     (showFeedback = false) => {
       setRefreshingComfy(true);
       setRefreshError(null);
-      const listRefresh = queryClient
-        .resetQueries(trpc.task.list.infiniteQueryFilter())
-        .then(() => {
-          const state = queryClient.getQueryState(trpc.task.list.infiniteQueryKey(listInput));
-          return state?.status === "success";
-        });
+      const listKey = trpc.task.list.infiniteQueryKey(listInput);
+      const firstPageKey = [...listKey, "manual-refresh"];
+      const listRefresh = (async () => {
+        try {
+          const firstPage = await queryClient.fetchQuery({
+            queryFn: ({ signal }) => trpcClient.task.list.query(listInput, { signal }),
+            queryKey: firstPageKey,
+          });
+          queryClient.setQueryData(listKey, { pageParams: [0], pages: [firstPage] });
+          return true;
+        } catch {
+          return false;
+        } finally {
+          queryClient.removeQueries({ queryKey: firstPageKey });
+        }
+      })();
       const tasksRefresh = Promise.all([listRefresh, summaryQ.refetch()]);
       const comfyRefresh = refreshComfyQueue().then(
         () => true,
@@ -256,7 +267,7 @@ export function useQueueMonitor(): QueueMonitorController {
         }
       })();
     },
-    [listInput, queryClient, summaryQ, toast, trpc],
+    [listInput, queryClient, summaryQ, toast, trpc, trpcClient],
   );
   const loadMore = useCallback(() => {
     if (hasMore && !listQ.isFetchingNextPage) {

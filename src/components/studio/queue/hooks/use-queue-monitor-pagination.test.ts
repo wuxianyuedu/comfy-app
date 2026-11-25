@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { QueueRow } from "../queue-monitor-config";
@@ -36,6 +36,7 @@ function row(index: number): QueueRow {
 }
 
 vi.mock("~/trpc/react", () => ({
+  useTRPCClient: () => ({ task: { list: { query: () => listPage({ pageParam: 0 }) } } }),
   useTRPC: () => ({
     task: {
       list: {
@@ -120,24 +121,51 @@ afterEach(cleanup);
 describe("队列分页刷新", () => {
   it("加载第二页后手动刷新丢弃旧 pageParams，只保留第一页", async () => {
     const { result } = renderMonitor();
-    await waitFor(() => expect(result.current.loadedCount).toBe(60));
+    await expect.poll(() => result.current.loadedCount).toBe(60);
 
     act(() => {
       result.current.loadMore();
     });
-    await waitFor(() => expect(result.current.loadedCount).toBe(61));
+    await expect.poll(() => result.current.loadedCount).toBe(61);
     expect(result.current.hasMore).toBe(false);
 
     act(() => {
       result.current.refresh();
     });
-    await waitFor(() => {
-      expect(result.current.refreshing).toBe(false);
-      expect(result.current.loadedCount).toBe(60);
-    });
+    await expect
+      .poll(() => {
+        if (result.current.refreshing || result.current.loadedCount !== 60) {
+          return false;
+        }
+        return true;
+      })
+      .toBe(true);
     expect(result.current.hasMore).toBe(true);
     expect(result.current.total).toBe(61);
     expect(result.current.refreshError).toBeNull();
+    expect(listPage.mock.calls.map(([request]) => request.pageParam)).toEqual([0, 60, 0]);
+  });
+
+  it("第一页刷新失败时保留上一份两页快照", async () => {
+    const { result } = renderMonitor();
+    await expect.poll(() => result.current.loadedCount).toBe(60);
+    act(() => {
+      result.current.loadMore();
+    });
+    await expect.poll(() => result.current.loadedCount).toBe(61);
+    expect(result.current.hasMore).toBe(false);
+
+    listPage.mockRejectedValueOnce(new Error("first page unavailable"));
+    act(() => {
+      result.current.refresh(true);
+    });
+    await expect.poll(() => result.current.refreshing).toBe(false);
+
+    expect(result.current.loadedCount).toBe(61);
+    expect(result.current.hasMore).toBe(false);
+    expect(result.current.refreshError).toContain("未完整同步");
+    expect(result.current.loadedCount).toBe(61);
+    expect(result.current.matchedCount).toBe(61);
     expect(listPage.mock.calls.map(([request]) => request.pageParam)).toEqual([0, 60, 0]);
   });
 });

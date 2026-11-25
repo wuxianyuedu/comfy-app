@@ -5,6 +5,7 @@
 
 import { formatElapsed } from "~/components/studio/hooks/use-comfy-queue";
 import { estimateRemainingMsFrom } from "~/lib/progress";
+import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { isTerminalTaskStatus } from "~/lib/task-state";
 import type { RouterOutputs } from "~/trpc/react";
 
@@ -114,13 +115,13 @@ export type QueueStatusFilter = "active" | "all" | "terminal";
 
 /** 搜索只匹配已加载行；状态筛选交给服务端分页，避免「筛到了但没加载」的假空态。 */
 export function searchQueueRows(rows: ReadonlyArray<QueueRow>, query: string): Array<QueueRow> {
-  const keyword = query.trim().toLocaleLowerCase();
-  if (keyword === "") {
+  const needle = normalizeNeedle(query);
+  if (needle === "") {
     return [...rows];
   }
   return rows.filter((row) =>
     [row.workflowName, row.prompt, row.modelName ?? "", row.id, row.error ?? ""].some((value) =>
-      value.toLocaleLowerCase().includes(keyword),
+      matchesNeedle(needle, value),
     ),
   );
 }
