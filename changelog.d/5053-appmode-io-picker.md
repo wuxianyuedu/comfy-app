@@ -1,0 +1,2 @@
+## Added
+- 工作流库详情新增「App Mode 选引脚」页签（#5053）：在工作流库里把模板导出为 ComfyUI 用户工作流目录的新文件（`ComfyAPP-` 前缀、绝不覆盖），按根 id 深链在复用的原生前端页签中打开，用 App Mode builder 勾选输入 / 输出并 Ctrl+S，再点「读回引脚选择」把文件里的 `extra.linearData` 映射成 `workflowIO` 暴露面落库。映射为纯函数（`src/lib/workflow/workflow-app-mode.ts`）：widgetId 兼容三段 / 两段式，输入按节点槽位判 widget / param、输出取首槽位名，幸存引脚保留显示名 / 必填 / seed / 模式覆盖 / 排序，找不到节点的引用逐条上报不静默丢；图编辑仍以应用 DB 为准。编辑器内既有勾选与双通道并存；`localWorkflows.ts` 的铁律注释同批写明唯一新增写路径例外；深链打开复用 `use-comfyui-control` 抽出的 `openComfyAtUrl`，与「打开查看」共用同一份页签参数，浏览器形态 `window.open` 仍在 await 之前同步调用。

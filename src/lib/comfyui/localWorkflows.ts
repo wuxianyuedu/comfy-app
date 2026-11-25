@@ -12,6 +12,10 @@
  * `fs.writeFile`、`fs.rename`、`fs.rm`、`unlink`、`appendFile` 等 ——
  * 违反者必须在 Code Review 拦下。
  *
+ * 唯一新增写路径（例外）：`workflowAppModeProcedures.exportForAppMode` 以
+ * `ComfyAPP-` 前缀**新建**文件供 App Mode 选引脚使用，绝不改写既有文件；
+ * 这条写入由 procedure 自己承担，本扫描器仍然只读。
+ *
  * `scanLocalWorkflowChecksums` 返回一份 `{absPath, checksum}` 清单，
  * 供路由层的「改名后重新挂接」流程使用。checksum 与
  * `importSource.checksum()` 写进 `WorkflowTemplate.sourceChecksum` 的是同一种

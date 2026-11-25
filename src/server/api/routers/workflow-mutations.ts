@@ -37,8 +37,10 @@ import { uniqueConflict } from "./unique-conflict";
 /* 保存同一工作流的并发写按模板 id 串行化（ISSUE #3870）：positions / rawJson
  * （groups / notes）的合并都基于「本次读到的 existing」，两个页签 / 自动保存
  * 并发提交时后写者会把先写者的坐标 / 分组 / 便签覆盖回旧值。写入方全在本进程，
- * 进程内按模板 id 互斥即可闭合；合并是纯内存计算，锁内不做慢 IO。 */
-const workflowUpdateMutex = new KeyedAsyncMutex();
+ * 进程内按模板 id 互斥即可闭合；合并是纯内存计算，锁内不做慢 IO。
+ * 导出为共享实例：workflow-app-mode 的读回写与这里的 update / resync 写
+ * 同模板时必须排在同一把锁后面，不能各开一把锁。 */
+export const workflowUpdateMutex = new KeyedAsyncMutex();
 
 /** 建模板：撞 `(userId, name)` 唯一索引（wt_user_name_uniq，#3934）时把裸约束
  *  错误翻译成业务 409，本地导入与粘贴 JSON 两条路径共用这一个出口。 */
