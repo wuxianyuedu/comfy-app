@@ -12,6 +12,11 @@ pnpm typecheck
 
 # 全量输出里只看某个文件的报错(把 AgentPanel 换成任意文件名片段)
 pnpm exec tsc --noEmit 2>&1 | grep -i "AgentPanel"
+
+# 报错是 .next/dev/types/validator.ts 的 TS2307(Cannot find module .../route.js)、
+# 且指向的路由文件其实已删:那是 Next 的生成类型清单比源码旧(ISSUE #5025)。
+# pnpm typecheck 的前置步会自动清掉;手动出口:
+rm -rf .next/dev/types
 ```
 
 ## 2. ESLint
