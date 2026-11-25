@@ -49,6 +49,14 @@ const EXCEPTIONS: ReadonlyArray<readonly [string, string]> = [
     "components/ui/seed-mode-button.tsx",
     "选中项悬停钉住 node-accent（aria-selected 选中行不翻底色），与 select-chip 同族钉法",
   ],
+  [
+    "components/studio/assets/AssetFolderTree.tsx",
+    "资产目录分类根节点选中态悬停钉住 primary-soft：ghost 自带的 hover 会把已选中那枚翻成未选中档（同 select-chip 文件头那条注释）",
+  ],
+  [
+    "components/workshop/ModelTestTree.tsx",
+    "模型树单选叶子的选中态悬停钉住 primary-soft：role=radio 的已选中档不翻底色，同 select-chip 钉法",
+  ],
 ];
 
 /** 拆一个 Tailwind 工具 token 为 { theme, modifiers, utility }。 */

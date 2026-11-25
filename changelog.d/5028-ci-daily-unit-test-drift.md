@@ -1,0 +1,2 @@
+## Fixed
+- GA 每日档全量单测 5 条红（#5028），均为「判据/夹具随源码漂移」而非行为缺陷，逐条归位：`theme-color-exemptions.cjs` 删掉随任务详情改版已移除的 `MaskCanvas.tsx` 豁免（门禁路径字面量存在性判据红）；`tests/button-hover-depth.test.ts` 把资产目录树与模型树的「选中态悬停钉住 primary-soft」按既有 select-chip 同族钉法登记进 `EXCEPTIONS`（未改 UI 与配色）；`tests/coverage-readout.test.ts` 的登记条数从 152 跟到角色库新增域后的 153；`tests/check-bundle-budget.test.ts` 把 seed 提交时间钉到基线之前，使「基线之后追加一笔」归因夹具不再把同日 seed 误数成第二笔。判据本体与断言口径均未放宽。
