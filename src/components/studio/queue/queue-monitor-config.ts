@@ -201,3 +201,46 @@ export function offlineRunningCardNote(): string {
 export function reprintText(row: Pick<QueueRow, "prompt" | "type" | "workflowName">): string {
   return [`提示词：${row.prompt}`, `工作流：${row.workflowName}`, `类型：${row.type}`].join("\n");
 }
+
+/** 队列页左树的选中态：选中的是一片「用途 + 模式 + 模型」叶子；null = 未筛选。 */
+export type ModelTreeSelection = { kind: string; mode: string; value: string } | null;
+
+/** 树叶子的最小形状（workshop 的 ModelTreeEntry 结构可赋值给它，纯模块不反向引视图）。 */
+export type ModelTreeFilterEntry = {
+  kind: string;
+  label: string;
+  mode: string;
+  modelName: string;
+  value: string;
+};
+
+/**
+ * 按左树选中的模型叶子过滤队列行。匹配判据（取并集，宽容优先）：
+ * `modelName` 对上叶子的模型标签 / 显示名，或 `workflowName` 对上叶子显示名
+ * （本地工作流候选的叶子名 = 工作流名）。选中的叶子在树里找不到（理论不可达）
+ * 时不筛选，宁可多显示也不静默吞行。
+ */
+export function filterRowsByModelSelection(
+  rows: ReadonlyArray<QueueRow>,
+  selection: ModelTreeSelection,
+  entries: ReadonlyArray<ModelTreeFilterEntry>,
+): Array<QueueRow> {
+  if (selection === null) {
+    return [...rows];
+  }
+  const entry = entries.find(
+    (candidate) =>
+      candidate.kind === selection.kind &&
+      candidate.mode === selection.mode &&
+      candidate.value === selection.value,
+  );
+  if (entry === undefined) {
+    return [...rows];
+  }
+  return rows.filter(
+    (row) =>
+      (entry.modelName !== "" && row.modelName === entry.modelName) ||
+      row.modelName === entry.label ||
+      row.workflowName === entry.label,
+  );
+}

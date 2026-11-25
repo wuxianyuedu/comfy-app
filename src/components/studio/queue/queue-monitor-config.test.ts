@@ -11,6 +11,7 @@ import {
   offlineBannerText,
   offlineEmptyText,
   offlineRunningCardNote,
+  filterRowsByModelSelection,
   queueStats,
   queuedWithPosition,
   recentWithin,
@@ -27,7 +28,7 @@ function row(over: Partial<QueueRow> & Pick<QueueRow, "status">): QueueRow {
     id: over.id ?? `t-${over.status}`,
     type: "IMAGE",
     workflowName: over.workflowName ?? "测试工作流",
-    modelName: null,
+    modelName: over.modelName ?? null,
     status: over.status,
     prompt: over.prompt ?? "一句提示词",
     createdAt: over.createdAt ?? new Date("2026-01-01T00:00:00Z"),
@@ -212,5 +213,62 @@ describe("queueStats", () => {
       running: 0,
       succeededToday: 0,
     });
+  });
+});
+
+describe("filterRowsByModelSelection（#5019 左树按模型过滤）", () => {
+  const entries = [
+    {
+      kind: "image",
+      label: "wan2.2",
+      mode: "T2I",
+      modelName: "wan2.2",
+      value: "wf::tpl-1",
+    },
+    {
+      kind: "image",
+      label: "z-Image",
+      mode: "T2I",
+      modelName: "",
+      value: "wf::tpl-2",
+    },
+  ];
+
+  it("未选中（null）原样返回全部行", () => {
+    const rows = [row({ id: "a", status: "QUEUED" }), row({ id: "b", status: "RUNNING" })];
+    expect(filterRowsByModelSelection(rows, null, entries)).toHaveLength(2);
+  });
+
+  it("按叶子的模型标签过滤：modelName 对上叶子才留下", () => {
+    const rows = [
+      row({ id: "mine", modelName: "wan2.2", status: "QUEUED" }),
+      row({ id: "other", modelName: "别的模型", status: "QUEUED" }),
+    ];
+    const kept = filterRowsByModelSelection(
+      rows,
+      { kind: "image", mode: "T2I", value: "wf::tpl-1" },
+      entries,
+    );
+    expect(kept.map((r) => r.id)).toEqual(["mine"]);
+  });
+
+  it("无模型标签的本地工作流候选按工作流名匹配", () => {
+    const rows = [
+      row({ id: "z1", workflowName: "z-Image", status: "RUNNING" }),
+      row({ id: "z2", workflowName: "别的", status: "RUNNING" }),
+    ];
+    const kept = filterRowsByModelSelection(
+      rows,
+      { kind: "image", mode: "T2I", value: "wf::tpl-2" },
+      entries,
+    );
+    expect(kept.map((r) => r.id)).toEqual(["z1"]);
+  });
+
+  it("选中的叶子在树里找不到时不筛选（宁可多显示也不静默吞行）", () => {
+    const rows = [row({ id: "a", status: "QUEUED" })];
+    expect(
+      filterRowsByModelSelection(rows, { kind: "image", mode: "T2I", value: "wf::gone" }, entries),
+    ).toHaveLength(1);
   });
 });
