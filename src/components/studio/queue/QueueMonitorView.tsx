@@ -1,17 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  Activity,
-  AlertCircle,
-  Boxes,
-  CheckCircle2,
-  ListChecks,
-  ListOrdered,
-  RefreshCcw,
-  WifiOff,
-  X,
-} from "lucide-react";
+import { Boxes, ListChecks, ListOrdered, RefreshCcw, WifiOff, X } from "lucide-react";
 
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
@@ -25,6 +15,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { StatusBadge } from "~/components/ui/status-badge";
+import { TimeAgo } from "~/components/ui/time-ago";
 import { SectionCard } from "~/components/workshop/ModelTestSectionCard";
 import { ModelTestTree } from "~/components/workshop/ModelTestTree";
 import { displayValue } from "~/lib/display-value";
@@ -33,7 +24,7 @@ import { taskStatusLabel } from "~/lib/task-state";
 import type { QueueModelTreeController } from "./hooks/use-queue-model-tree";
 import type { QueueMonitorController } from "./hooks/use-queue-monitor";
 import type { QueueRow } from "./queue-monitor-config";
-import { Field, QueueRowLine, SectionHeading } from "./QueueMonitorParts";
+import { Field, QueueOverview, QueueRowLine, SectionHeading } from "./QueueMonitorParts";
 import {
   offlineBannerText,
   offlineEmptyText,
@@ -67,6 +58,7 @@ export function QueueMonitorView({
     [c.runningRows, c.queued, c.recent],
   );
   const keepIds = useMemo(() => tree.filterIds(allRows), [tree, allRows]);
+  const showRunningCard = running !== null && keepIds.has(running.id);
   const runningRows = c.runningRows.filter((row) => keepIds.has(row.id));
   const queued = c.queued.filter((entry) => keepIds.has(entry.row.id));
   const recent = c.recent.filter((row) => keepIds.has(row.id));
@@ -123,17 +115,42 @@ export function QueueMonitorView({
         <span className="text-ink-faint text-xs tabular-nums">
           {`待执行 ${String(c.waitingCount)}`}
         </span>
+        <span className="text-ink-faint text-xs">
+          {c.lastSyncedAt === null ? (
+            "等待同步"
+          ) : (
+            <>
+              最后同步 <TimeAgo value={c.lastSyncedAt} />
+            </>
+          )}
+        </span>
         <Button
           aria-label="立即重新读取队列"
           className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
-          onClick={c.refresh}
+          disabled={c.refreshing}
+          onClick={() => {
+            c.refresh(true);
+          }}
           size="xs"
           variant="outline"
         >
-          <RefreshCcw aria-hidden className="size-3" data-icon="inline-start" />
+          <RefreshCcw
+            aria-hidden
+            className={`size-3 ${c.refreshing ? "animate-spin" : ""}`}
+            data-icon="inline-start"
+          />
           刷新
         </Button>
       </ViewActions>
+
+      {c.refreshError === null ? null : (
+        <div className="mb-6" role="alert">
+          <EmptyState
+            description={`${c.refreshError}。当前列表保留上一次成功读数，不代表实时队尾。`}
+            variant="hint"
+          />
+        </div>
+      )}
 
       {c.loadError !== null && c.loadError !== "" ? (
         <EmptyState
@@ -230,60 +247,19 @@ export function QueueMonitorView({
               </p>
             ) : null}
 
-            {/* ── 顶部指标带（重设计稿）：先一眼回答「现在什么规模」，再看三段明细。
-                四格读数全部来自 controller 的纯派生（`queueStats`），视图不算数；
-                指标始终是**全局**数，不随左树筛选变化。 */}
-            <div aria-label="队列概览" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              {(
-                [
-                  {
-                    chip: "bg-info/10 text-info-strong",
-                    icon: Activity,
-                    label: "运行中",
-                    value: c.stats.running,
-                  },
-                  {
-                    chip: "bg-warning/10 text-warning-strong",
-                    icon: ListOrdered,
-                    label: "排队中",
-                    value: c.stats.queued,
-                  },
-                  {
-                    chip: "bg-success/10 text-success-strong",
-                    icon: CheckCircle2,
-                    label: "今日完成",
-                    value: c.stats.succeededToday,
-                  },
-                  {
-                    chip: "bg-destructive/10 text-danger-strong",
-                    icon: AlertCircle,
-                    label: "失败",
-                    value: c.stats.failedToday,
-                  },
-                ] as const
-              ).map(({ chip, icon: Icon, label, value }) => (
-                <div
-                  className="border-border bg-card flex items-center gap-3.5 rounded-2xl border p-4"
-                  key={label}
-                >
-                  <span
-                    className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${chip}`}
-                  >
-                    <Icon aria-hidden className="size-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="text-ink-bright block text-[22px] leading-none font-bold tabular-nums">
-                      {String(value)}
-                    </span>
-                    <span className="text-ink-faint mt-1 block text-xs">{label}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
+            <QueueOverview
+              hasMore={c.hasMore}
+              matchedCount={c.matchedCount}
+              onSearchChange={c.setSearch}
+              onStatusChange={c.setStatusFilter}
+              search={c.search}
+              stats={c.stats}
+              statusFilter={c.statusFilter}
+            />
 
             <section aria-labelledby="queue-running-heading">
               <SectionHeading id="queue-running-heading">跑动中</SectionHeading>
-              {running !== null && keepIds.has(running.id) ? (
+              {showRunningCard ? (
                 <article className="bg-card border-border rounded-2xl border p-4">
                   <div className="flex flex-wrap items-center gap-3">
                     <h3 className="text-ink-bright min-w-0 flex-1 text-sm font-semibold">
@@ -334,7 +310,7 @@ export function QueueMonitorView({
                     </Button>
                   </div>
                 </article>
-              ) : running === null && runningRows.length > 0 ? (
+              ) : runningRows.length > 0 ? (
                 <ol className="flex flex-col gap-3">
                   {runningRows.map((row) => (
                     <li className="bg-card border-border rounded-2xl border p-4" key={row.id}>
@@ -349,7 +325,9 @@ export function QueueMonitorView({
                         <StatusBadge label={taskStatusLabel("RUNNING")} status="RUNNING" />
                       </div>
                       <ProgressBar className="mt-3" label="采样进度" value={row.progress} />
-                      <p className="text-ink-fainter mt-2 text-xs">{offlineNote}</p>
+                      <p className="text-ink-fainter mt-2 text-xs">
+                        {c.online ? "ComfyUI 尚未回报运行明细，当前显示任务库状态。" : offlineNote}
+                      </p>
                       <div className="mt-3 flex justify-end gap-1">
                         <Button
                           aria-label="查看正在跑这条的执行日志"
@@ -401,7 +379,10 @@ export function QueueMonitorView({
                 <ol className="border-border bg-card overflow-hidden rounded-2xl border">
                   {queued.map(({ row, position }) => (
                     <li className="border-border border-b px-4 py-3 last:border-b-0" key={row.id}>
-                      <QueueRowLine leading={`第 ${String(position)} 位`} {...rowProps(row)} />
+                      <QueueRowLine
+                        leading={position === null ? "排队中" : `第 ${String(position)} 位`}
+                        {...rowProps(row)}
+                      />
                     </li>
                   ))}
                 </ol>
@@ -429,6 +410,25 @@ export function QueueMonitorView({
                 </p>
               )}
             </section>
+
+            <div className="border-border-subtle flex flex-wrap items-center justify-center gap-3 border-t pt-5">
+              <span className="text-ink-muted text-xs tabular-nums">
+                已加载 {c.loadedCount} / {c.total ?? c.loadedCount} 个任务
+              </span>
+              {c.hasMore ? (
+                <Button
+                  className="border-border bg-subtle text-ink-strong hover:bg-surface-2 h-auto rounded-lg px-4 py-1.5"
+                  disabled={c.loadingMore}
+                  onClick={c.loadMore}
+                  size="xs"
+                  variant="outline"
+                >
+                  {c.loadingMore ? "加载中…" : "加载更多"}
+                </Button>
+              ) : (
+                <span className="text-ink-fainter text-2xs">已全部加载</span>
+              )}
+            </div>
           </div>
         </div>
       ) : null}

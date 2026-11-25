@@ -44,6 +44,12 @@ function inferMediaType(
 }
 
 export const taskRouter = createTRPCRouter({
+  summary: authedProcedure
+    .input(z.object({ todayStartedAt: z.string().datetime() }))
+    .query(async ({ ctx, input }) =>
+      taskRepository.summaryByUser(ctx.user.id, new Date(input.todayStartedAt)),
+    ),
+
   /* GET /api/tasks —— 读：list tasks */
   list: authedProcedure
     .input(
@@ -70,6 +76,10 @@ export const taskRouter = createTRPCRouter({
           : undefined;
 
       const PAGE = input.take;
+      const needsQueuePositions = statusList === undefined || statusList.includes("QUEUED");
+      const queuedPositions = needsQueuePositions
+        ? await taskRepository.queuedPositionsByUser(ctx.user.id)
+        : new Map<string, number>();
       /* media 过滤的判据（`inferMediaType`）依赖首图扩展名等应用层解析，
        * 纯 SQL 复刻不了，内存过滤保留；但把原先「固定 ×4（最多 400 行，
        * 含大 JSON 关联）」改成**迭代补页**——大多数请求第 1 页就凑满，
@@ -116,6 +126,9 @@ export const taskRouter = createTRPCRouter({
             status: task.status,
             prompt: task.prompt,
             createdAt: task.createdAt,
+            claimedAt: task.claimedAt,
+            finishedAt: task.finishedAt,
+            queuePosition: task.status === "QUEUED" ? (queuedPositions.get(task.id) ?? null) : null,
             cover,
             checkpoint,
             mediaType: inferMediaType(cover, coverMediaType, task.type),

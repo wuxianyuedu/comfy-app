@@ -9,7 +9,7 @@
 // 可以同时测试。视图（ModelTestView）只渲染 + 上抛，不出现 fetch / api.*。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { readFileAsDataUrl } from "~/lib/file-io";
 import { runAsyncAction } from "~/lib/async-action";
@@ -42,12 +42,13 @@ import { useRequestPreview } from "./use-model-test-request-preview";
 import { useReferenceImageGroup } from "./use-reference-image-group";
 import { useApplyJsonValues } from "./use-model-test-json";
 import { useOpenResultInBrowser } from "./use-open-result-in-browser";
+import { useModelTestRuns } from "../model-test-runs";
 
-import { useTRPC } from "~/trpc/react";
+import { useTRPC, useTRPCClient, type RouterInputs } from "~/trpc/react";
 
 import {
   buildRequestBodies,
-  candidateLabel,
+  buildCandidateLabels,
   candidateValue,
   contractTestRows,
   defaultModeForKind,
@@ -99,13 +100,18 @@ export type ModelTestController = {
   /** 当前格的候选模型（按当前模式收窄：远端只列配了该模式适配器的；
    *  工作流候选按 modes 声明判支持）。 */
   candidates: Array<TestCandidate>;
+  clearRuns: () => void;
   /** 最近一次生成的失败文案（空 = 没失败）。 */
   error: string | null;
   /** 生成动作：按适配器映射收集统一输入并发起一次真实调用（消耗额度）。
    *  不传 key = 测当前格。 */
   /** 发起一次真实生成。`valuesOverride`（ISSUE #4769）：JSON 输入模式解析出的
    *  表单值在同一次点击里直接进生成，不吃旧闭包。 */
-  generate: (key?: string, valuesOverride?: ModelTestValues) => Promise<void>;
+  generate: (
+    key?: string,
+    valuesOverride?: ModelTestValues,
+    referenceImagesOverride?: Array<string>,
+  ) => Promise<void>;
   /** 当前格是否在生成中。 */
   generating: boolean;
   /** 左栏「生成中」标记的读数（ISSUE #4838）：**全部格**聚合的生成中索引 ——
@@ -159,6 +165,8 @@ export type ModelTestController = {
   responseRows: Array<ApiCallDebugRow>;
   /** 最近一次成功产物（当前格）。 */
   result: ModelTestResult;
+  /** 当前格最近运行记录（最多 30 条），用于摘要与参数对比。 */
+  runs: ReturnType<typeof useModelTestRuns>["runs"];
   selectedModel: string;
   /** 选中的工作流候选（#4080 评论 4）；null = 选中的是远端 / Ollama 模型或未选。 */
   selectedWorkflow: WorkshopWorkflowOption | null;
@@ -498,6 +506,7 @@ export function useModelTest(): ModelTestController {
    * 读数 / 执行日志 / 产物 / **表单值**互相隔离，切走再切回各看各的，不同
    * 模型可以同时测试。 */
   const [sessions, setSessions] = useState<Record<string, ModelTestSession>>({});
+  const runHistory = useModelTestRuns();
 
   /* 当前格的键：用途 + 模式 + 模型（候选取值空间 = 模型名 / wf::<id>）。 */
   const activeKey = `${kind}::${mode}::${selectedModel}`;
@@ -526,7 +535,7 @@ export function useModelTest(): ModelTestController {
   const appendTaskLog = useCallback((key: string, entry: TaskLogEntry) => {
     setSessions((prev) => {
       const base = prev[key] ?? emptyModelTestSession();
-      return { ...prev, [key]: { ...base, taskLogs: [...base.taskLogs, entry] } };
+      return { ...prev, [key]: { ...base, taskLogs: [...base.taskLogs, entry].slice(-300) } };
     });
   }, []);
   /* 每格自己的取消句柄（#4080 评论 12）：取消只中止那一格的任务。 */
@@ -550,7 +559,12 @@ export function useModelTest(): ModelTestController {
     patchSession,
   });
   /* 对话测试（#4080）：向本地 / 远端被测模型发一条提示词，返回补全与耗时。 */
-  const chatTestM = useMutation(trpc.llm.chatTest.mutationOptions());
+  const trpcClient = useTRPCClient();
+  const chatTest = useCallback(
+    (input: RouterInputs["llm"]["chatTest"], signal: AbortSignal) =>
+      trpcClient.llm.chatTest.mutate(input, { signal }),
+    [trpcClient],
+  );
 
   /* 候选 / 契约 / 适配器索引：取数与派生收在 useTestCatalog（§12.13 第二刀）。 */
   const {
@@ -613,17 +627,7 @@ export function useModelTest(): ModelTestController {
   /* 下拉显示名（#4080 评论 17）：工作流候选显示**模型名**（工作流上挂的模型
    * 标签，如 z-image），不是工作流文件名；同一模型挂在多个工作流上时，后
    * 出现的用工作流名消歧；没挂标签的退工作流名。 */
-  const candidateLabels = useMemo<Record<string, string>>(() => {
-    const out: Record<string, string> = {};
-    const seen = new Map<string, number>();
-    for (const c of modeCandidates) {
-      const base = candidateLabel(c);
-      const n = seen.get(base) ?? 0;
-      seen.set(base, n + 1);
-      out[candidateValue(c)] = n === 0 ? base : `${base} · ${c.workflow?.name ?? c.name}`;
-    }
-    return out;
-  }, [modeCandidates]);
+  const candidateLabels = useMemo(() => buildCandidateLabels(modeCandidates), [modeCandidates]);
 
   const setKind = useCallback(
     (next: ModelTestKind) => {
@@ -733,12 +737,12 @@ export function useModelTest(): ModelTestController {
    * 组装结果（#3949 需求 8 —— 三处各拼一套必然漂移）。值显式入参：生成可带
    * 覆盖值（JSON 输入模式，ISSUE #4769），预览 / 提交行走当前表单值。 */
   const buildBodies = useCallback(
-    (values: ModelTestValues) =>
+    (values: ModelTestValues, referenceImages = referenceGroup.images) =>
       buildRequestBodies({
         kind,
         mode,
         model: selectedModel,
-        referenceImages: referenceGroup.images,
+        referenceImages,
         values,
       }),
     [kind, mode, referenceGroup.images, selectedModel],
@@ -748,11 +752,12 @@ export function useModelTest(): ModelTestController {
    * 的编排）收在 useModelTestGenerate（§12.13 拆分），只编排不另判。 */
   const { generate: generateSession } = useModelTestGenerate({
     buildBodies,
-    chatTestM,
+    chatTest,
     contract,
     inputRows,
     kind,
     mode,
+    onRunRecord: runHistory.recordRun,
     referenceGroup,
     selectedCandidate,
     selectedModel,
@@ -763,8 +768,8 @@ export function useModelTest(): ModelTestController {
     values,
   });
   const generate = useCallback(
-    (key?: string, valuesOverride?: ModelTestValues) =>
-      generateSession(key ?? activeKeyRef.current, valuesOverride),
+    (key?: string, valuesOverride?: ModelTestValues, referenceImagesOverride?: Array<string>) =>
+      generateSession(key ?? activeKeyRef.current, valuesOverride, referenceImagesOverride),
     [generateSession],
   );
 
@@ -837,6 +842,8 @@ export function useModelTest(): ModelTestController {
 
   return {
     candidates: modeCandidates,
+    runs: runHistory.runs,
+    clearRuns: runHistory.clearRuns,
     candidateLabels,
     responseRows: activeSession.responseRows,
     requestRows,

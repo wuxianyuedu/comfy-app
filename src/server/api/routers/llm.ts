@@ -247,7 +247,7 @@ export const llmRouter = createTRPCRouter({
         prompt: z.string().min(1).max(4000),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, signal }) => {
       const started = Date.now();
       let cfg: WorkshopLLMConfig;
       if (input.local) {
@@ -269,7 +269,11 @@ export const llmRouter = createTRPCRouter({
           maxTokens: 2048,
         };
       }
-      const reply = await completeWorkshopLLM(cfg, [{ role: "user", content: input.prompt }]);
+      const reply = await completeWorkshopLLM(
+        cfg,
+        [{ role: "user", content: input.prompt }],
+        signal,
+      );
       return {
         reply,
         durationMs: Date.now() - started,

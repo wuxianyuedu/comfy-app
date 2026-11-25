@@ -134,6 +134,7 @@ describe("comfy-queue-store", () => {
     expect(snap.queued).toBe(3);
     expect(snap.comfy).toEqual({ running: 1, pending: 2 });
     expect(snap.running?.taskId).toBe("task-1");
+    expect(snap.syncedAt).toEqual(expect.any(Number));
     expect(typeof snap.elapsedMs).toBe("number");
     expect(snap.elapsedMs).not.toBeNull();
     off();
@@ -424,30 +425,38 @@ describe("comfy-queue-store", () => {
     off();
   });
 
-  it("publish 幂等：同一份观测再喂一次不重复通知（快照身份稳定）", async () => {
-    /* running 为 null ⇒ elapsedMs 恒为 null ⇒ 两次观测字段全等 ⇒ publish 早退。
-     * 这是 `useSyncExternalStore` 不无限重渲染的那一格。 */
+  it("publish 幂等：同一份观测与同步时刻再喂一次不重复通知（快照身份稳定）", async () => {
+    /* running 为 null ⇒ elapsedMs 恒为 null；固定时钟后两次 syncedAt 也相等，
+     * 全部字段相等时 publish 早退。这是 useSyncExternalStore 不无限重渲染的那一格。 */
     const steady = {
       online: true,
       comfy: { running: 1, pending: 2 },
       running: null,
       queued: 3,
     };
-    fetchMock.mockResolvedValue(queueRes(steady));
-    const onChange = vi.fn();
-    const off = mod.subscribeComfyQueue(onChange);
-    await vi.waitFor(() => {
-      expect(onChange).toHaveBeenCalled();
-    });
-    onChange.mockClear();
+    const now = vi.spyOn(Date, "now").mockReturnValue(5000);
+    try {
+      fetchMock.mockResolvedValue(queueRes(steady));
+      const onChange = vi.fn();
+      const off = mod.subscribeComfyQueue(onChange);
+      try {
+        await vi.waitFor(() => {
+          expect(onChange).toHaveBeenCalled();
+        });
+        onChange.mockClear();
 
-    FakeEventSource.last!.emit("steady");
-    await vi.waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(2);
-    });
-    await flush();
-    expect(onChange).not.toHaveBeenCalled();
-    off();
+        FakeEventSource.last!.emit("steady");
+        await vi.waitFor(() => {
+          expect(fetchMock).toHaveBeenCalledTimes(2);
+        });
+        await flush();
+        expect(onChange).not.toHaveBeenCalled();
+      } finally {
+        off();
+      }
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("本地秒表：有在跑的任务时 elapsedMs 随本地时钟推进（且不发请求）", async () => {
@@ -476,6 +485,141 @@ describe("comfy-queue-store", () => {
       running: null,
       queued: 0,
       elapsedMs: null,
+      syncedAt: null,
+    });
+  });
+
+  describe("refreshComfyQueue", () => {
+    it("并发调用复用同一个待定 Promise，fetch 只发一次", async () => {
+      const request = deferred();
+      fetchMock.mockImplementationOnce(() => request.promise);
+
+      const first = mod.refreshComfyQueue();
+      const second = mod.refreshComfyQueue();
+      const third = mod.refreshComfyQueue();
+
+      expect(second).toBe(first);
+      expect(third).toBe(first);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      request.resolve(queueRes(onlinePayload(7)));
+      await Promise.all([first, second, third]);
+
+      expect(mod.getComfyQueueSnapshot().queued).toBe(7);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("请求完成后后续调用发起新 fetch，不会永久去重", async () => {
+      fetchMock
+        .mockResolvedValueOnce(queueRes(onlinePayload(4)))
+        .mockResolvedValueOnce(queueRes(onlinePayload(5)));
+
+      const first = mod.refreshComfyQueue();
+      await first;
+      const second = mod.refreshComfyQueue();
+      await second;
+
+      expect(second).not.toBe(first);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(mod.getComfyQueueSnapshot().queued).toBe(5);
+    });
+
+    it("相同队列内容也更新同步时刻并通知订阅者", async () => {
+      const now = vi.spyOn(Date, "now").mockReturnValue(1000);
+      try {
+        await mod.refreshComfyQueue();
+        const firstSyncedAt = mod.getComfyQueueSnapshot().syncedAt;
+        now.mockReturnValue(2000);
+        const onChange = vi.fn();
+        const off = mod.subscribeComfyQueue(onChange);
+        try {
+          await flush();
+          onChange.mockClear();
+          now.mockReturnValue(3000);
+          await mod.refreshComfyQueue();
+          expect(mod.getComfyQueueSnapshot().syncedAt).toBe(3000);
+          expect(mod.getComfyQueueSnapshot().syncedAt).not.toBe(firstSyncedAt);
+          expect(onChange).toHaveBeenCalled();
+        } finally {
+          off();
+        }
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    it("fetch reject 后向主动刷新方报错，下一次可重试且不产生未处理 rejection", async () => {
+      fetchMock
+        .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce(queueRes(onlinePayload(8)));
+      const unhandledRejection = vi.fn();
+      process.on("unhandledRejection", unhandledRejection);
+
+      try {
+        await expect(mod.refreshComfyQueue()).rejects.toThrow("ComfyUI 队列刷新失败");
+        await flush();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(mod.getComfyQueueSnapshot().queued).toBe(0);
+
+        await expect(mod.refreshComfyQueue()).resolves.toBeUndefined();
+        await flush();
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(mod.getComfyQueueSnapshot().queued).toBe(8);
+        expect(unhandledRejection).not.toHaveBeenCalled();
+      } finally {
+        process.off("unhandledRejection", unhandledRejection);
+      }
+    });
+
+    it("兜底轮询抢先时，手动刷新不复用被新请求取代的旧回包", async () => {
+      const stale = deferred();
+      const fresh = deferred();
+      fetchMock
+        .mockImplementationOnce(() => stale.promise)
+        .mockImplementationOnce(() => fresh.promise);
+      const staleRefresh = mod.refreshComfyQueue();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      const off = mod.subscribeComfyQueue(vi.fn());
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      stale.resolve(queueRes(onlinePayload(111)));
+      await expect(staleRefresh).rejects.toThrow("ComfyUI 队列刷新失败");
+      expect(mod.getComfyQueueSnapshot().queued).toBe(0);
+
+      fresh.resolve(queueRes(onlinePayload(222)));
+      await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().queued).toBe(222));
+      off();
+    });
+
+    it("reset 后旧在途回包不能覆盖新快照或清除新请求", async () => {
+      const stale = deferred();
+      const fresh = deferred();
+      fetchMock
+        .mockImplementationOnce(() => stale.promise)
+        .mockImplementationOnce(() => fresh.promise);
+
+      const staleRefresh = mod.refreshComfyQueue();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      mod.resetComfyQueueStoreForTest();
+      const freshRefresh = mod.refreshComfyQueue();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(mod.refreshComfyQueue()).toBe(freshRefresh);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      stale.resolve(queueRes(onlinePayload(111)));
+      await expect(staleRefresh).rejects.toThrow("ComfyUI 队列刷新失败");
+      await flush();
+
+      expect(mod.refreshComfyQueue()).toBe(freshRefresh);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(mod.getComfyQueueSnapshot()).toEqual(mod.getComfyQueueServerSnapshot());
+
+      fresh.resolve(queueRes(onlinePayload(222)));
+      await freshRefresh;
+      expect(mod.getComfyQueueSnapshot().queued).toBe(222);
     });
   });
 });

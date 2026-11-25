@@ -30,7 +30,7 @@
  * `unguarded`；登记 PURE_NODE_HOSTS 只是**给未来**「impl 里若加了 node: 前缀
  * import」留的锚，当前 scanner 视角不严格必要。
  */
-import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { TERMINAL_TASK_STATUSES } from "../task-state";
 import { task, taskImage } from "~/server/db/schema";
@@ -133,7 +133,7 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
         .select({ id: task.id })
         .from(task)
         .where(and(eq(task.status, "QUEUED"), ownedBy(mode)))
-        .orderBy(task.createdAt)
+        .orderBy(asc(task.createdAt), asc(task.id))
         .limit(take);
       const claimed = await db
         .update(task)
@@ -145,8 +145,10 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
           claimedAt: new Date(),
         })
         .where(inArray(task.id, candidates))
-        .returning({ id: task.id });
-      return claimed.map((row) => row.id);
+        .returning({ createdAt: task.createdAt, id: task.id });
+      return claimed
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
+        .map((row) => row.id);
     },
 
     /** host 领取后重建 Job 的行读（P3 §5 ADR §13-3B1 决定 1）：执行载荷取

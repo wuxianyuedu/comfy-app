@@ -10,46 +10,24 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import {
-  Boxes,
-  Compass,
-  History,
-  Info,
-  Play,
-  SlidersHorizontal,
-  TriangleAlert,
-} from "lucide-react";
+import { Boxes, Compass, History } from "lucide-react";
 
-import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
-import { Textarea } from "~/components/ui/textarea";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
-import { FormField } from "~/components/ui/form-field";
 import { PageHeader } from "~/components/ui/page-header";
-import { SelectChip } from "~/components/ui/select-chip";
-import { TruncatedText } from "~/components/ui/truncated-text";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { sizeSourceForMode } from "~/lib/workflow/workflow-size-source";
 import type { QueueTaskLogTarget } from "~/components/studio/queue/QueueTaskLogModal";
-import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
-
-import { cn } from "~/lib/utils";
 import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
-import {
-  MODEL_TEST_KIND_LABELS,
-  serializeModelTestJson,
-  type ModelTestControl,
-  type ModelTestKind,
-} from "./model-test-config";
-import { InputRow } from "./ModelTestInputRow";
-import { ModelTestProgressPanel } from "./ModelTestProgressPanel";
-import { ModelTestSizeField } from "./ModelTestSizeField";
+import { MODEL_TEST_KIND_LABELS, type ModelTestKind } from "./model-test-config";
+import { ModelTestInputCard } from "./ModelTestInputCard";
 import { ModelTestTree } from "./ModelTestTree";
-import { ReferenceImageField, RequiredBadge } from "./ReferenceImageField";
 import { SectionCard } from "./ModelTestSectionCard";
 import { useModelTest } from "./hooks/use-model-test";
 import { useModelTestTree } from "./hooks/use-model-test-tree";
 import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
+import { ModelTestRunHistory } from "./ModelTestRunHistory";
+import { classifyModelTestError } from "./model-test-runs";
 
 /* 「大屏查看日志」弹窗：与历史记录 / 队列页同一份（QueueTaskLogModal 按 taskId
  * 直连 SSE）。dynamic 加载断开它携带的重依赖（react18-json-view 等），与
@@ -132,7 +110,7 @@ function LeftColumn({
   return (
     /* 普通静态栏（ISSUE #4997）：不吸顶、不设 max-h / 内部滚动、h-fit——
      * 高度随内容，底部空隙由页面既有内边距给。 */
-    <aside className="flex w-full shrink-0 flex-col gap-4 xl:w-64">
+    <aside className="flex w-full shrink-0 flex-col gap-4 lg:w-60 xl:w-64">
       <SectionCard hint="布局可切换" icon={<Boxes />} title="用途 / 模式 / 模型">
         {c.loading || tree.loading ? (
           /* 骨架屏（ISSUE #4749）：与模型列表条目同形的占位条。 */
@@ -207,6 +185,7 @@ export function ModelTestView({
     // 不进依赖（进去了也会因会话 state 变化反复触发）。
     // oxlint-disable-next-line react/exhaustive-deps
   }, [pendingReprint]);
+  const cancelled = c.error !== null && classifyModelTestError(c.error) === "已取消";
   const openLogScreen = () => {
     if (c.taskId === null || c.taskId === "") {
       return;
@@ -214,17 +193,17 @@ export function ModelTestView({
     setLogTarget({
       id: c.taskId,
       /* 弹窗内的徽标会按 SSE 流自行翻面，这里只是打开那一刻的初值。 */
-      status: c.generating ? "RUNNING" : c.error === null ? "SUCCEEDED" : "FAILED",
+      status: c.generating
+        ? "RUNNING"
+        : c.error === null
+          ? "SUCCEEDED"
+          : cancelled
+            ? "CANCELLED"
+            : "FAILED",
       workflowName: c.selectedWorkflow?.name ?? c.selectedModel,
     });
   };
 
-  const selectedAdapter = c.adapters.find((a) => a.mode === c.mode) ?? null;
-  /* 适配器映射了的统一输入类型集合：契约行通道承接得住、但适配器没映射时，
-   * 生成不会带上那个值 —— 行上明说，不静默丢（映射关系只在有适配器时存在）。 */
-  const mappedTypes = new Set<WorkshopInputType>(
-    (selectedAdapter?.inputs ?? []).map((row) => row.type),
-  );
   const hasModel = c.selectedModel !== "";
 
   /* 页面树的条目装配（ISSUE #4916 / #4952）：跨三种用途取候选、按可测模式
@@ -253,7 +232,7 @@ export function ModelTestView({
         </p>
       )}
 
-      <div className="flex flex-row items-start gap-4">
+      <div className="flex flex-col items-start gap-4 lg:flex-row">
         {/* ── 左栏：用途 / 模式 / 模型 一棵树（拆成子组件 —— §12.13；
             空态与「生成中」徽标的说明见 `LeftColumn`）── */}
         <LeftColumn c={c} tree={treeCatalog} />
@@ -261,260 +240,38 @@ export function ModelTestView({
         {/* ── 中栏 + 右栏包一层（ISSUE #4978）：左栏在窄窗口下也侧立吸附，
             不再参与堆叠；右栏窄窗口落到表单下方，xl 起仍三栏并排。 ── */}
         <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+          <div className="flex min-w-0 flex-1 flex-col gap-4 lg:flex-col xl:flex-row xl:items-start">
             {/* ── 中栏：统一输入 + 生成 CTA（未选模型时给三步引导）──
                 max-h 与左栏同口径（ISSUE #4983/#4991）：xl 下三栏各自封顶在
                 显示区域高度、超出在栏内滚动，页面本身不再出现滚动条。 */}
             <div className="flex min-w-0 flex-1 flex-col gap-4 xl:max-h-[calc(100dvh-96px)] xl:overflow-y-auto">
               {hasModel ? (
                 <>
-                  <SectionCard
-                    className="flex-1"
-                    hint="与工坊生成走同一份模式契约"
-                    icon={<SlidersHorizontal />}
-                    title={jsonMode ? "JSON 输入" : "统一输入"}
-                  >
-                    {/* 输入方式切换（ISSUE #4769）：表单逐项填 ⇄ 粘贴历史「复制去重投」
-                    复制的整份 JSON 重跑。两栏双向同步（ISSUE #4922）：切 JSON
-                    带出当前值，切回表单落回 JSON 里的值。 */}
-                    <div aria-label="输入方式" className="flex flex-wrap gap-2" role="radiogroup">
-                      <SelectChip
-                        onClick={() => {
-                          if (jsonMode && jsonText.trim() !== "") {
-                            /* 切回统一输入前先落账：JSON 里认得的键写回表单；
-                             * 解析失败留在 JSON 栏（错误已在反馈位），不丢输入。 */
-                            const parsed = c.applyJsonValues(jsonText);
-                            if (!parsed.ok) {
-                              return;
-                            }
-                          }
-                          setJsonMode(false);
-                        }}
-                        selected={!jsonMode}
-                        shape="pill"
-                      >
-                        统一输入
-                      </SelectChip>
-                      <SelectChip
-                        onClick={() => {
-                          setJsonText(serializeModelTestJson(c.mode, c.values));
-                          setJsonMode(true);
-                        }}
-                        selected={jsonMode}
-                        shape="pill"
-                      >
-                        JSON 输入
-                      </SelectChip>
-                    </div>
-                    {jsonMode ? (
-                      <FormField
-                        hint="已按当前统一输入预填（含默认档）；直接改或粘贴历史「复制去重投」的 JSON，点「生成」或切回统一输入时按这里的参数应用；认不得的键会忽略"
-                        id="model-test-json"
-                        label="提交参数 JSON"
-                        labelClassName="mb-1.5"
-                      >
-                        {(a11y) => (
-                          <Textarea
-                            {...a11y}
-                            className="border-border bg-surface-1 focus:border-primary w-full resize-y rounded-lg border px-3 py-2 font-mono text-sm outline-none"
-                            onChange={(e) => {
-                              setJsonText(e.target.value);
-                            }}
-                            placeholder={
-                              '{\n  "mode": "T2I",\n  "inputs": {\n    "prompt": "…",\n    "seed": "…"\n  }\n}'
-                            }
-                            rows={12}
-                            spellCheck={false}
-                            value={jsonText}
-                          />
-                        )}
-                      </FormField>
-                    ) : (
-                      <div className="flex flex-col gap-4">
-                        {c.inputRows.map((row, i) => {
-                          if (row.control === "size") {
-                            return (
-                              <FormField
-                                hint={
-                                  row.disabled
-                                    ? "API 通道暂未承接尺寸输入（工坊完整链路才有）"
-                                    : "比例 / 像素（分辨率 · 百万像素）/ 倍数一次选完，与工作流库同款；已按最常用档预置默认值"
-                                }
-                                id={`model-test-size-${String(i)}`}
-                                key={`${row.id}-${String(i)}`}
-                                label={
-                                  <span className="flex min-w-0 items-center gap-1.5">
-                                    <TruncatedText className="truncate">
-                                      {row.disabled ? `${row.label}（未承接）` : row.label}
-                                    </TruncatedText>
-                                    <RequiredBadge required={row.required} />
-                                  </span>
-                                }
-                                labelClassName="mb-1.5"
-                              >
-                                {() => (
-                                  <ModelTestSizeField
-                                    disabled={row.disabled}
-                                    mode={c.mode}
-                                    onPatchValues={c.patchValues}
-                                    referenceImageSrc={c.referenceImages[0]}
-                                    sizeFromReference={sizeFromReference}
-                                    values={c.values}
-                                  />
-                                )}
-                              </FormField>
-                            );
-                          }
-                          const control: ModelTestControl = row.control;
-                          const id = `model-test-input-${row.id}`;
-                          /* 通道承接得住、但适配器没映射 → 提示「生成不会带上」。 */
-                          const unmapped =
-                            !row.disabled &&
-                            row.valueKey !== null &&
-                            selectedAdapter !== null &&
-                            !mappedTypes.has(row.valueKey);
-                          const hint = row.disabled
-                            ? "API 通道暂未承接这类输入（工坊完整链路才有）—— 填了也会被忽略"
-                            : unmapped
-                              ? "适配器没有映射这个输入 —— 本次生成不会带上它；要带上请到「模型适配」为它配字段映射"
-                              : undefined;
-                          if (row.id === "reference-image" && control === "image") {
-                            return (
-                              <ReferenceImageField
-                                disabled={row.disabled}
-                                hint={hint}
-                                id={`${id}-${String(i)}`}
-                                images={c.referenceImages}
-                                key={`${row.id}-${String(i)}`}
-                                label={row.label}
-                                onAdd={(files) => {
-                                  void c.addReferenceImages(files);
-                                }}
-                                onError={c.showNotice}
-                                onRemove={c.removeReferenceImage}
-                                required={row.required}
-                              />
-                            );
-                          }
-                          return (
-                            <InputRow
-                              control={control}
-                              disabled={row.disabled}
-                              hint={hint}
-                              id={`${id}-${String(i)}`}
-                              key={`${row.id}-${String(i)}`}
-                              label={row.disabled ? `${row.label}（未承接）` : row.label}
-                              onChange={(value) => {
-                                if (row.valueKey !== null) {
-                                  c.patchValue(row.valueKey, value);
-                                }
-                              }}
-                              onError={c.showNotice}
-                              onPickFile={(file) => {
-                                if (row.valueKey === "first-frame" || row.valueKey === "image") {
-                                  void c.setInputFromFile(row.valueKey, file);
-                                }
-                              }}
-                              onRandom={
-                                row.valueKey === "prompt"
-                                  ? () => {
-                                      c.randomizePrompt();
-                                    }
-                                  : undefined
-                              }
-                              required={row.required}
-                              value={row.valueKey === null ? "" : (c.values[row.valueKey] ?? "")}
-                            />
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* 生成（生成中可取消；对话用途是「发送」）。JSON 输入模式先解析
-                    粘贴的载荷并写回表单值，再带着这份值生成（ISSUE #4769）。 */}
-                    <div className="mt-2 flex flex-wrap items-center gap-3">
-                      <Button
-                        className="h-10 rounded-lg px-6"
-                        disabled={c.generating}
-                        onClick={() => {
-                          if (jsonMode) {
-                            const parsed = c.applyJsonValues(jsonText);
-                            if (!parsed.ok) {
-                              return;
-                            }
-                            /* 切回统一输入：填进去的参数看得见，错误也在同一反馈位。 */
-                            setJsonMode(false);
-                            void c.generate(undefined, parsed.values);
-                            return;
-                          }
-                          void c.generate();
-                        }}
-                        variant="primary-solid"
-                      >
-                        <Play className="size-4" data-icon="inline-start" />
-                        {c.generating
-                          ? c.kind === "chat"
-                            ? "发送中…"
-                            : "生成中…"
-                          : c.kind === "chat"
-                            ? "发送"
-                            : "生成"}
-                      </Button>
-                      {c.generating && (
-                        <Button
-                          className="h-10 rounded-lg px-4"
-                          onClick={() => {
-                            c.cancelGenerate();
-                          }}
-                          variant="outline"
-                        >
-                          {c.kind === "chat" ? "取消发送" : "取消生成"}
-                        </Button>
-                      )}
-                      <span className="text-2xs text-muted-foreground">
-                        {c.kind === "chat"
-                          ? "真实调用被测模型 —— 本地模型走设置里配置的本地服务，远端模型按名直连。"
-                          : c.selectedWorkflow === null
-                            ? "真实调用，按上游计费 —— 与工坊生成走同一条通道。"
-                            : "真实运行本地工作流 —— 与工坊生成走同一条本地通道（ComfyUI）。"}
-                      </span>
-                    </div>
-
-                    {/* 本地工作流任务的实时进度：SSE state 帧，整百分比变化才更新。
-                    明细行是 tqdm 那一行的可读版（步数 / 速度 / 已用 / 预估剩余）。 */}
-                    <ModelTestProgressPanel
-                      generating={c.generating}
-                      progress={c.workflowProgress}
-                      since={c.generatingSince}
-                    />
-
-                    {c.error !== null && (
-                      <p className="bg-destructive/10 text-destructive flex items-start gap-1.5 rounded-lg px-3 py-2 text-xs leading-relaxed">
-                        <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
-                        <span>{c.error}</span>
-                      </p>
-                    )}
-
-                    {c.notice !== null && (
-                      <p
-                        className={cn(
-                          "flex items-start gap-1.5 rounded-lg px-3 py-2 text-xs leading-relaxed",
-                          c.notice.kind === "ok"
-                            ? "bg-subtle text-muted-foreground"
-                            : "bg-destructive/10 text-destructive",
-                        )}
-                      >
-                        <Info className="mt-0.5 size-3.5 shrink-0" />
-                        <span>{c.notice.text}</span>
-                      </p>
-                    )}
-                  </SectionCard>
+                  <ModelTestInputCard
+                    c={c}
+                    cancelled={cancelled}
+                    jsonMode={jsonMode}
+                    jsonText={jsonText}
+                    setJsonMode={setJsonMode}
+                    setJsonText={setJsonText}
+                    sizeFromReference={sizeFromReference}
+                  />
 
                   {/* 执行日志放中栏：紧贴生成动作（进度 → 日志），列宽也容得下
                   等宽字体行，不再挤在窄右栏里 */}
                   <LogsCard
                     logs={c.taskLogs}
                     onOpenScreen={c.taskId === null ? undefined : openLogScreen}
+                  />
+                  <ModelTestRunHistory
+                    generating={c.generating}
+                    onClear={c.clearRuns}
+                    onRetry={(run) => {
+                      void c.generate(run.sessionKey, run.values, run.referenceImages);
+                    }}
+                    runs={c.runs.filter(
+                      (run) => run.sessionKey === `${c.kind}::${c.mode}::${c.selectedModel}`,
+                    )}
                   />
                 </>
               ) : (

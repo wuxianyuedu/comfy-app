@@ -40,6 +40,9 @@ function row(over: Partial<QueueRow> & Pick<QueueRow, "id" | "status">): QueueRo
     modelName: null,
     prompt: `提示词 ${over.id}`,
     createdAt: new Date("2026-01-01T00:00:00Z"),
+    claimedAt: null,
+    finishedAt: null,
+    queuePosition: null,
     cover: null,
     checkpoint: null,
     videoPath: null,
@@ -71,6 +74,19 @@ function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorCon
     paramRows: [],
     isBusy: () => false,
     refresh: vi.fn(),
+    loadedCount: 0,
+    matchedCount: 0,
+    loadingMore: false,
+    loadMore: vi.fn(),
+    hasMore: false,
+    total: 0,
+    lastSyncedAt: null,
+    refreshError: null,
+    refreshing: false,
+    search: "",
+    setSearch: vi.fn(),
+    statusFilter: "all",
+    setStatusFilter: vi.fn(),
     cancel: vi.fn(),
     openFolder: vi.fn(),
     copyForReprint: vi.fn(),
@@ -265,6 +281,17 @@ describe("QueueMonitor", () => {
     );
   });
 
+  it("队列快照未命中时写「排队中」，不按已加载子集编造位次", () => {
+    monitorMock.mockReturnValue(
+      controller({
+        queued: [{ row: row({ id: "unknown", status: "QUEUED" }), position: null }],
+      }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getAllByText("排队中")).toHaveLength(2);
+    expect(screen.queryByText(/^第 \d+ 位$/)).not.toBeInTheDocument();
+  });
+
   it("左树选中模型：三段列表只留该模型的行，筛选提示与清除入口在场", () => {
     const clear = vi.fn();
     treeMock.mockReturnValue(
@@ -314,6 +341,61 @@ describe("QueueMonitor", () => {
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText("估算中")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /正在跑的工作流/ })).toBeInTheDocument();
+  });
+
+  it("富运行卡被模型筛选排除时，仍显示匹配的库内 RUNNING 行", () => {
+    treeMock.mockReturnValue(
+      treeController({
+        activeLabel: "sd-only",
+        filterIds: (rows) =>
+          new Set(rows.filter((r) => r.modelName === "sd-only").map((r) => r.id)),
+      }),
+    );
+    monitorMock.mockReturnValue(
+      controller({
+        running: {
+          id: "rich-other",
+          workflowName: "已排除的富运行卡",
+          modelText: "wan-only",
+          nodeText: "KSampler",
+          elapsedText: "00:30",
+          remainingText: "估算中",
+          progressPct: 0,
+          stepsText: "—",
+          rateText: "—",
+        },
+        runningRows: [
+          row({ id: "rich-other", modelName: "wan-only", status: "RUNNING" }),
+          row({ id: "running-match", modelName: "sd-only", status: "RUNNING", progress: 42 }),
+        ],
+      }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.queryByRole("heading", { name: "已排除的富运行卡" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "工作流 running-match" })).toBeInTheDocument();
+    expect(screen.getByText("ComfyUI 尚未回报运行明细，当前显示任务库状态。")).toBeInTheDocument();
+    expect(screen.queryByText(/连接后显示耗时与节点明细/)).not.toBeInTheDocument();
+  });
+
+  it("同步读数缺失时显示等待同步，不伪造实时状态", () => {
+    monitorMock.mockReturnValue(controller());
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByText("等待同步")).toBeInTheDocument();
+  });
+
+  it("刷新按钮把成功反馈要求传给 controller", async () => {
+    const refresh = vi.fn();
+    monitorMock.mockReturnValue(controller({ lastSyncedAt: 1000, refresh }));
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByText(/最后同步/)).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "立即重新读取队列" }));
+    expect(refresh).toHaveBeenCalledWith(true);
+  });
+
+  it("刷新失败时保留旧快照并显示非实时提醒", () => {
+    monitorMock.mockReturnValue(controller({ refreshError: "刷新失败：部分真相源未完整同步" }));
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("不代表实时队尾");
   });
 
   it("读不到任务记录时说明读不到，而不是显示一套空的列表当作准数", () => {

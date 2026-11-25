@@ -14,6 +14,7 @@ function view(over: Partial<ComfyQueueView> = {}): ComfyQueueView {
     running: null,
     queued: 0,
     elapsedMs: null,
+    syncedAt: null,
     ...over,
   };
 }

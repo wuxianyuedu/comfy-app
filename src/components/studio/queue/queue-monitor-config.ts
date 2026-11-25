@@ -54,10 +54,8 @@ export function bucketQueueRows(rows: ReadonlyArray<QueueRow>): QueueBuckets {
   return { running, queued, recent };
 }
 
-/** 顶部指标带的四格读数（纯派生，视图只渲染）。
- * running / queued 即三桶计数；完成与失败只数**创建于今天**的终态行 ——
- * task.list 没有完成时刻，创建日是能拿到的最近口径（窗口为最近 200 条，
- * 日常远不到上限，越界时读数偏保守而非虚高）。 */
+/** 顶部指标带的四格读数（纯派生，视图只渲染）。今日终态按真实结束时刻统计，
+ * 历史任务在今天重跑完成也能计入；缺少结束时刻的旧数据才退回创建时刻。 */
 export type QueueStats = {
   failedToday: number;
   queued: number;
@@ -70,7 +68,7 @@ export function queueStats(buckets: QueueBuckets, now: Date): QueueStats {
   let succeededToday = 0;
   let failedToday = 0;
   for (const row of buckets.recent) {
-    if (row.createdAt.toDateString() !== today) {
+    if ((row.finishedAt ?? row.createdAt).toDateString() !== today) {
       continue;
     }
     if (row.status === "SUCCEEDED") {
@@ -94,17 +92,45 @@ export function queueStats(buckets: QueueBuckets, now: Date): QueueStats {
  */
 export function queuedWithPosition(
   queued: ReadonlyArray<QueueRow>,
-): Array<{ position: number; row: QueueRow }> {
-  const total = queued.length;
+  limit = QUEUED_WINDOW,
+): Array<{ position: number | null; row: QueueRow }> {
   return queued
-    .map((row, index) => ({ row, position: total - index }))
-    .sort((a, b) => a.position - b.position)
-    .slice(0, QUEUED_WINDOW);
+    .map((row) => ({ row, position: row.queuePosition }))
+    .sort(
+      (a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER),
+    )
+    .slice(0, limit);
 }
 
-/** 最近结果：按窗口上限截断（进来的顺序已是新的在前）。 */
-export function recentWithin(rows: ReadonlyArray<QueueRow>): Array<QueueRow> {
-  return rows.slice(0, RECENT_WINDOW);
+/** 最近结果：默认按窗口上限截断；分页视图可显式展示已加载的全部终态行。 */
+export function recentWithin(
+  rows: ReadonlyArray<QueueRow>,
+  limit = RECENT_WINDOW,
+): Array<QueueRow> {
+  return rows.slice(0, limit);
+}
+
+export type QueueStatusFilter = "active" | "all" | "terminal";
+
+/** 搜索只匹配已加载行；状态筛选交给服务端分页，避免「筛到了但没加载」的假空态。 */
+export function searchQueueRows(rows: ReadonlyArray<QueueRow>, query: string): Array<QueueRow> {
+  const keyword = query.trim().toLocaleLowerCase();
+  if (keyword === "") {
+    return [...rows];
+  }
+  return rows.filter((row) =>
+    [row.workflowName, row.prompt, row.modelName ?? "", row.id, row.error ?? ""].some((value) =>
+      value.toLocaleLowerCase().includes(keyword),
+    ),
+  );
+}
+
+/** 任务耗时：开始时刻优先取 claimedAt，缺失的旧任务退回创建时刻。 */
+export function queueTaskDurationMs(row: QueueRow): number | null {
+  if (row.finishedAt === null) {
+    return null;
+  }
+  return Math.max(0, row.finishedAt.getTime() - (row.claimedAt ?? row.createdAt).getTime());
 }
 
 /**

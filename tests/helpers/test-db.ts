@@ -652,11 +652,13 @@ export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateIn
 }
 
 export type SeedTaskInput = {
+  claimedAt?: Date | null;
   createdAt?: Date;
   error?: string | null;
   /** 提交时刻的 RAW 执行载荷（task.retry 用例要区分「有载荷可原样重跑」与
    *  「execPayload 为空的历史遗留行」两态）。 */
   execPayload?: unknown;
+  finishedAt?: Date | null;
   id?: string;
   images?: Array<Row>;
   negativePrompt?: string | null;
@@ -695,6 +697,8 @@ export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
     progress: input.progress ?? 0,
     error: input.error ?? null,
     createdAt: input.createdAt ?? new Date(),
+    finishedAt: input.finishedAt ?? null,
+    claimedAt: input.claimedAt ?? null,
   });
   // task 表没有 images 列（Drizzle 用 taskImage 子表 + 关系装载）：
   // seed 的 images 逐行写入 taskImage，首图 isCover=1（与 task.list 封面投影一致）

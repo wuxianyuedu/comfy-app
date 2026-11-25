@@ -25,11 +25,24 @@ import { ViewableImage } from "~/components/ui/image-viewer";
 import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
 import type { TaskLogEntry } from "~/lib/workshop/generation-client";
+import { classifyModelTestError } from "./model-test-runs";
 import type { useModelTest } from "./hooks/use-model-test";
 import { RequestDetailSection } from "./ModelTestRequestDetail";
 import { TaskProgressPanel } from "./TaskProgressPanel";
 
 type ModelTestController = ReturnType<typeof useModelTest>;
+type ResultCardController = Pick<
+  ModelTestController,
+  | "error"
+  | "generating"
+  | "openBusy"
+  | "openResultInBrowser"
+  | "result"
+  | "responseRows"
+  | "workflowProgress"
+>;
+type ResultPanelController = ResultCardController &
+  Pick<ModelTestController, "generatingSince" | "requestRows" | "taskLogs">;
 
 /** 卡片外壳：白底细边 + 轻投影，标题行 = 图标 + 名称 + 右侧弱化说明或操作区。 */
 function Panel({
@@ -72,12 +85,12 @@ function Panel({
   );
 }
 
-/** 状态徽标：完成 / 生成中 / 待生成 / 失败 四态。 */
+/** 状态徽标：完成 / 生成中 / 待生成 / 失败 / 已取消。 */
 function StatusChip({
   state,
   text,
 }: {
-  state: "done" | "error" | "generating" | "idle";
+  state: "cancelled" | "done" | "error" | "generating" | "idle";
   text: string;
 }) {
   return (
@@ -86,6 +99,7 @@ function StatusChip({
         "ml-auto flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-2xs font-semibold",
         state === "done" && "bg-success/10 text-success-strong",
         state === "generating" && "bg-warning/10 text-warning-strong",
+        state === "cancelled" && "bg-warning/10 text-warning-strong",
         state === "error" && "bg-destructive/10 text-destructive",
         state === "idle" && "bg-subtle text-muted-foreground",
       )}
@@ -95,6 +109,7 @@ function StatusChip({
           "size-1.5 rounded-full",
           state === "done" && "bg-success",
           state === "generating" && "bg-warning-strong",
+          state === "cancelled" && "bg-warning-strong",
           state === "error" && "bg-destructive",
           state === "idle" && "bg-muted-foreground/60",
         )}
@@ -159,8 +174,18 @@ function TaskLogSection({ autoscroll, logs }: { autoscroll: boolean; logs: Array
 }
 
 /** 产物卡：按运行状态给预览形态（生成中进度环 / 完成预览 / 空占位）。 */
-function ResultCard({ c }: { c: ModelTestController }) {
-  const state = c.generating ? "generating" : c.result === null ? "idle" : "done";
+function ResultCard({ c }: { c: ResultCardController }) {
+  const cancelled = c.error !== null && classifyModelTestError(c.error) === "已取消";
+  const state = c.generating
+    ? "generating"
+    : cancelled
+      ? "cancelled"
+      : c.error === null
+        ? c.result === null
+          ? "idle"
+          : "done"
+        : "error";
+  const latestResponse = c.responseRows.at(-1);
   const resultUrl = c.result !== null && c.result.kind !== "chat" ? c.result.url : null;
   const kindIcon =
     c.result?.kind === "video" ? (
@@ -176,9 +201,34 @@ function ResultCard({ c }: { c: ModelTestController }) {
         <span className="text-2xs text-muted-foreground">状态</span>
         <StatusChip
           state={state}
-          text={state === "generating" ? "生成中" : state === "done" ? "生成完成" : "待生成"}
+          text={
+            state === "generating"
+              ? "生成中"
+              : state === "done"
+                ? "生成完成"
+                : state === "cancelled"
+                  ? "已取消"
+                  : state === "error"
+                    ? "执行失败"
+                    : "待生成"
+          }
         />
       </div>
+
+      {latestResponse !== undefined && (
+        <dl className="text-2xs grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+          <dt className="text-muted-foreground">端点</dt>
+          <dd className="break-all">{latestResponse.endpoint}</dd>
+          <dt className="text-muted-foreground">耗时</dt>
+          <dd className="tabular-nums">
+            {latestResponse.durationMs === undefined
+              ? "—"
+              : `${String(latestResponse.durationMs)} ms`}
+          </dd>
+          <dt className="text-muted-foreground">HTTP</dt>
+          <dd className="tabular-nums">{latestResponse.status ?? "—"}</dd>
+        </dl>
+      )}
 
       {c.result === null ? (
         c.generating ? (
@@ -197,8 +247,17 @@ function ResultCard({ c }: { c: ModelTestController }) {
           </div>
         ) : (
           <EmptySlot>
-            {kindIcon}
-            生成完成后在这里展示产物，点开可进查看器缩放
+            {state === "error" || state === "cancelled" ? (
+              <CircleAlert
+                className={cn(
+                  "size-8",
+                  state === "error" ? "text-destructive" : "text-warning-strong",
+                )}
+              />
+            ) : (
+              kindIcon
+            )}
+            {state === "error" ? c.error : "生成完成后在这里展示产物，点开可进查看器缩放"}
           </EmptySlot>
         )
       ) : (
@@ -305,7 +364,7 @@ export function ModelTestResultPanel({
   excerptPretty,
   onExcerptPretty,
 }: {
-  c: ModelTestController;
+  c: ResultPanelController;
   excerptPretty: boolean;
   onExcerptPretty: (pretty: boolean) => void;
 }) {
