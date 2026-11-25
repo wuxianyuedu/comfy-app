@@ -28,11 +28,12 @@
 // Node 里 import 本模块」的承诺。
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
+import { collectOutputs, extractRuntimeParams, type RuntimeParams } from "./executor-outputs";
 import { describeZeroOutputFailure } from "./zero-output-reason";
 import { friendlyError } from "./executor-errors";
 import { taskOutputDir, taskOutputUrl } from "~/lib/media/output-paths";
 import { isRecord } from "~/lib/is-record";
+import { getWorkflowType, parseModesJson } from "~/lib/workflow/workflow-types";
 import { fetchHistoryEntry, traceComfyQueue, type ComfyHistoryEntry } from "./executor-history";
 import { historyTraceSummary, historyOutputKeys, trace } from "./trace";
 import { kickQueue } from "./executor-continuation";
@@ -159,6 +160,167 @@ export async function complete(taskId: string, promptId: string) {
     // 下载 / 落盘 / 写库任何一步炸了，都必须把任务收口，否则队列同样会卡死。
     const failureMessage = isRecord(error) ? error.message : undefined;
     await finalizeFailure(taskId, promptId, failureMessage ?? "结果处理失败");
+  }
+}
+
+/* ── manifest（归档件）辅助 ────────────────────────────────────── */
+
+/** 北京时间（UTC+8）的 ISO 带偏移格式：把 UTC 时刻加 8 小时，并把偏移
+ *  `+08:00` 写进同一串（替代结尾的 `Z`）。manifest 是给人对照时钟的
+ *  归档件，时间一律落北京时间（ISSUE #5009 反馈）。 */
+const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
+function beijingIso(value: Date | string | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    return null;
+  }
+  return new Date(d.getTime() + BEIJING_OFFSET_MS).toISOString().replace("Z", "+08:00");
+}
+
+/** 工坊元数据的**尽力而为**读取：工坊模型名称（工作流上挂的模型标签）与模式。
+ *  manifest 是归档件——查不到（宿主未注入该仓储且 dynamic import 失败）就给
+ *  null，绝不阻塞收口。 */
+async function loadWorkshopMeta(
+  userId: string | null,
+  templateId: string | null,
+): Promise<{
+  defaultMode: string | null;
+  modeCode: string | null;
+  modelName: string | null;
+  modeName: string | null;
+  modes: Array<string>;
+} | null> {
+  if (userId === null || templateId === null || templateId === "") {
+    return null;
+  }
+  try {
+    const repo = await import("../core/repository");
+    const tpl = await repo.workflowTemplateRepository.findByIdForUser(userId, templateId);
+    if (tpl === null) {
+      return null;
+    }
+    const tagRows = await repo.workflowModelTagRepository.getTemplateTagRows([templateId]);
+    const modeCode = tpl.defaultMode ?? tpl.taskType ?? null;
+    return {
+      defaultMode: tpl.defaultMode ?? null,
+      modeCode,
+      modelName: tagRows[0]?.name ?? null,
+      modeName: modeCode === null ? null : (getWorkflowType(modeCode)?.label ?? null),
+      modes: parseModesJson(tpl.modes),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** 成功收口的归档件：manifest.json（time / files / workshop / params / workflow
+ *  五块，见 #5009 反馈）+ workflow.json（本次实际执行的图）。都是尽力而为：
+ *  落盘失败只 warn，不阻塞收口。 */
+async function writeSuccessManifest(args: {
+  actualSeed: number | undefined;
+  dir: string;
+  executedWorkflow: unknown;
+  projectId: string | null;
+  reqSeed: string | undefined;
+  runtime: RuntimeParams;
+  saved: Array<{ localPath: string; mediaType: string }>;
+  sizeStr: string;
+  taskId: string;
+  taskParams: Record<string, unknown>;
+  taskRow: {
+    createdAt: Date;
+    negativePrompt: string | null;
+    params: unknown;
+    projectId: string | null;
+    prompt: string;
+    referenceImages: unknown;
+    userId: string;
+    workflowName: string;
+  } | null;
+}): Promise<void> {
+  const {
+    actualSeed,
+    dir,
+    executedWorkflow,
+    projectId,
+    reqSeed,
+    runtime,
+    saved,
+    sizeStr,
+    taskId,
+    taskParams,
+    taskRow,
+  } = args;
+  const taskRuntimeLog = await resolveRuntimeLogger();
+  // 项目级产出：写一份可复现的 manifest，便于「按项目归档 + 一键还原」。
+  // 结构分五块（ISSUE #5009 反馈：此前混在一起，每部分要清晰）：
+  //   time     —— 北京时间（任务创建 / manifest 写入）
+  //   files    —— 产物清单
+  //   workshop —— 工坊模型名称 / 模式名称
+  //   params   —— 工坊参数（本次提交的对外参数）
+  //   workflow —— 工作流参数（模板信息 + 本次实际执行的采样参数）
+  const referenceImagesRaw: unknown = taskRow?.referenceImages;
+  const referenceImages: Array<string> = isStringArray(referenceImagesRaw)
+    ? referenceImagesRaw
+    : [];
+  const templateId = typeof taskParams.workflow === "string" ? taskParams.workflow : null;
+  const workshopMeta = await loadWorkshopMeta(taskRow?.userId ?? null, templateId);
+  const manifest = {
+    taskId,
+    projectId,
+    time: {
+      createdAt: beijingIso(taskRow?.createdAt ?? null),
+      writtenAt: beijingIso(new Date()),
+    },
+    files: saved,
+    workshop: {
+      modelName: workshopMeta?.modelName ?? null,
+      modeCode: workshopMeta?.modeCode ?? null,
+      modeName: workshopMeta?.modeName ?? null,
+    },
+    params: {
+      prompt: taskRow?.prompt ?? null,
+      negativePrompt: taskRow?.negativePrompt ?? null,
+      seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
+      size: sizeStr || null,
+      referenceImages,
+      workflowInputs: Array.isArray(taskParams.workflowInputs) ? taskParams.workflowInputs : [],
+    },
+    workflow: {
+      id: templateId,
+      name: taskRow?.workflowName ?? null,
+      modes: workshopMeta?.modes ?? [],
+      defaultMode: workshopMeta?.defaultMode ?? null,
+      runtime,
+    },
+  };
+  await fs
+    .writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8")
+    .catch((writeError: unknown) => {
+      /* 复现产物落盘失败要看得见（ISSUE #4270）：DB 说有产物、盘上没有的那类
+       * 「磁盘状态对不上」故障，没有这条 warn 就只能靠人肉对账发现。 */
+      taskRuntimeLog?.warn(
+        `[finalize] manifest.json 落盘失败（dir=${dir}）：${friendlyError(writeError)}`,
+      );
+    });
+
+  // 落盘本次执行实际用到的 workflow.json。种子等已在
+  // manifest.params.seed + TaskImage.seed 持久化，工作流模板后续改动时凭这份快照即可
+  // 完整复现本次生成结果。raw 路径为 liblib subgraph 格式（未展开），api 路径为
+  // 已展开 graph。
+  if (executedWorkflow !== null && executedWorkflow !== undefined) {
+    await fs
+      .writeFile(path.join(dir, "workflow.json"), JSON.stringify(executedWorkflow, null, 2), "utf8")
+      .catch((writeError: unknown) => {
+        /* 同上（ISSUE #4270）：工作流快照落盘失败也要留痕，否则后续模板改动
+         * 时这份「本次实际用到的图」就无声缺失、无法复现。 */
+        taskRuntimeLog?.warn(
+          `[finalize] workflow.json 落盘失败（dir=${dir}）：${friendlyError(writeError)}`,
+        );
+      });
   }
 }
 
@@ -479,49 +641,21 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     return;
   }
 
-  // 项目级产出：写一份可复现的 manifest，便于「按项目归档 + 一键还原」。
-  const referenceImagesRaw: unknown = taskRow?.referenceImages;
-  const referenceImages: Array<string> = isStringArray(referenceImagesRaw)
-    ? referenceImagesRaw
-    : [];
-  const manifest = {
+  // 项目级产出：写归档件 manifest.json（time / files / workshop / params /
+  // workflow 五块）+ 本次实际执行的 workflow.json。都是尽力而为，失败只 warn。
+  await writeSuccessManifest({
     taskId,
     projectId,
-    workflowName: taskRow?.workflowName ?? null,
-    prompt: taskRow?.prompt ?? null,
-    negativePrompt: taskRow?.negativePrompt ?? null,
-    seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
-    size: sizeStr || null,
-    referenceImages,
-    params: taskParams,
-    createdAt: taskRow?.createdAt ?? null,
-    files: saved,
-  };
-  await fs
-    .writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8")
-    .catch((writeError: unknown) => {
-      /* 复现产物落盘失败要看得见（ISSUE #4270）：DB 说有产物、盘上没有的那类
-       * 「磁盘状态对不上」故障，没有这条 warn 就只能靠人肉对账发现。 */
-      taskRuntimeLog?.warn(
-        `[finalize] manifest.json 落盘失败（dir=${dir}）：${friendlyError(writeError)}`,
-      );
-    });
-
-  // 落盘本次执行实际用到的 workflow.json。种子等已在
-  // manifest.seed + TaskImage.seed 持久化，工作流模板后续改动时凭这份快照即可
-  // 完整复现本次生成结果。raw 路径为 liblib subgraph 格式（未展开），api 路径为
-  // 已展开 graph。
-  if (executedWorkflow !== null && executedWorkflow !== undefined) {
-    await fs
-      .writeFile(path.join(dir, "workflow.json"), JSON.stringify(executedWorkflow, null, 2), "utf8")
-      .catch((writeError: unknown) => {
-        /* 同上（ISSUE #4270）：工作流快照落盘失败也要留痕，否则后续模板改动
-         * 时这份「本次实际用到的图」就无声缺失、无法复现。 */
-        taskRuntimeLog?.warn(
-          `[finalize] workflow.json 落盘失败（dir=${dir}）：${friendlyError(writeError)}`,
-        );
-      });
-  }
+    dir,
+    taskRow,
+    taskParams,
+    saved,
+    actualSeed,
+    reqSeed,
+    sizeStr,
+    runtime,
+    executedWorkflow,
+  });
 
   await persistLogs(taskId);
   /* 完整原文这一包只在收口时写一次（见 `persistRawCli` 的分工说明）：执行侧是谁
