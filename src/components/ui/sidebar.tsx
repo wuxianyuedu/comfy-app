@@ -588,8 +588,13 @@ function SidebarMenuButton({
       {comp}
       <TooltipContent
         align="center"
+        /* #5059：折叠轨的打开态会把关闭钮收进拉宽后的胶片（右缘 48px）。气泡
+         * 起点从默认 4px 推到 10px，避开关闭钮；样式也收成中性描边 + 更柔的投影
+         * 与大一点的圆角/内边距，不再用抢眼的品牌色描边（两态都成）。 */
+        className="border-border/60 rounded-lg px-3 py-2 shadow-lg"
         hidden={state !== "collapsed" || isMobile}
         side="right"
+        sideOffset={10}
         {...tooltip}
       />
     </Tooltip>
