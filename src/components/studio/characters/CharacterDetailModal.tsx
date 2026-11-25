@@ -7,7 +7,7 @@
  * 纯展示组件：数据与回调由 CharacterLibrary 注入（规范 17 §17.2 第③层）。
  */
 import { useState } from "react";
-import { RefreshCw, SquarePen, Trash2 } from "lucide-react";
+import { Gauge, RefreshCw, SquarePen, Trash2 } from "lucide-react";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -31,9 +31,11 @@ export type CharacterDetailModalProps = {
   onEdit: (id: string) => void;
   onRegenerate: (id: string) => void;
   onRemove: (id: string) => void;
+  onScore: (id: string) => void;
   /** 弹层开关：详情 id 非空才开——查询的 pending 态不能当开关。 */
   open: boolean;
   regenerating: boolean;
+  scoring: boolean;
 };
 
 /** 候选立绘条里展示的张数上限（详情弹窗宽度有限，其余在库里）。 */
@@ -45,8 +47,10 @@ export function CharacterDetailModal({
   onEdit,
   onRegenerate,
   onRemove,
+  onScore,
   open,
   regenerating,
+  scoring,
 }: CharacterDetailModalProps) {
   const [portraitIndex, setPortraitIndex] = useState(0);
   const portraits = character?.portraits ?? [];
@@ -142,6 +146,29 @@ export function CharacterDetailModal({
                   ))}
                 </div>
               ) : null}
+              {character.qualityScore !== null && character.qualityScore !== undefined ? (
+                <div className="flex flex-col gap-1">
+                  <p
+                    className={cn(
+                      "text-xs font-medium",
+                      character.qualityScore >= 80
+                        ? "text-success-strong"
+                        : character.qualityScore >= 60
+                          ? "text-warning-strong"
+                          : "text-danger-strong",
+                    )}
+                  >
+                    质量分 {character.qualityScore} / 100
+                  </p>
+                  {(character.qualityIssues ?? []).length > 0 ? (
+                    <ul className="text-ink-fainter text-2xs list-disc pl-4">
+                      {(character.qualityIssues ?? []).map((issue) => (
+                        <li key={issue}>{issue}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="mt-auto flex items-center gap-2">
                 <Button
                   onClick={() => {
@@ -152,6 +179,18 @@ export function CharacterDetailModal({
                 >
                   <RefreshCw aria-hidden className="size-3.5" data-icon="inline-start" />
                   {regenerating ? "入队中…" : "重新生图"}
+                </Button>
+                <Button
+                  disabled={scoring}
+                  onClick={() => {
+                    onScore(character.id);
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <Gauge aria-hidden className="size-3.5" data-icon="inline-start" />
+                  {scoring ? "打分中…" : "打分"}
                 </Button>
                 <Button
                   onClick={() => {

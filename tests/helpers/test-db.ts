@@ -40,6 +40,7 @@ const jsonColumns = new Set<string>([
   "scriptReview",
   "styleTags",
   "tags",
+  "qualityIssues",
   "portraits",
   "inputTypes",
   "outputTypes",
@@ -243,6 +244,7 @@ CREATE TABLE IF NOT EXISTS characterProfile (
   gender TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '[]',
   portraitUrl TEXT, portraits TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'draft',
   source TEXT NOT NULL DEFAULT 'manual', taskId TEXT, params TEXT, width INTEGER, height INTEGER,
+  qualityScore INTEGER, qualityIssues TEXT,
   createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 

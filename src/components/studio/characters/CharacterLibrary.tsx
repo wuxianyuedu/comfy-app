@@ -9,7 +9,7 @@
  * 弹层编排（规范 17 §17.2 第④层）。
  */
 import { useMemo, useState } from "react";
-import { History, RefreshCw, Search, Sparkles, UserPlus, Users, Wand2 } from "lucide-react";
+import { Gauge, History, RefreshCw, Search, Sparkles, UserPlus, Users, Wand2 } from "lucide-react";
 
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
@@ -158,6 +158,18 @@ export function CharacterLibrary() {
               同步进度（每 5 秒自动）
             </Button>
           ) : null}
+          <Button
+            disabled={c.scoring}
+            onClick={() => {
+              void c.scoreAllQuality();
+            }}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <Gauge aria-hidden className="size-3.5" data-icon="inline-start" />
+            {c.scoring ? "打分中…" : "质量打分"}
+          </Button>
           <Button onClick={openCreate} size="sm" type="button" variant="outline">
             <UserPlus aria-hidden className="size-3.5" data-icon="inline-start" />
             新建角色
@@ -186,6 +198,26 @@ export function CharacterLibrary() {
           </Button>
         </div>
       </div>
+
+      {/* ── 质量问题提示条：批量打分后发现低分立绘 ── */}
+      {c.flaggedCount !== null && c.flaggedCount > 0 ? (
+        <div className="border-warning-strong/30 bg-warning-soft mb-3 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2">
+          <span className="text-ink-strong text-xs">
+            {c.flaggedCount} 张立绘质量有问题（纯色 / 空白 / 低分辨率等），建议重新生成。
+          </span>
+          <Button
+            disabled={c.regenerating}
+            onClick={() => {
+              void c.regenerateFlagged();
+            }}
+            size="xs"
+            type="button"
+            variant="outline"
+          >
+            {c.regenerating ? "重新生成中…" : "重生成问题立绘"}
+          </Button>
+        </div>
+      ) : null}
 
       {/* ── 标签筛选行（多选 AND；空态不占位）── */}
       {tagChips.length > 0 ? (
@@ -306,8 +338,12 @@ export function CharacterLibrary() {
         onRemove={(id) => {
           c.openRemove(id);
         }}
+        onScore={(id) => {
+          void c.scoreOne(id);
+        }}
         open={c.detailId !== null}
         regenerating={c.enqueuing}
+        scoring={c.scoring}
       />
 
       {/* ── 手工建档弹窗（新建 / 编辑，create / update 的消费方）── */}
