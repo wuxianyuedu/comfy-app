@@ -1,10 +1,11 @@
 "use client";
 
 /* ComfyUI 子图包裹节点的紫色身份标题栏：
- * 收起箭头 + 「S」徽标 + 下钻动作 + IO 编辑复选框 +
+ * 收起箭头 + 「S」徽标 + IO 编辑复选框 +
  * 节点 id 章。与普通 WorkflowNode 头部同一个 NODE_TITLE_H，
- * 好让带标题的节点在网格上对齐。 */
-import { ExternalLink } from "lucide-react";
+ * 好让带标题的节点在网格上对齐。
+ * 下钻入口不在标题栏 —— 新版 ComfyUI 的形态是卡片底部的进入条，
+ * 见 SubgraphEnterFooter。 */
 import { mixHex, NODE_TITLE_H } from "../workflow-utils";
 import { useCssColorToken } from "../hooks/use-css-color-token";
 import { Button } from "~/components/ui/button";
@@ -16,7 +17,6 @@ export type SubgraphHeaderProps = {
   io?: IOEditContextValue;
   isCollapsed: boolean;
   nodeId: string;
-  onEnter?: () => void;
   onToggle: () => void;
   /** First output entry used by the per-node output checkbox（只带端口身份：
    *  显示名不进库，由富化链一处给）。Pass null when the subgraph exposes no
@@ -31,7 +31,6 @@ export function SubgraphHeader({
   accent,
   isCollapsed,
   onToggle,
-  onEnter,
   io,
   outputRef,
 }: SubgraphHeaderProps) {
@@ -127,23 +126,6 @@ export function SubgraphHeader({
         />
       )}
       <NodeIdChip nodeId={String(nodeId)} variant="subgraph" />
-      {onEnter && (
-        <Hint accessibleName label="展开子工作流">
-          <Button
-            /* 下钻章从 h-4 w-4（16×16）提到 h-6 w-6（24×24）—— 用户反馈 30px 标题行上目标太小。
-             * 24×24 比 NODE_TITLE_H 矮 3px，仍像行内按钮；比收起箭头 h-5 w-5 大一档，标记下钻是子图主要动作。 */
-            className="text-primary-strong hover:bg-primary/30 text-3xs ml-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded transition-colors hover:text-white"
-            onClick={(event) => {
-              event.stopPropagation();
-              onEnter();
-            }}
-            size="icon-xs"
-            variant="ghost"
-          >
-            <ExternalLink data-icon="inline-start" size={12} strokeWidth={2.5} />
-          </Button>
-        </Hint>
-      )}
     </div>
   );
 }

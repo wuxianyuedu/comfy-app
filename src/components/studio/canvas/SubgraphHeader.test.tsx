@@ -79,22 +79,13 @@ describe("SubgraphHeader", () => {
     expect(onToggle).toHaveBeenCalledOnce();
   });
 
-  it("标题仅为纯文本，不渲染为可点击按钮（展开只允许右上角图标触发）", () => {
-    const onEnter = vi.fn();
-    renderHeader(<SubgraphHeader {...base} onEnter={onEnter} onToggle={vi.fn()} />);
-    // 标题不再带 role=button，因此整行只剩右上角「展开子工作流」一个 onEnter 入口
+  it("标题仅为纯文本，不渲染为可点击按钮", () => {
+    renderHeader(<SubgraphHeader {...base} onToggle={vi.fn()} />);
     expect(screen.queryByRole("button", { name: "我的子图" })).not.toBeInTheDocument();
     expect(screen.getByText("我的子图")).toBeInTheDocument();
   });
 
-  it("传入 onEnter 时渲染钻入按钮,点击触发 onEnter", async () => {
-    const onEnter = vi.fn();
-    renderHeader(<SubgraphHeader {...base} onEnter={onEnter} onToggle={vi.fn()} />);
-    await userEvent.click(screen.getByRole("button", { name: "展开子工作流" }));
-    expect(onEnter).toHaveBeenCalledOnce();
-  });
-
-  it("未传 onEnter 时不渲染钻入按钮", () => {
+  it("标题栏不再承载下钻入口（#5047：入口迁至底部进入条 SubgraphEnterFooter）", () => {
     renderHeader(<SubgraphHeader {...base} onToggle={vi.fn()} />);
     expect(screen.queryByRole("button", { name: "展开子工作流" })).not.toBeInTheDocument();
   });
