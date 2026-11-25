@@ -181,6 +181,8 @@ export const characterLibraryRouter = createTRPCRouter({
           portraitCount: normalizePortraits(row.portraits).length,
           width: row.width,
           height: row.height,
+          qualityScore: row.qualityScore,
+          qualityIssues: normalizeTags(row.qualityIssues),
           createdAt: row.createdAt,
         })),
         tagFacets,
@@ -198,6 +200,7 @@ export const characterLibraryRouter = createTRPCRouter({
       ...row,
       tags: normalizeTags(row.tags),
       portraits: normalizePortraits(row.portraits),
+      qualityIssues: normalizeTags(row.qualityIssues),
     };
   }),
 
