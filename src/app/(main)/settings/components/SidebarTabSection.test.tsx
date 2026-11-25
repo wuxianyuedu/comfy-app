@@ -66,8 +66,8 @@ describe("SidebarTabSection 的配置面", () => {
   it("配置面里的每一项都给出两档选择，且当前生效值落在选中态上", () => {
     seedController();
     render(<SidebarTabSection />);
-    // 十三项全局视图（首页是固定页签，不在配置面内）；设置与 UI 控件总览也算在内
-    expect(screen.getAllByRole("radiogroup")).toHaveLength(13);
+    // 十四项全局视图（首页是固定页签，不在配置面内）；设置与 UI 控件总览也算在内
+    expect(screen.getAllByRole("radiogroup")).toHaveLength(14);
     expect(checkedMode("模型适配")).toBe("独立标签页");
     expect(checkedMode("模型")).toBe("共享标签页");
     /* ISSUE #3798：非侧栏的两屏出现在配置面里；出厂默认两屏都是共享档。 */
@@ -77,6 +77,8 @@ describe("SidebarTabSection 的配置面", () => {
     expect(checkedMode("资产库")).toBe("独立标签页");
     /* ISSUE #5009：角色库与资产库同族，默认独立标签页。 */
     expect(checkedMode("角色库")).toBe("独立标签页");
+    /* ISSUE #5069：风格库同族，默认独立标签页。 */
+    expect(checkedMode("风格库")).toBe("独立标签页");
   });
 
   it("非侧栏的「UI 控件总览」也能逐项改（ISSUE #3798）", async () => {
