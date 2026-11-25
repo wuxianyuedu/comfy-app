@@ -23,6 +23,13 @@ describe("详情页签集合（#4963 说明页签）", () => {
     expect(DEFAULT_DETAIL_TAB).toBe("params");
   });
 
+  it("App Mode 选引脚页签跟在 IO 预览之后、实际使用之前（#5053）", () => {
+    const keys = DETAIL_TABS.map((tab) => tab.key);
+    expect(keys.indexOf("appMode")).toBe(keys.indexOf("io") + 1);
+    expect(keys.indexOf("appMode")).toBe(keys.indexOf("use") - 1);
+    expect(DETAIL_TABS.find((tab) => tab.key === "appMode")?.label).toBe("App Mode 选引脚");
+  });
+
   it("说明页签恒可见（不像参考图装载那样按槽位显隐）", () => {
     expect(visibleDetailTabs([]).map((tab) => tab.key)).toContain("notes");
     expect(visibleDetailTabs([{ id: "reference-image" }]).map((tab) => tab.key)).toContain("notes");
