@@ -78,6 +78,13 @@
       "when": 1795586774687,
       "tag": "0010_yielding_solo",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1795611101262,
+      "tag": "0011_aberrant_shadowcat",
+      "breakpoints": true
     }
   ]
 }
