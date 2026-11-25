@@ -5,7 +5,8 @@ import { expect, type Locator, type Page } from "@playwright/test";
  *
  * 旧断言找的是 `getByRole("tablist", { name: "已打开的视图" })`，那一栏已经不存在；
  * 页签现在混在侧栏导航里、按 `data-slot="sidebar-menu-button"` 与 `data-active` 表达
- * 切换/当前态，关闭按钮仍是「关闭 <标签>」。分组本身**没有页签时整组不渲染**
+ * 切换/当前态，关闭按钮是「关闭 <标签> 页签」（ISSUE #4981 起三处行关闭钮共用
+ * `SidebarRowClose`，可访问名统一带「页签」尾字）。分组本身**没有页签时整组不渲染**
  * （AppShell 按 stripTabs + iframeTabs 判），所以「起步为空」要用 `toHaveCount(0)`，
  * 不能再用 `toBeVisible()` 等一个不存在的容器。
  *
@@ -69,9 +70,10 @@ export function tempTabButton(page: Page, label: string): Locator {
 
 /** 关闭一个临时页签。组件刻意绑 `onPointerDown`（ISSUE #3789：click 会落到行 <li> 上），
  *  Playwright 的 `.click()` 里那一下 pointerdown 又被同行的菜单按钮抢走，所以这里按
- *  组件真实监听的事件派发，而不是绕开可见性检查。 */
+ *  组件真实监听的事件派发，而不是绕开可见性检查。
+ *  可访问名跟 `SidebarRowClose` 的模板走（ISSUE #4981）：「关闭 <标签> 页签」。 */
 export async function closeTempTab(page: Page, label: string): Promise<void> {
-  const button = tempTabsOf(page).getByRole("button", { name: `关闭 ${label}`, exact: true });
+  const button = tempTabsOf(page).getByRole("button", { name: `关闭 ${label} 页签`, exact: true });
   await expect(button).toBeVisible();
   await button.dispatchEvent("pointerdown");
 }
