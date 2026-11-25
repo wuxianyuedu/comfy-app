@@ -52,7 +52,11 @@ export type RawWorkflowOverride = {
  * 漂移，只取本模块读写（`name` / `widget`）的部分，其余原样保留。
  */
 export type RawUiNodeInput = {
+  /** 该槽是否由连线喂入（非空 = 值来自上游节点，widget 里存的只是旧值）。 */
+  link?: unknown;
   name?: unknown;
+  /** 部分序列化形态把控件值直接挂在输入槽上。 */
+  value?: unknown;
   widget?: unknown;
 };
 
@@ -171,6 +175,46 @@ export function widgetSlot(node: RawNodeSlotView, name: string): number {
     }
   }
   return -1;
+}
+
+/** 读 RAW（UI 格式）图里某个节点具名控件的**图内值**（历史详情默认值用，#5041）。
+ *
+ *  与写侧（`applyRawOverrides`）同一套定位与槽位口径：节点按 `resolveRawNode`
+ *  定位（顶层 id / `宿主:内部` 链 / 旧数据的裸内部 id 都认），槽位按带 `widget`
+ *  标记的输入序（`widgetSlot`）；节点带 seed 哨兵槽（`control_after_generate`）
+ *  时，seed 之后的槽位在 `widgets_values` 里右移一位，读侧同样右移对齐。
+ *
+ *  连线喂入的槽（`link` 非空）不读：它的值来自上游节点，widget 里存的只是
+ *  旧值，当「图内默认值」展示会误导。找不到节点 / 控件或值缺失返回 `undefined`
+ *  （调用方如实回落，不编造）。
+ *
+ *  @param raw 整张 RAW 图（`{ nodes, links, definitions, … }`）
+ *  @param nodeId 节点 id；子图内部节点传运行期展开形态 `宿主id:内部id`
+ */
+export function rawGraphWidgetValue(raw: JsonRecord, nodeId: string, name: string): unknown {
+  const node = resolveRawNode(raw, nodeId);
+  if (node === null) {
+    return undefined;
+  }
+  const slotInput = (node.inputs ?? []).find((inp) => inp?.name === name);
+  if (slotInput === undefined) {
+    return undefined;
+  }
+  /* 连线喂入的槽没有「图内默认值」可言。 */
+  if (slotInput.link !== undefined && slotInput.link !== null) {
+    return undefined;
+  }
+  /* 部分序列化形态把控件值直接挂在输入槽上：先认它。 */
+  if (slotInput.value !== undefined && slotInput.value !== null && slotInput.value !== "") {
+    return slotInput.value;
+  }
+  const slot = widgetSlot(node, name);
+  if (slot < 0 || !Array.isArray(node.widgets_values)) {
+    return undefined;
+  }
+  const seedSlot = seedWidgetSlot(node);
+  const adjusted = hasSeedControlSlot(node) && seedSlot >= 0 && slot > seedSlot ? slot + 1 : slot;
+  return node.widgets_values[adjusted];
 }
 /** seed 类控件在 UI 节点 `widgets_values` 数组里的下标。
  *  节点上没有 seed 类控件时返回 -1。 */
