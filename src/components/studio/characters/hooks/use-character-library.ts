@@ -35,6 +35,8 @@ const SYNC_INTERVAL_MS = 5000;
 export type CharacterLibraryController = {
   /** 取消删除（ConfirmDialog 的关闭侧）。 */
   cancelRemove: () => void;
+  /** 关闭详情弹层（open 由 detailId 派生，不清掉它就「关不掉」）。 */
+  closeDetail: () => void;
   /** 删除（非阻塞确认由视图挂 ConfirmDialog 承接）。 */
   confirmRemove: () => Promise<void>;
   /** 手工创建角色（标签由服务端从描述提取）。 */
@@ -324,6 +326,9 @@ export function useCharacterLibrary(): CharacterLibraryController {
     detail: detailQ.isSuccess ? detailQ.data : null,
     detailId,
     detailLoading: detailQ.isFetching,
+    closeDetail: () => {
+      setDetailId(null);
+    },
     empty,
     enqueueGeneration,
     enqueuing: enqueueMut.isPending,

@@ -297,10 +297,7 @@ export function CharacterLibrary() {
       {/* ── 角色详情弹窗（完整描述 + 全部标签 + 候选立绘）── */}
       <CharacterDetailModal
         character={c.detail}
-        onClose={() => {
-          setRegenerateTargetId(null);
-          c.refresh();
-        }}
+        onClose={c.closeDetail}
         onEdit={openEdit}
         onRegenerate={(id) => {
           setRegenerateTargetId(id);
