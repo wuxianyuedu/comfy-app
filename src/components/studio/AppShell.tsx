@@ -49,6 +49,13 @@ import { isTabClosable, type ViewTab } from "./workspace-tabs";
 import { ViewActionsProvider } from "./ViewActions";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 
+/* 打开态胶片的 class（全局导航项 / 项目行共用，#5040）：展开态是 size-7 浅底胶片；
+ * 折叠成图标轨时按钮内容盒只有 16px（size-8! + p-2!），28px 胶片会 overflow
+ * 并把图标推右 6px，与临时页签的裸图标不对齐。折叠态改成铺满按钮（inset-0 /
+ * size-full），图标回到按钮中心，与裸图标同列。按钮本身有 relative 可承载 absolute。 */
+const OPEN_TAB_GLYPH_CLASS =
+  "bg-primary-soft text-primary-strong inline-flex size-7 shrink-0 items-center justify-center rounded-md group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:inset-0 group-data-[collapsible=icon]:size-full group-data-[collapsible=icon]:rounded-[inherit]";
+
 /** 侧栏底部「项目」分组里列出的一条项目（只需 id + 展示名）。 */
 export type SidebarProject = {
   id: string;
@@ -189,10 +196,7 @@ function SidebarProjectsGroup({
                           {openProjectTabs.length > 0 ? (
                             /* 打开态（与上方导航项同款）：图标落进品牌色浅底胶片，
                                读起来是「这个项目的界面开着」。 */
-                            <span
-                              className="bg-primary-soft text-primary-strong inline-flex size-7 shrink-0 items-center justify-center rounded-md"
-                              data-open-state="true"
-                            >
+                            <span className={OPEN_TAB_GLYPH_CLASS} data-open-state="true">
                               <ProjectGlyph />
                             </span>
                           ) : (
@@ -475,10 +479,7 @@ export function AppShell({
                                （`primary-soft`，明暗两态自有值），读起来是「这一页在用」，
                                不再像「有通知」的角点。与「当前在这页」的选中指示条
                                （侧栏 `data-active`）是两个维度，互不替代。 */
-                            <span
-                              className="bg-primary-soft text-primary-strong inline-flex size-7 shrink-0 items-center justify-center rounded-md"
-                              data-open-state="true"
-                            >
+                            <span className={OPEN_TAB_GLYPH_CLASS} data-open-state="true">
                               {item.icon}
                             </span>
                           ) : (
