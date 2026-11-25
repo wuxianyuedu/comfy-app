@@ -57,8 +57,8 @@ const TASK_DETAIL_BASE: TaskDetail = {
   images: [],
 };
 
-function makeDetail(params: unknown): TaskDetail {
-  return { ...TASK_DETAIL_BASE, params };
+function makeDetail(params: unknown, extra: Partial<TaskDetail> = {}): TaskDetail {
+  return { ...TASK_DETAIL_BASE, params, ...extra };
 }
 
 /** 造一份带作者标签的 IO 表（键是 ioKey：`<nodeId>::widget::<name>`）。 */
@@ -324,6 +324,71 @@ describe("deriveWorkflowParams", () => {
     };
     expect(deriveWorkflowParams(makeDetail({}), ioMap, "T2V").rows[0]?.value).toBe(30);
     expect(deriveWorkflowParams(makeDetail({}), ioMap, "T2I").rows[0]?.value).toBe(20);
+  });
+
+  it("IO 没写默认值时，回退到执行快照图里节点配置的值（工作流默认一定有值）", () => {
+    const ioMap: WorkflowIOMap = {
+      "14::widget::aspect_ratio": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "14",
+        name: "aspect_ratio",
+        label: "宽高比",
+      },
+      "14::widget::megapixels": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "14",
+        name: "megapixels",
+        label: "百万像素",
+      },
+      "8::widget::seed": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "8",
+        name: "seed",
+        label: "种子",
+      },
+      "5:23::widget::scale": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "23",
+        hostNodeId: "5",
+        name: "scale",
+        label: "缩放",
+      },
+    };
+    const detail = makeDetail(
+      {
+        workflow: "w",
+      },
+      {
+        workflowSnapshot: {
+          workflow: {
+            14: {
+              class_type: "ResolutionSelector",
+              inputs: { aspect_ratio: "1:1 (Square)", megapixels: 4, multiple: 32 },
+            },
+            8: { class_type: "KSampler", inputs: { seed: 941_524_759_465_139 } },
+            "5:23": { class_type: "ImageScaleBy", inputs: { scale: 1.5 } },
+          },
+          capturedAt: "2026-01-01T00:00:00.000Z",
+          source: "execution",
+        },
+      },
+    );
+    const rows = deriveWorkflowParams(detail, ioMap).rows;
+    expect(rows[0]).toMatchObject({ value: "1:1 (Square)", source: "default" });
+    expect(rows[1]).toMatchObject({ value: 4, source: "default" });
+    expect(rows[2]).toMatchObject({ value: 941_524_759_465_139, source: "default" });
+    /* 子图引脚：运行期展开后的节点 id 是 `宿主id:内部id`。 */
+    expect(rows[3]).toMatchObject({ value: 1.5, source: "default" });
+  });
+
+  it("执行快照里也没有的端口才如实显示未提供（不编造）", () => {
+    const ioMap = io(["14", "aspect_ratio", "宽高比"]);
+    const rows = deriveWorkflowParams(makeDetail({}), ioMap).rows;
+    expect(rows[0]).toMatchObject({ value: undefined, source: "default" });
   });
 
   it("工坊顶层值也算提交值（没画线时它不会落进 workflowInputs）", () => {
