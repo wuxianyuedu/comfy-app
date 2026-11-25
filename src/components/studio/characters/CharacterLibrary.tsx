@@ -34,6 +34,50 @@ import { useCharacterLibrary } from "./hooks/use-character-library";
 /** 标签筛选行最多展示几枚（按分面计数取前 N；已选中的恒在）。 */
 const TAG_FILTER_LIMIT = 24;
 
+/** 详情候选删除确认（从页面函数拆出，守住函数长度硬闸）。 */
+type PortraitDeleteConfirmProps = {
+  count: number;
+  deleting: boolean;
+  name: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+  open: boolean;
+};
+
+function PortraitDeleteConfirm({
+  count,
+  deleting,
+  name,
+  onClose,
+  onConfirm,
+  open,
+}: PortraitDeleteConfirmProps) {
+  return (
+    <ConfirmDialog
+      confirmLabel="删除选中"
+      danger
+      description={`将从「${name ?? "该角色"}」删除 ${count} 张候选立绘；主立绘与来源任务不受影响。`}
+      onClose={onClose}
+      onConfirm={onConfirm}
+      open={open}
+      pending={deleting}
+      title="删除选中的候选立绘？"
+    />
+  );
+}
+
+/** 生图弹窗的显式目标：详情重跑发该角色，选择模式发勾选项，否则空（全部待生成）。 */
+function resolveGenerateTargetIds(
+  regenerateTargetId: string | null,
+  selecting: boolean,
+  selected: Array<string>,
+): Array<string> {
+  if (regenerateTargetId !== null) {
+    return [regenerateTargetId];
+  }
+  return selecting ? selected : [];
+}
+
 export function CharacterLibrary() {
   const c = useCharacterLibrary();
   const [seedOpen, setSeedOpen] = useState(false);
@@ -45,9 +89,18 @@ export function CharacterLibrary() {
   const [editTargetId, setEditTargetId] = useState<string | null>(null);
   const [editInitial, setEditInitial] = useState<CharacterFormValues | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  /** 选择模式：勾选后卡片出现 checkbox，批量生图只对选中角色入队。 */
+  const [selectingCharacters, setSelectingCharacters] = useState(false);
+  /** 详情候选删除的 ConfirmDialog 开关（沿用角色库的非阻塞确认纪律）。 */
+  const [portraitDeleteOpen, setPortraitDeleteOpen] = useState(false);
 
   const removeTargetCharacter = c.items.find((item) => item.id === c.removeTarget) ?? null;
   const regenerateTarget = c.items.find((item) => item.id === regenerateTargetId) ?? null;
+  const generateTargetIds = resolveGenerateTargetIds(
+    regenerateTargetId,
+    selectingCharacters,
+    c.selectedCharacterIds,
+  );
 
   /** 手工建档提交：编辑走 update（只改档案三字段，名字锁定），新建走 create。 */
   const submitEdit = async (values: CharacterFormValues): Promise<boolean> => {
@@ -152,6 +205,20 @@ export function CharacterLibrary() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <SelectChip
+            onClick={() => {
+              if (selectingCharacters) {
+                c.clearCharacterSelection();
+              }
+              setSelectingCharacters((prev) => !prev);
+            }}
+            selected={selectingCharacters}
+            shape="pill"
+          >
+            <span>
+              {selectingCharacters ? `已选 ${c.selectedCharacterIds.length} 个角色` : "选择角色"}
+            </span>
+          </SelectChip>
           {c.generating ? (
             <Button onClick={c.syncNow} size="sm" type="button" variant="outline">
               <RefreshCw aria-hidden className="size-3.5" data-icon="inline-start" />
@@ -186,6 +253,7 @@ export function CharacterLibrary() {
             预置角色
           </Button>
           <Button
+            disabled={selectingCharacters && c.selectedCharacterIds.length === 0}
             onClick={() => {
               setRegenerateTargetId(null);
               setGenerateOpen(true);
@@ -194,7 +262,7 @@ export function CharacterLibrary() {
             type="button"
           >
             <Wand2 aria-hidden className="size-3.5" data-icon="inline-start" />
-            批量生图
+            {selectingCharacters ? `批量生图（${c.selectedCharacterIds.length}）` : "批量生图"}
           </Button>
         </div>
       </div>
@@ -284,6 +352,9 @@ export function CharacterLibrary() {
               onRemove={(target) => {
                 c.openRemove(target.id);
               }}
+              onToggleSelection={c.toggleCharacterSelection}
+              selected={c.selectedCharacterIds.includes(item.id)}
+              selectionMode={selectingCharacters}
             />
           ))}
         </div>
@@ -312,8 +383,8 @@ export function CharacterLibrary() {
           setRegenerateTargetId(null);
         }}
         onlyCharacterName={regenerateTarget?.name ?? null}
-        onSubmit={(workflowId, limit) => {
-          void c.enqueueGeneration(workflowId, limit).then((ok) => {
+        onSubmit={(workflowId, limit, ids) => {
+          void c.enqueueGeneration(workflowId, limit, ids).then((ok) => {
             if (ok) {
               setGenerateOpen(false);
               setRegenerateTargetId(null);
@@ -322,6 +393,7 @@ export function CharacterLibrary() {
         }}
         open={generateOpen}
         pending={c.enqueuing}
+        targetIds={generateTargetIds}
         workflows={c.workflows}
         workflowsLoading={c.workflowsLoading}
       />
@@ -329,7 +401,16 @@ export function CharacterLibrary() {
       {/* ── 角色详情弹窗（完整描述 + 全部标签 + 候选立绘）── */}
       <CharacterDetailModal
         character={c.detail}
-        onClose={c.closeDetail}
+        deletingPortraits={c.deletingPortraits}
+        history={c.history}
+        historyLoading={c.historyLoading}
+        onClose={() => {
+          c.closeDetail();
+          setPortraitDeleteOpen(false);
+        }}
+        onDeleteSelectedPortraits={() => {
+          setPortraitDeleteOpen(true);
+        }}
         onEdit={openEdit}
         onRegenerate={(id) => {
           setRegenerateTargetId(id);
@@ -341,9 +422,11 @@ export function CharacterLibrary() {
         onScore={(id) => {
           void c.scoreOne(id);
         }}
+        onTogglePortraitSelection={c.togglePortraitSelection}
         open={c.detailId !== null}
         regenerating={c.enqueuing}
         scoring={c.scoring}
+        selectedPortraitUrls={c.selectedPortraitUrls}
       />
 
       {/* ── 手工建档弹窗（新建 / 编辑，create / update 的消费方）── */}
@@ -372,6 +455,24 @@ export function CharacterLibrary() {
         onConfirm={c.confirmRemove}
         open={c.removeTarget !== null}
         title="删除这个角色？"
+      />
+
+      {/* ── 详情候选删除确认（非阻塞，与角色 / 资产库同一纪律）── */}
+      <PortraitDeleteConfirm
+        count={c.selectedPortraitUrls.length}
+        deleting={c.deletingPortraits}
+        name={c.detail?.name ?? null}
+        onClose={() => {
+          setPortraitDeleteOpen(false);
+        }}
+        onConfirm={() => {
+          void c.deleteSelectedPortraits().then((ok) => {
+            if (ok) {
+              setPortraitDeleteOpen(false);
+            }
+          });
+        }}
+        open={portraitDeleteOpen}
       />
     </DocumentFrame>
   );

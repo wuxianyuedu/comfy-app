@@ -12,7 +12,11 @@ vi.mock("~/lib/core/logger", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 
-import { copyIntoCharacterStore, removeCharacterStoreDir } from "./character-store";
+import {
+  copyIntoCharacterStore,
+  removeCharacterPortrait,
+  removeCharacterStoreDir,
+} from "./character-store";
 
 /** 模块加载时的 cwd（= 检出根）；每个用例结束切回来再清理。 */
 const ORIGINAL_CWD = process.cwd();
@@ -62,5 +66,46 @@ describe("copyIntoCharacterStore —— 立绘落盘（ISSUE #5009）", () => {
     await expect(fs.access(dir)).rejects.toThrow();
     /* 幂等：再删一次不抛。 */
     await expect(removeCharacterStoreDir("char-3")).resolves.toBeUndefined();
+  });
+});
+
+describe("removeCharacterPortrait —— 只删本角色目录内的一张", () => {
+  it("删掉本角色的一张，目录里的其它图保留", async () => {
+    const dir = path.join(tempRoot, "generated", "character-library", "char-safe");
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, "a.png"), "a");
+    await fs.writeFile(path.join(dir, "b.png"), "b");
+
+    await removeCharacterPortrait("/api/generated/character-library/char-safe/a.png", "char-safe");
+    await expect(fs.access(path.join(dir, "a.png"))).rejects.toThrow();
+    await expect(fs.readFile(path.join(dir, "b.png"), "utf8")).resolves.toBe("b");
+  });
+
+  it("别的角色目录 / 非产物地址 / 路径穿越一律不动盘", async () => {
+    const mine = path.join(tempRoot, "generated", "character-library", "char-mine");
+    const other = path.join(tempRoot, "generated", "character-library", "char-other");
+    await fs.mkdir(mine, { recursive: true });
+    await fs.mkdir(other, { recursive: true });
+    await fs.writeFile(path.join(other, "secret.png"), "keep");
+
+    await removeCharacterPortrait(
+      "/api/generated/character-library/char-other/secret.png",
+      "char-mine",
+    );
+    await removeCharacterPortrait("https://example.com/secret.png", "char-mine");
+    await removeCharacterPortrait(
+      "/api/generated/character-library/char-mine/../char-other/secret.png",
+      "char-mine",
+    );
+    await expect(fs.readFile(path.join(other, "secret.png"), "utf8")).resolves.toBe("keep");
+  });
+
+  it("文件不存在按已清理处理（幂等）", async () => {
+    await expect(
+      removeCharacterPortrait(
+        "/api/generated/character-library/char-nope/missing.png",
+        "char-nope",
+      ),
+    ).resolves.toBeUndefined();
   });
 });

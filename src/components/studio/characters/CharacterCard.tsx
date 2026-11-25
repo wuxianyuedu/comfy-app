@@ -2,13 +2,14 @@
 
 /**
  * `CharacterCard` — 角色库网格里的单张角色卡（ISSUE #5009）：
- * 竖版立绘缩略图 + 名字 + 状态徽标 + 原型 + 质量分 + 特征标签（前几枚）。
+ * 竖版立绘缩略图 + 名字（同行带原型徽标）+ 状态徽标 + 质量分 + 全部特征标签。
  * 状态徽标放信息区、不压在立绘上（反馈：徽标挡图影响观看）。
  * 纯展示组件：数据与回调都由 CharacterLibrary 注入（规范 17 §17.2 第③层）。
  */
 import { Trash2, UserRound } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { cn } from "~/lib/utils";
@@ -20,14 +21,22 @@ export type CharacterCardProps = {
   character: CharacterListItem;
   onOpenDetail: (id: string) => void;
   onRemove: (character: CharacterListItem) => void;
+  /** 选择模式下勾选本卡（由工具行「选择角色」开关驱动）。 */
+  onToggleSelection?: (id: string) => void;
+  /** 本卡是否已被勾选。 */
+  selected?: boolean;
+  /** 选择模式：勾选框出现在缩略图左上角。 */
+  selectionMode?: boolean;
 };
 
-/** 卡面上最多展示几枚标签（其余进详情看）。 */
-const CARD_TAG_LIMIT = 3;
-
-export function CharacterCard({ character, onOpenDetail, onRemove }: CharacterCardProps) {
-  const visibleTags = character.tags.slice(0, CARD_TAG_LIMIT);
-  const hiddenTagCount = character.tags.length - visibleTags.length;
+export function CharacterCard({
+  character,
+  onOpenDetail,
+  onRemove,
+  onToggleSelection,
+  selected = false,
+  selectionMode = false,
+}: CharacterCardProps) {
   return (
     <div
       className="group bg-card border-border-subtle relative flex flex-col overflow-hidden rounded-xl border transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/25"
@@ -48,6 +57,17 @@ export function CharacterCard({ character, onOpenDetail, onRemove }: CharacterCa
             {character.status === "failed" ? "生成失败" : "暂无立绘"}
           </span>
         )}
+        {/* 选择模式的勾选框：与删除入口分居左上角 / 右上角，互不遮挡。 */}
+        {selectionMode ? (
+          <Checkbox
+            aria-label={`选择角色 ${character.name}`}
+            checked={selected}
+            className="bg-panel/80 absolute top-2 left-2"
+            onCheckedChange={() => {
+              onToggleSelection?.(character.id);
+            }}
+          />
+        ) : null}
         {/* 删除入口（悬停浮现，与资产卡同纪律）。 */}
         <Button
           aria-label={`删除角色 ${character.name}`}
@@ -62,7 +82,7 @@ export function CharacterCard({ character, onOpenDetail, onRemove }: CharacterCa
         </Button>
       </div>
 
-      {/* ── 信息区：名字 + 状态 + 原型 + 质量 + 标签（整块可点，进详情） ── */}
+      {/* ── 信息区：名字 + 原型同行 + 状态 + 质量 + 全部标签（整块可点，进详情） ── */}
       <Button
         className="flex h-auto flex-col gap-1.5 p-3 text-left"
         onClick={() => {
@@ -71,9 +91,23 @@ export function CharacterCard({ character, onOpenDetail, onRemove }: CharacterCa
         type="button"
         variant="ghost"
       >
-        <TruncatedText className="text-ink-strong truncate text-sm font-medium">
-          {character.name}
-        </TruncatedText>
+        <div className="flex min-w-0 items-center gap-1.5" data-testid="character-name-row">
+          {/* 长名字让位给原型：名字 flex-1 先截断，原型 shrink-0 恒在同行。 */}
+          <TruncatedText className="text-ink-strong min-w-0 flex-1 truncate text-sm font-medium">
+            {character.name}
+          </TruncatedText>
+          {character.archetype === "" ? null : (
+            <span
+              className="bg-primary-soft text-primary-strong text-2xs shrink-0 rounded-full px-1.5 py-0.5 font-medium"
+              data-testid="character-archetype"
+            >
+              {character.archetype}
+            </span>
+          )}
+        </div>
+        {character.gender === "" ? null : (
+          <p className="text-ink-fainter text-2xs truncate">{character.gender}</p>
+        )}
         {/* 状态徽标放信息区、不压在立绘上（ISSUE #5009 反馈：徽标挡图）。 */}
         <div className="flex items-center gap-2">
           <span
@@ -99,13 +133,9 @@ export function CharacterCard({ character, onOpenDetail, onRemove }: CharacterCa
             </span>
           ) : null}
         </div>
-        <p className="text-ink-fainter text-2xs truncate">
-          {character.archetype === "" ? "未设原型" : character.archetype}
-          {character.gender === "" ? "" : ` · ${character.gender}`}
-        </p>
         {character.tags.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {visibleTags.map((tag) => (
+          <div className="flex flex-wrap gap-1" data-testid="character-tags">
+            {character.tags.map((tag) => (
               <span
                 className="bg-primary-soft text-primary-strong text-2xs rounded-full px-1.5 py-0.5 font-medium"
                 key={tag}
@@ -113,9 +143,6 @@ export function CharacterCard({ character, onOpenDetail, onRemove }: CharacterCa
                 {tag}
               </span>
             ))}
-            {hiddenTagCount > 0 ? (
-              <span className="text-ink-fainter text-2xs py-0.5">+{hiddenTagCount}</span>
-            ) : null}
           </div>
         ) : null}
       </Button>
