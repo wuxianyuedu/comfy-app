@@ -12,7 +12,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { fireAndForget, runAsyncAction } from "~/lib/async-action";
 import { useShellTabs } from "~/lib/shell/shell-tabs-store";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
-import { openComfyTab } from "~/lib/comfy/comfy-tab-client";
+import { openComfyTab, type OpenComfyTabResult } from "~/lib/comfy/comfy-tab-client";
 import { shouldUseBrowserTab } from "~/lib/comfy/comfy-embed";
 import { useTRPC } from "~/trpc/react";
 
@@ -25,6 +25,36 @@ import { useComfyStateEvents } from "./use-comfy-state-events";
 /** 事件通道之外兜底轮询节奏（毫秒）。留它是因长轮询断开/服务重启/事件丢失时界面不能停在旧结论；
  * 30s 而非 5s：主角是事件，这条只是「万一主通道坏了」的后备 —— 节奏按「多久发现通道坏了」定。 */
 const COMFY_STATUS_FALLBACK_MS = 30_000;
+
+/**
+ * 「给定地址开页签」的共用出口（ISSUE #5053）：桌面壳里复用稳定 id `comfyui`
+ * 的页签（同 id 只刷新 url，不叠重复页签），可嵌时加载传入的完整 url（可带
+ * `#rootId` 深链），不可嵌时仍留在页签里给可读说明。
+ * 浏览器形态的 `window.open` 由调用方在 await 之前同步执行（弹窗拦截器口径），
+ * 这里只负责页签那一半 —— 「打开查看」与 App Mode 深链共用本函数，避免两份
+ * 页签参数漂移。
+ */
+export async function openComfyAtUrl(args: {
+  /** 运行中的 ComfyUI base（内嵌判决与 blockedUrl 都用它） */
+  base: string;
+  /** 应用自身的 origin */
+  origin: string;
+  /** 要加载的完整地址（App Mode 深链时带 `#rootId`） */
+  url: string;
+}): Promise<OpenComfyTabResult> {
+  const decision = await openComfyTab(args.base, args.origin);
+  useShellTabs.getState().openTab({
+    id: "comfyui",
+    label: "ComfyUI",
+    url: decision.target === "embed" ? args.url : decision.embedUrl,
+    closable: true,
+    blockedReason: decision.target === "blocked" ? decision.detail : null,
+    /* 不可嵌时把地址一并带进说明：用户能复制到浏览器自查，也能判断
+     * 是外壳拦的还是 ComfyUI 自己拦的（ISSUE #310）。 */
+    blockedUrl: decision.target === "blocked" ? decision.base : null,
+  });
+  return decision;
+}
 
 export function useComfyuiControl() {
   const trpc = useTRPC();
@@ -201,18 +231,11 @@ export function useComfyuiControl() {
            * `--enable-cors-header`，跨源不会被 origin-only 中间件拦 403，直接内嵌；
            * 万一判到不可嵌（外部实例不受本应用参数控制等），页签照常打开、里面渲染
            * 可读说明 —— 仍留在同一个窗口里，不另开窗口。 */
-          const decision = await openComfyTab(base, window.location.origin);
-          // 用稳定 id 打开 ComfyUI 页签：重启后端口偏移（base 变化）时
-          // 复用同一页签并刷新地址，而不是叠出重复页签。
-          useShellTabs.getState().openTab({
-            id: "comfyui",
-            label: "ComfyUI",
-            url: decision.embedUrl,
-            closable: true,
-            blockedReason: decision.target === "blocked" ? decision.detail : null,
-            /* 不可嵌时把地址一并带进说明：用户能复制到浏览器自查，也能判断
-             * 是外壳拦的还是 ComfyUI 自己拦的（ISSUE #310）。 */
-            blockedUrl: decision.target === "blocked" ? decision.base : null,
+          /* 用稳定 id 打开 / 复用同一页签；页签参数只在这一处写（#5053 抽出）。 */
+          const decision = await openComfyAtUrl({
+            url: base,
+            base,
+            origin: window.location.origin,
           });
           return {
             ok: decision.target === "embed",

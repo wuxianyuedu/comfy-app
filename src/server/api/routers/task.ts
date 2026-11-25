@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure, rateLimitedProcedure } from "~/server/api/trpc";
 import { taskRepository, workflowModelTagRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
-import { errorMessage } from "~/lib/error-message";
+import { errorMessage, errorText } from "~/lib/error-message";
 import { asRecord } from "~/lib/is-record";
 import { taskOutputDir } from "~/lib/media/output-paths";
 import { cancelTask as cancelExecutorTask } from "~/lib/comfyui/enqueue";
@@ -227,6 +227,34 @@ export const taskRouter = createTRPCRouter({
      * 负责（`executor-host.mjs` 的 reconcileCancelled）。 */
     await cancelExecutorTask(input.id);
     return { ok: true };
+  }),
+
+  /**
+   * 取消当前用户全部未结束任务（ISSUE #5064）：候选由仓储层按归属 + 终态过滤，
+   * 逐个走与单条取消同一个执行层出口 `cancelExecutorTask` —— 在飞的会中断 comfy-cli、
+   * 归还槽位，排队的行只翻状态，不会出现「按了取消还在出图」。
+   *
+   * 部分失败语义（规范 05「批量必答部分成功」）：单条失败不中断其余（每条自己记
+   * warn 日志），返回 `failed` 让 UI 如实报「取消了几条、几条没取消掉」—— 近千条
+   * 队列里一条脏行不该让剩下九百九十九条继续跑。重复点幂等：第二轮的候选里已经
+   * 没有上一轮取消掉的行。
+   */
+  cancelAll: authedProcedure.mutation(async ({ ctx }) => {
+    const ids = await taskRepository.listActiveIdsForUser(ctx.user.id);
+    let cancelled = 0;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：每条各自收口，串行避免与派发循环抢同一个槽
+        await cancelExecutorTask(id);
+        cancelled += 1;
+      } catch (error) {
+        failed += 1;
+        /* 错因文案走 errorText（P42）：动作前缀与详情由同一个出口拼，不在这里手拼。 */
+        logger.warn(`[task.cancelAll] ${errorText(error, `取消 ${id} 失败`)}`);
+      }
+    }
+    return { cancelled, failed, total: ids.length };
   }),
 
   /** 打开产物目录：返回 comfyapp:// 深链（协议未注册时的引导见 openTaskFolder）。 */

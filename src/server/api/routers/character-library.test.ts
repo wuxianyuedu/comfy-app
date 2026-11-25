@@ -60,47 +60,76 @@ vi.mock("~/lib/character/character-store", async () => {
       return Promise.resolve(`/api/generated/character-library/${characterId}/out.png`);
     }),
     removeCharacterStoreDir: vi.fn(() => Promise.resolve(undefined)),
+    removeCharacterPortrait: vi.fn(() => Promise.resolve(undefined)),
     readArtifactBytes: vi.fn(() => Promise.resolve(flatPng)),
   };
 });
-vi.mock("~/lib/workshop/workflow-run.server", () => ({
-  prepareWorkflowRun: vi.fn((_userId: string, workflowId: string) => {
-    if (workflowId !== "wf-1") {
-      return null;
-    }
-    return {
-      contractIds: [],
-      io: {},
-      mode: null,
-      sizeTable: {},
-      tpl: {
-        id: "wf-1",
-        name: "minimax_h3_image",
-        taskType: "TXT2IMG",
-        modes: "[]",
-        defaultMode: null,
-        paramMap: null,
-        workflowIO: null,
-        rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
-        hasRaw: true,
-        positions: null,
-        sourcePath: null,
-        sourceChecksum: null,
-        sourceMtime: null,
-        createdAt: new Date(),
-        userId: "user-a",
-      },
-    };
-  }),
-  buildWorkflowRunParams: vi.fn(
-    (ctx: { tpl: { id: string } }, values: { negativePrompt?: string; prompt?: string }) => ({
-      ...(values.negativePrompt === undefined ? {} : { negative: values.negativePrompt }),
-      prompt: values.prompt ?? "",
-      workflow: ctx.tpl.id,
-      workflowInputs: [],
+vi.mock("~/lib/workshop/workflow-run.server", () => {
+  /* minimax H3 只有正向口（wf-1）；wf-negative 是「作者连了负向线」的对照夹具。 */
+  const NEGATIVE_IO = {
+    negative: {
+      defaultValue: "",
+      direction: "input",
+      kind: "widget",
+      label: "negative_prompt",
+      multiline: true,
+      name: "text",
+      nodeId: "7",
+      type: "STRING",
+    },
+    text: {
+      defaultValue: "",
+      direction: "input",
+      kind: "widget",
+      label: "positive_prompt",
+      multiline: true,
+      name: "text",
+      nodeId: "6",
+      type: "STRING",
+    },
+  };
+  return {
+    prepareWorkflowRun: vi.fn((_userId: string, workflowId: string) => {
+      if (workflowId !== "wf-1" && workflowId !== "wf-negative") {
+        return null;
+      }
+      const supportsNegative = workflowId === "wf-negative";
+      return {
+        contractIds: supportsNegative ? undefined : [],
+        io: supportsNegative ? NEGATIVE_IO : {},
+        mode: supportsNegative ? "T2I" : null,
+        sizeTable: {},
+        tpl: {
+          id: workflowId,
+          name: supportsNegative ? "negative_capable_workflow" : "minimax_h3_image",
+          taskType: "TXT2IMG",
+          modes: "[]",
+          defaultMode: null,
+          paramMap: supportsNegative
+            ? { source: { "mode:T2I": { negative: "negative", prompt: "text" } } }
+            : null,
+          workflowIO: null,
+          rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
+          hasRaw: true,
+          positions: null,
+          sourcePath: null,
+          sourceChecksum: null,
+          sourceMtime: null,
+          createdAt: new Date(),
+          userId: "user-a",
+        },
+      };
     }),
-  ),
-}));
+    buildWorkflowRunParams: vi.fn(
+      (ctx: { tpl: { id: string } }, values: { negativePrompt?: string; prompt?: string }) => ({
+        ...(values.negativePrompt === undefined ? {} : { negative: values.negativePrompt }),
+        prompt: values.prompt ?? "",
+        workflow: ctx.tpl.id,
+        workflowInputs: [],
+      }),
+    ),
+  };
+});
 vi.mock("~/lib/comfyui/executor-continuation", () => ({
   kickQueue: vi.fn(),
 }));
@@ -112,10 +141,16 @@ import { eq } from "drizzle-orm";
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { characterLibraryRouter } from "~/server/api/routers/character-library";
-import { removeCharacterStoreDir } from "~/lib/character/character-store";
+import { removeCharacterPortrait, removeCharacterStoreDir } from "~/lib/character/character-store";
 import { db } from "~/server/db";
 import { characterProfile, task } from "~/server/db/schema";
-import { getTestDb, seedTask, seedUser, type TestDb } from "../../../../tests/helpers/test-db";
+import {
+  getTestDb,
+  seedTask,
+  seedUser,
+  seedWorkflowTemplate,
+  type TestDb,
+} from "../../../../tests/helpers/test-db";
 import { makeCtx, makeUser } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(characterLibraryRouter);
@@ -350,6 +385,18 @@ describe("characterLibrary.syncGeneration —— 生成对账回写", () => {
     const queued = await caller().detail({ id: queuedId });
     expect(queued.status).toBe("generating");
   });
+
+  it("任务取消（CANCELLED，全仓口径）：状态落 failed，角色能重新进生图池（#5054）", async () => {
+    const cancelledId = await seedGeneratingCharacter("task-cancelled", "CANCELLED");
+    const res = await caller().syncGeneration();
+    expect(res.failed).toBe(1);
+    expect(res.pending).toBe(0);
+    const detail = await caller().detail({ id: cancelledId });
+    expect(detail.status).toBe("failed");
+    /* 失败角色随后可被 enqueueGeneration 再次入队（取消 → 重跑的闭环）。 */
+    const rerun = await caller().enqueueGeneration({ workflowId: "wf-1" });
+    expect(rerun.enqueued).toBe(1);
+  });
 });
 
 describe("characterLibrary.scoreQuality / scoreAllQuality / regenerateFlagged —— 质量打分", () => {
@@ -404,5 +451,160 @@ describe("characterLibrary.scoreQuality / scoreAllQuality / regenerateFlagged �
     /* 新任务已入队（QUEUED）。 */
     const tasks = await db.select().from(task);
     expect(tasks.some((row) => row.status === "QUEUED")).toBe(true);
+  });
+});
+
+describe("characterLibrary.enqueueGeneration —— 负向词能力探针", () => {
+  it("工作流接负向词：正向也带服饰文字例外句，负向只压低质 / 多肢", async () => {
+    const created = await caller().create({ name: "接负向角色", description: "银发猫娘。" });
+    const res = await caller().enqueueGeneration({ workflowId: "wf-negative", ids: [created.id] });
+    expect(res.enqueued).toBe(1);
+    const rows = await db.select().from(task);
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row?.prompt).toContain("单人角色立绘");
+    expect(row?.prompt).toContain("除了角色服饰上的装饰文字");
+    expect(row?.prompt).not.toContain("画面中不出现任何文字");
+    expect(row?.negativePrompt).toContain("低质量");
+    expect(row?.negativePrompt).not.toContain("文字");
+    expect(row?.params).toMatchObject({ negative: row?.negativePrompt });
+  });
+
+  it("工作流只有正向口：不写 negativePrompt，文字约束折进正向词", async () => {
+    const created = await caller().create({ name: "仅正向角色", description: "黑发剑士。" });
+    const res = await caller().enqueueGeneration({ workflowId: "wf-1", ids: [created.id] });
+    expect(res.enqueued).toBe(1);
+    const rows = await db.select().from(task);
+    const row = rows[0];
+    expect(row?.prompt).toContain("单人角色立绘");
+    expect(row?.prompt).toContain("除了角色服饰上的装饰文字");
+    expect(row?.prompt).not.toContain("画面中不出现任何文字");
+    expect(row?.negativePrompt).toBeNull();
+    expect(row?.params).not.toHaveProperty("negative");
+  });
+});
+
+describe("characterLibrary.history —— 候选对应任务信息", () => {
+  it("逐条回查候选任务，带模型名 / 图数；查不到或他人任务的条目跳过", async () => {
+    seedWorkflowTemplate(tdb, {
+      id: "tpl-1",
+      userId: "user-a",
+      modelTags: [{ id: "tag-1", userId: "user-a", name: "minimax_h3" }],
+    });
+    const id = await seedGeneratingCharacter("history-ok", "SUCCEEDED");
+    await caller().syncGeneration();
+    await tdb
+      .update(task)
+      .set({
+        error: "上次失败",
+        params: { workflow: "tpl-1" },
+        prompt: "历史正向词",
+        workflowName: "workflow-for-history",
+      })
+      .where(eq(task.id, "history-ok"));
+    seedTask(tdb, {
+      id: "history-other",
+      images: [{ localPath: "/api/generated/x/other.png" }],
+      status: "SUCCEEDED",
+      userId: "user-b",
+    });
+    const detail = await caller().detail({ id });
+    const portraits = detail.portraits;
+    await tdb
+      .update(characterProfile)
+      .set({
+        portraits: [
+          ...portraits,
+          {
+            createdAt: 1,
+            taskId: "missing-task",
+            url: "/api/generated/character-library/missing.png",
+          },
+          {
+            createdAt: 2,
+            taskId: "history-other",
+            url: "/api/generated/character-library/foreign.png",
+          },
+        ],
+      })
+      .where(eq(characterProfile.id, id));
+
+    const history = await caller().history({ id });
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      error: "上次失败",
+      imageCount: 1,
+      modelName: "minimax_h3",
+      prompt: "历史正向词",
+      status: "SUCCEEDED",
+      taskId: "history-ok",
+      workflowName: "workflow-for-history",
+    });
+    expect(history[0]?.url).toBe(portraits[0]?.url);
+    expect(typeof history[0]?.createdAt).toBe("number");
+  });
+
+  it("角色不存在 → NOT_FOUND", async () => {
+    await expect(caller().history({ id: "missing-id" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
+  });
+});
+
+describe("characterLibrary.deletePortraits —— 候选逐张删除", () => {
+  async function seedCharacterWithPortraits(name: string, count: number) {
+    const created = await caller().create({ name, description: "黑发。" });
+    const urls = Array.from(
+      { length: count },
+      (_, index) => `/api/generated/character-library/${created.id}/img-${index}.png`,
+    );
+    await tdb
+      .update(characterProfile)
+      .set({
+        portraitUrl: urls[0] ?? null,
+        portraits: urls.map((url, index) => ({
+          createdAt: count - index,
+          taskId: `task-${index}`,
+          url,
+        })),
+        status: "ready",
+      })
+      .where(eq(characterProfile.id, created.id));
+    return { id: created.id, urls };
+  }
+
+  it("删当前图时把剩余第一张提升为当前图；状态保持 ready", async () => {
+    const { id, urls } = await seedCharacterWithPortraits("删除候选角色", 3);
+    const res = await caller().deletePortraits({ id, urls: [urls[0] ?? ""] });
+    expect(res).toEqual({ portraitUrl: urls[1], removed: 1 });
+    const detail = await caller().detail({ id });
+    expect(detail.portraits.map((portrait) => portrait.url)).toEqual([urls[1], urls[2]]);
+    expect(detail.portraitUrl).toBe(urls[1]);
+    expect(detail.status).toBe("ready");
+    expect(removeCharacterPortrait).toHaveBeenCalledWith(urls[0], id);
+  });
+
+  it("删掉最后一张：当前图置空，但状态仍是 ready", async () => {
+    const { id, urls } = await seedCharacterWithPortraits("删空角色", 1);
+    const res = await caller().deletePortraits({ id, urls: [urls[0] ?? ""] });
+    expect(res).toEqual({ portraitUrl: null, removed: 1 });
+    const detail = await caller().detail({ id });
+    expect(detail.portraits).toHaveLength(0);
+    expect(detail.portraitUrl).toBeNull();
+    expect(detail.status).toBe("ready");
+  });
+
+  it("越界 url 不影响别的角色，也不会删别人的文件", async () => {
+    const mine = await seedCharacterWithPortraits("越界测试甲", 2);
+    const other = await seedCharacterWithPortraits("越界测试乙", 1);
+    const foreignUrl = other.urls[0] ?? "";
+    const res = await caller().deletePortraits({
+      id: mine.id,
+      urls: [mine.urls[0] ?? "", foreignUrl],
+    });
+    expect(res.removed).toBe(1);
+    expect(removeCharacterPortrait).not.toHaveBeenCalledWith(foreignUrl, mine.id);
+    const otherDetail = await caller().detail({ id: other.id });
+    expect(otherDetail.portraits.map((portrait) => portrait.url)).toEqual([foreignUrl]);
   });
 });

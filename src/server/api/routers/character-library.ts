@@ -2,28 +2,35 @@
  * `character-library.ts` — 角色库路由（ISSUE #5009）：跨项目的二次元角色档案池。
  *
  * 能力：列表（关键词 + 标签 AND 过滤 + 状态过滤 + 标签分面 + 状态角标）、
- * 详情、手工增改删（标签随描述自动重提）、预置批量入库（组合式生成器，幂等）、
- * 批量生图（走工作流库工作流 + 既有任务队列，逐角色一个任务）、生成结果对账回写
- * （产物复制进角色自有目录，与任务生命周期解耦）。
+ * 详情、生成历史（候选逐条回查任务信息）、手工增改删（标签随描述自动重提、
+ * 候选立绘逐张删除）、预置批量入库（组合式生成器，幂等）、批量生图（走工作流库
+ * 工作流 + 既有任务队列，逐角色一个任务）、生成结果对账回写（产物复制进角色
+ * 自有目录，与任务生命周期解耦）。
  * @module server/routers/character-library — 角色库 tRPC 路由
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createId } from "@paralleldrive/cuid2";
 
-import { isRecord } from "~/lib/is-record";
+import { asRecord, isRecord } from "~/lib/is-record";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { characterProfileRepository, taskRepository } from "~/lib/core/repository";
+import {
+  characterProfileRepository,
+  taskRepository,
+  workflowModelTagRepository,
+} from "~/lib/core/repository";
+import { buildEncapsulatedInputs } from "~/lib/workshop/workflow-encapsulation";
 import { extractCharacterTags } from "~/lib/character/tag-extract";
 import {
   generateCharacterRoster,
   ROSTER_COUNT_MAX,
   ROSTER_COUNT_MIN,
 } from "~/lib/character/roster-seed";
-import { buildPortraitPrompt, PORTRAIT_NEGATIVE_PROMPT } from "~/lib/character/portrait-prompt";
+import { buildPortraitPrompts } from "~/lib/character/portrait-prompt";
 import {
   copyIntoCharacterStore,
   readArtifactBytes,
+  removeCharacterPortrait,
   removeCharacterStoreDir,
 } from "~/lib/character/character-store";
 import {
@@ -85,6 +92,40 @@ function normalizePortraits(
 
 const statusSchema = z.enum(["all", ...CHARACTER_PROFILE_STATUSES]).default("all");
 
+type WorkflowRunContext = NonNullable<Awaited<ReturnType<typeof prepareWorkflowRun>>>;
+
+/** 单条候选立绘对应的任务信息（历史面板的只读投影）。 */
+type PortraitHistoryEntry = {
+  createdAt: number;
+  error: string | null;
+  imageCount: number;
+  modelName: string | null;
+  prompt: string | null;
+  status: string | null;
+  taskId: string;
+  url: string;
+  workflowName: string | null;
+};
+
+/**
+ * 探针：这条工作流到底接不接负向提示词。
+ *
+ * 用同一份封装纯函数做一次假提交，只看 `resolved.negative` 有没有落点——
+ * 落点只认作者连的线，没有线就没有落点（与真正下发时的判据同源，不另立一套
+ * 模型元数据表）。探针的 workflowInputs 是假值，直接丢弃。
+ */
+function workflowSupportsNegative(runCtx: WorkflowRunContext): boolean {
+  const { resolved } = buildEncapsulatedInputs({
+    contractIds: runCtx.contractIds,
+    io: runCtx.io,
+    mode: runCtx.mode,
+    paramMap: runCtx.tpl.paramMap,
+    table: runCtx.sizeTable,
+    values: { negativePrompt: "__probe__", prompt: "__probe__" },
+  });
+  return typeof resolved.negative === "string" && resolved.negative !== "";
+}
+
 /** 逐个角色入队生图任务（批量生图与「重生成有问题的立绘」共用的同一条链）。 */
 async function enqueueCharacters(
   characters: Array<{
@@ -93,20 +134,25 @@ async function enqueueCharacters(
     id: string;
     name: string;
   }>,
-  runCtx: NonNullable<Awaited<ReturnType<typeof prepareWorkflowRun>>>,
+  runCtx: WorkflowRunContext,
   userId: string,
 ): Promise<number> {
   const executorClaim = resolveExecutorClaim();
+  /* 一批只用同一条工作流，能力探针在循环外判一次（避免逐角色重复封装）。 */
+  const supportsNegative = workflowSupportsNegative(runCtx);
   let enqueued = 0;
   for (const character of characters) {
-    const prompt = buildPortraitPrompt({
-      name: character.name,
-      archetype: character.archetype,
-      description: character.description,
-    });
+    const { prompt, negativePrompt } = buildPortraitPrompts(
+      {
+        name: character.name,
+        archetype: character.archetype,
+        description: character.description,
+      },
+      supportsNegative,
+    );
     const params = buildWorkflowRunParams(runCtx, {
       prompt,
-      negativePrompt: PORTRAIT_NEGATIVE_PROMPT,
+      ...(negativePrompt === null ? {} : { negativePrompt }),
       /* 尺寸不传：工作流（如 minimax h3）的 aspect_ratio 是枚举口
        * （「3:4 (Portrait Standard)」这类带说明的标签），按场景表折算的
        * 宽高 / 比例值落不进枚举，会在执行前校验被打回。角色立绘直接用
@@ -117,7 +163,7 @@ async function enqueueCharacters(
       userId,
       type: runCtx.tpl.taskType,
       prompt,
-      negativePrompt: PORTRAIT_NEGATIVE_PROMPT,
+      ...(negativePrompt === null ? {} : { negativePrompt }),
       params,
       workflowName: runCtx.tpl.name,
       projectId: null,
@@ -202,6 +248,63 @@ export const characterLibraryRouter = createTRPCRouter({
       portraits: normalizePortraits(row.portraits),
       qualityIssues: normalizeTags(row.qualityIssues),
     };
+  }),
+
+  /** 生成历史：候选立绘逐条回查任务信息；查不到 / 不属于当前用户的跳过。 */
+  history: authedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
+    const row = await characterProfileRepository.findOwned(input.id, ctx.user.id);
+    if (row === null) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "角色不存在" });
+    }
+    const portraits = normalizePortraits(row.portraits)
+      .filter((portrait) => portrait.taskId !== undefined)
+      .slice(0, MAX_PORTRAIT_CANDIDATES);
+    /* 任务回查互不依赖，一趟并行取回（no-await-in-loop 的正解）。 */
+    const tasks = await Promise.all(
+      portraits.map((portrait) =>
+        portrait.taskId === undefined
+          ? Promise.resolve(undefined)
+          : taskRepository.findByIdWithImages(portrait.taskId),
+      ),
+    );
+    const visible = portraits.flatMap((portrait, index) => {
+      const task = tasks[index];
+      if (portrait.taskId === undefined || task === undefined || task.userId !== ctx.user.id) {
+        return [];
+      }
+      return [{ portrait: { taskId: portrait.taskId, url: portrait.url }, task }];
+    });
+    /* 模型名与任务详情同一口径：任务行不存模型，工作流上挂的标签才是权威来源。 */
+    const templateIds = [
+      ...new Set(
+        visible
+          .map(({ task }) => {
+            const workflowId = asRecord(task.params)?.workflow;
+            return typeof workflowId === "string" && workflowId !== "" ? workflowId : null;
+          })
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    const tagRows =
+      templateIds.length === 0
+        ? []
+        : await workflowModelTagRepository.getTemplateTagRows(templateIds);
+    const modelNameByTemplate = new Map(tagRows.map((tagRow) => [tagRow.templateId, tagRow.name]));
+    return visible.map(({ portrait, task }): PortraitHistoryEntry => {
+      const workflowId = asRecord(task.params)?.workflow;
+      const templateId = typeof workflowId === "string" && workflowId !== "" ? workflowId : null;
+      return {
+        createdAt: task.createdAt.getTime(),
+        error: task.error ?? null,
+        imageCount: task.images.length,
+        modelName: templateId === null ? null : (modelNameByTemplate.get(templateId) ?? null),
+        prompt: task.prompt ?? null,
+        status: task.status ?? null,
+        taskId: portrait.taskId,
+        url: portrait.url,
+        workflowName: task.workflowName ?? null,
+      };
+    });
   }),
 
   /** 手工创建一个角色（标签从描述自动提取，调用方不必传）。 */
@@ -311,6 +414,35 @@ export const characterLibraryRouter = createTRPCRouter({
   }),
 
   /**
+   * 删除选中的候选立绘（只认本角色的候选地址）。删掉当前图时把剩余第一张
+   * 提升为新的当前图（没有剩余则为 null）；角色状态保持现状，不强行改写。
+   */
+  deletePortraits: authedProcedure
+    .input(z.object({ id: z.string(), urls: z.array(z.string()).min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const row = await characterProfileRepository.findOwned(input.id, ctx.user.id);
+      if (row === null) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "角色不存在" });
+      }
+      const portraits = normalizePortraits(row.portraits);
+      const removedUrls = new Set(input.urls);
+      const remaining = portraits.filter((portrait) => !removedUrls.has(portrait.url));
+      const removedPortraits = portraits.filter((portrait) => removedUrls.has(portrait.url));
+      const currentRemoved = row.portraitUrl !== null && removedUrls.has(row.portraitUrl);
+      const nextPortraitUrl = currentRemoved ? (remaining[0]?.url ?? null) : row.portraitUrl;
+      /* 先落库再删盘：删盘失败不影响库内状态（下次清理可按地址重试）。 */
+      await characterProfileRepository.update(row.id, {
+        portraitUrl: nextPortraitUrl,
+        portraits: remaining,
+      });
+      for (const portrait of removedPortraits) {
+        // oxlint-disable-next-line no-await-in-loop -- 逐张删盘，彼此独立，落库成功后才动文件
+        await removeCharacterPortrait(portrait.url, row.id).catch(() => undefined);
+      }
+      return { portraitUrl: nextPortraitUrl, removed: removedPortraits.length };
+    }),
+
+  /**
    * 预置批量入库：组合式生成器按 (count, seed) 产出角色（含已提取的标签），
    * 批量插入；(userId, name) 撞名按幂等跳过——同种子重跑不产生重复行。
    */
@@ -416,7 +548,7 @@ export const characterLibraryRouter = createTRPCRouter({
       if (
         task === null ||
         task.status === "FAILED" ||
-        task.status === "CANCELED" ||
+        task.status === "CANCELLED" ||
         (task.status === "SUCCEEDED" && (task.images?.length ?? 0) === 0)
       ) {
         // oxlint-disable-next-line no-await-in-loop -- 对账逐行回写，SQLite 单写者并行无收益

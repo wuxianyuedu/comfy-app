@@ -9,10 +9,10 @@ import { isRecord } from "~/lib/is-record";
 import { task, taskImage, type Task, type TaskImage } from "~/server/db/schema";
 import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";
-import { eq, and, inArray, desc, asc, sql, count } from "drizzle-orm";
+import { eq, and, inArray, notInArray, desc, asc, sql, count } from "drizzle-orm";
 import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
-import { isTerminalTaskStatus } from "~/lib/task-state";
+import { isTerminalTaskStatus, TERMINAL_TASK_STATUSES } from "~/lib/task-state";
 
 /** 任务卡的四个重列（唯一名单）：`workflowSnapshot`（整份工作流 JSON）、
  *  `execPayload`（提交时刻的 RAW 原件）、`rawCli`（comfy-cli 完整原文，上限
@@ -385,6 +385,23 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return t?.userId === userId ? t : null;
   }
 
+  /**
+   * 「取消全部」的候选 id（ISSUE #5064）：只取当前用户**非终态**行的 id，按提交顺序
+   * （createdAt 升序）给。终态判据复用 `TERMINAL_TASK_STATUSES` —— 与列表分桶、取消
+   * 出口同一份定义，不在这里重写状态字面量。
+   *
+   * 只投影 id：近千任务时不能把 `workflowSnapshot` / `rawCli` 那几个 MB 级重列拉回
+   * （同 `taskCardColumns` 的理由）。调用方拿到 id 后逐个走执行层唯一出口取消。
+   */
+  async listActiveIdsForUser(userId: string): Promise<Array<string>> {
+    const rows = await db
+      .select({ id: task.id })
+      .from(task)
+      .where(and(eq(task.userId, userId), notInArray(task.status, [...TERMINAL_TASK_STATUSES])))
+      .orderBy(asc(task.createdAt), asc(task.id));
+    return rows.map((row) => row.id);
+  }
+
   async updateStatusForUser(
     userId: string,
     id: string,
@@ -661,6 +678,16 @@ export class TaskRepository extends DrizzleRepository<Task> {
    * （它只依赖注入进来的仓储形状，不依赖 impl 的构造细节）。 */
   claimNextQueued: TaskRepoImpl["claimNextQueued"] = (mode, take) =>
     impl.claimNextQueued(mode, take);
+
+  peekNextQueued: TaskRepoImpl["peekNextQueued"] = (mode) => impl.peekNextQueued(mode);
+
+  /* 生图暂停（ISSUE #5055）：状态读写也走同一份 impl（host / inline 各自的
+   * 仓储实例都带这两条，派发闸门因此两宿主同形）。 */
+  getGenerationPauseState: TaskRepoImpl["getGenerationPauseState"] = () =>
+    impl.getGenerationPauseState();
+
+  setGenerationPaused: TaskRepoImpl["setGenerationPaused"] = (paused) =>
+    impl.setGenerationPaused(paused);
 
   findExecJob: TaskRepoImpl["findExecJob"] = (taskId) => impl.findExecJob(taskId);
 

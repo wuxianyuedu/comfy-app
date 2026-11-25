@@ -7,7 +7,7 @@
 // 轮询成本：状态栏已挂 useComfyQueue，本视图再挂一次即每 2s 两次（服务端量小）；重复消费未修，收口方向是模块级单例订阅（COMFY_QUEUE_POLL_MS 改动会同步影响成本）。
 
 import { useCallback, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { COMFY_QUEUE_POLL_MS, useComfyQueue } from "~/components/studio/hooks/use-comfy-queue";
 import { useCopyResult } from "~/components/ui/use-copy-feedback";
@@ -16,7 +16,7 @@ import { useViewTabActive } from "~/components/ui/view-tab-active";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { revealTaskFolder } from "~/lib/history-detail-actions";
 import { formatSampleRateText, formatStepsText } from "~/lib/progress";
-import { cancelTask } from "~/lib/task-cancel-client";
+import { cancelAllTasks, cancelTask } from "~/lib/task-cancel-client";
 import { useTRPC } from "~/trpc/react";
 
 import { useToast } from "../../ToastProvider";
@@ -52,7 +52,15 @@ export type RunningCardView = {
 
 export type QueueMonitorController = {
   cancel: (id: string, label: string) => Promise<void>;
+  /** 取消全部进行中（否决重复点 / 弹窗 pending）。 */
+  cancelAllBusy: boolean;
+  /** 「取消全部」确认弹窗是否开着。 */
+  cancelAllOpen: boolean;
+  /** 关闭「取消全部」确认弹窗。 */
+  closeCancelAll: () => void;
   closeLog: () => void;
+  /** 确认「取消全部」：关弹窗 → 发请求 → 刷新列表。 */
+  confirmCancelAll: () => Promise<void>;
   copyForReprint: (row: QueueRow) => Promise<void>;
   /** 展开那条的详情是否还在拉取。 */
   detailLoading: boolean;
@@ -72,11 +80,17 @@ export type QueueMonitorController = {
   openLog: (task: QueueTaskLogTarget) => void;
   /** 展开那条的输入参数行（task.detail → 纯派生）；未展开 / 拉取中为空。 */
   paramRows: Array<ReturnType<typeof queueTaskParamRows>[number]>;
+  /** 暂停 / 恢复切换进行中（防连点）。 */
+  pauseBusy: boolean;
+  /** 生图暂停中（落库的持久状态，应用重启不丢，ISSUE #5055）。 */
+  paused: boolean;
   /** 排队项，`position` 从 1 起（1 = 下一个开跑）。 */
   queued: Array<{ position: number; row: QueueRow }>;
   /** 最近结果（已截到窗口上限，新的在前）。 */
   recent: Array<QueueRow>;
   refresh: () => void;
+  /** 打开「取消全部」确认弹窗。 */
+  requestCancelAll: () => void;
   /** 正在跑的那条（富卡片：来自 `/api/comfy/queue`）；没有在跑时为 null。 */
   running: RunningCardView | null;
   /** 库里 status=RUNNING 的行。`running` 为 null 而这里非空 = ComfyUI 没连上
@@ -86,6 +100,8 @@ export type QueueMonitorController = {
   stats: QueueStats;
   /** 点同一行收起、点另一行切换。 */
   toggleExpanded: (id: string) => void;
+  /** 点一下：暂停 ↔ 恢复（暂停语义见执行器闸门，ISSUE #5055）。 */
+  togglePause: () => void;
   /** 本应用排队 + ComfyUI 自己排队，与状态栏那格同一算法；离线时退回
    * 「库里在跑 + 排队的行数」（`/api/comfy/queue` 读不到，不能报 0）。 */
   waitingCount: number;
@@ -100,6 +116,9 @@ export function useQueueMonitor(): QueueMonitorController {
   /* 日志弹窗的目标行：openLog 那一刻的快照（不是从 listQ 派生）——否则每 2s
    * 一次的轮询都会换掉对象身份，弹窗会被误重挂、SSE 反复重订。 */
   const [logRow, setLogRow] = useState<QueueTaskLogTarget | null>(null);
+  /* 「取消全部」确认弹窗的开合（ISSUE #5064）：破坏性整表动作先问一句，
+   * 与 WorksGallery 的删除项目同一口径（ConfirmDialog）。 */
+  const [cancelAllOpen, setCancelAllOpen] = useState(false);
   /* 展开看输入参数的那条（ISSUE #5019）：展开才拉 task.detail（enabled 门控），
    * 参数行由纯派生 queueTaskParamRows 算出。 */
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -192,6 +211,67 @@ export function useQueueMonitor(): QueueMonitorController {
     [action, listQ, report],
   );
 
+  /* 取消全部（ISSUE #5064）：整表动作，用 null 作用域的同一把重入锁（与单条
+   * 取消共用 `action`，因此「取消全部」在跑时那批行的「取消这条」也一起禁用）。
+   * 服务端逐条走执行层出口、部分失败计数带回，这里如实报数：只说「已取消」
+   * 会把没取消掉的几条藏起来（用户还以为队列已经清空了）。 */
+  const confirmCancelAll = useCallback(async () => {
+    setCancelAllOpen(false);
+    await action.run(null, async () => {
+      /* 条数只在本次动作的 closure 里存一份：`runAsyncAction` 的统一出口只认
+       * 「成功 / 失败」两态，而这次要如实报「取消了几条、几条没取消掉」。 */
+      let outcome: Awaited<ReturnType<typeof cancelAllTasks>> | null = null;
+      await runAsyncAction(
+        async () => {
+          outcome = await cancelAllTasks();
+          return outcome;
+        },
+        {
+          report,
+          failureText: "取消全部失败，请稍后重试",
+          successText: () => {
+            if (outcome === null) {
+              return "已发送取消全部请求";
+            }
+            const { cancelled, failed } = outcome;
+            return failed === 0
+              ? `已取消 ${String(cancelled)} 条任务`
+              : `已取消 ${String(cancelled)} 条，${String(failed)} 条未能取消（详见执行日志）`;
+          },
+        },
+      );
+      void listQ.refetch();
+    });
+  }, [action, listQ, report]);
+  const requestCancelAll = useCallback(() => {
+    setCancelAllOpen(true);
+  }, []);
+  const closeCancelAll = useCallback(() => {
+    setCancelAllOpen(false);
+  }, []);
+
+  /* 生图暂停（ISSUE #5055）：状态在库里（应用重启不丢），队列页用播放 / 暂停
+   * 图标切换。暂停语义在执行器闸门（executor-dispatch）：当前任务照常跑完，
+   * 之后不再领取生图任务；恢复后按队列序继续。 */
+  const pauseQ = useQuery(
+    trpc.generationControl.pauseState.queryOptions(undefined, { enabled: isTabActive }),
+  );
+  const setPausedM = useMutation(
+    trpc.generationControl.setPaused.mutationOptions({
+      onSuccess: () => {
+        void pauseQ.refetch();
+      },
+    }),
+  );
+  const togglePause = useCallback(() => {
+    const next = !(pauseQ.data?.paused ?? false);
+    void runAsyncAction(() => setPausedM.mutateAsync({ paused: next }), {
+      report,
+      successText: next ? "已暂停：当前任务跑完后不再领取新的生图任务" : "已恢复：按队列序继续生成",
+      failureText: next ? "暂停失败，请稍后重试" : "恢复失败，请稍后重试",
+    });
+  }, [pauseQ.data, setPausedM, report]);
+
   const openFolder = useCallback(
     async (row: QueueRow) => {
       await action.run(row.id, async () => {
@@ -249,8 +329,16 @@ export function useQueueMonitor(): QueueMonitorController {
       void listQ.refetch();
     },
     cancel,
+    cancelAllOpen,
+    cancelAllBusy: action.isBusy(null),
+    confirmCancelAll,
+    requestCancelAll,
+    closeCancelAll,
     openFolder,
     copyForReprint,
+    paused: pauseQ.data?.paused ?? false,
+    pauseBusy: setPausedM.isPending,
+    togglePause,
     openLog: (task) => {
       setLogRow(task);
     },

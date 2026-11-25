@@ -700,6 +700,28 @@
   `src/lib/llm/prompts.ts`（翻译 system prompt）、
   `src/components/studio/workflow-library/workflow-library-detail-config.ts`（`DETAIL_TABS`）
 
+#### FR-WF-16 详情「App Mode 选引脚」页签（原生 builder 选暴露面）
+
+- 状态：已上线
+- 需求：在工作流库详情用 ComfyUI 原生前端的 App Mode builder 勾选要暴露的输入 / 输出引脚
+  （ISSUE #5053）；显示名 / 必填 / seed 行为 / 按模式覆盖等元数据仍全部留在应用内编辑器
+  （IO 预览与编辑器），编辑器内既有勾选方式保留，两通道并存。
+- 行为与验收：详情在「IO 预览」后新增「App Mode 选引脚」页签，显示源文件是否在、文件里
+  有无 `extra.linearData` 选择、输入输出计数与原生前端地址。无源文件时可将当前 rawJson
+  导出为 ComfyUI 用户工作流目录里的新文件（`ComfyAPP-` 前缀，缺根 `id` 时补 UUID，已存在
+  则报冲突、**绝不覆盖**），并按导入链登记 `sourcePath` / 校验和 / mtime；有源文件时可按
+  工作流根 `id` 深链在复用页签中打开原生前端。用户在原生界面进 App Mode 勾选并 Ctrl+S 后，
+  点「读回引脚选择」从源文件取 `extra.linearData`，按节点图把输入判为 widget / param、
+  输出取首槽位名，映射成 `workflowIO` 暴露面并落库；幸存引脚保留显示名 / 必填 / seed /
+  模式覆盖 / 排序等元数据，图里找不到的引用逐条计入跳过并提示，不静默丢。图编辑仍以应用
+  DB 的 rawJson 为准，不做原生图回灌。
+- 落点：`src/lib/workflow/workflow-app-mode.ts`（纯映射）、
+  `src/server/api/routers/workflow-app-mode.ts`（`appModeInfo` / `exportForAppMode` /
+  `applyAppModeSelection`，与既有并发写共用同一把锁）、
+  `src/components/studio/workflow-library/sections/WorkflowLibraryAppModePanel.tsx`、
+  `src/components/studio/workflow-library/hooks/use-app-mode-actions.ts`、
+  `src/components/studio/workflow-library/workflow-library-detail-config.ts`（`DETAIL_TABS`）
+
 ---
 
 ## 6. 生成与任务（FR-GN）
@@ -814,6 +836,10 @@
   的模型标签），当前在队列中的是哪些模型一眼可见。排队 / 最近行可**就地展开
   看输入参数**（展开才拉 `task.detail`，经 `queue-task-params` 纯派生成
   中文标签键值行；内部键剔除、长值截断）。
+  顶部操作区还有生图**暂停 / 恢复**（播放 / 暂停图标随状态切换，暂停后当前任务
+  跑完即不再领生图任务，状态落库重启不丢）与**取消全部**（危险色按钮 + 二次
+  确认，一键取消当前用户所有非终态任务，含正在生成的那一条；他人任务与终态
+  任务不动，部分失败如实报数）。
 - 落点：`src/components/studio/queue/QueueMonitor.tsx`、
   `src/components/studio/queue/hooks/use-queue-model-tree.ts`（左树与过滤）、
   `src/components/studio/queue/queue-task-params.ts`（参数派生）
@@ -1944,7 +1970,9 @@
   （名字 / 原型 / 描述）+ 按特征标签筛选（多选取交集，标签带命中数角标）。
 - 行为与验收：① 侧栏「角色库」可点开，页头显示「角色库」，出厂为独立标签页
   （切走不关）；② 关键词 / 标签 / 状态三维过滤可组合，结果实时收窄；
-  ③ 空库给出「先预置角色」的引导与动作按钮，不是白屏。
+  ③ 空库给出「先预置角色」的引导与动作按钮，不是白屏；④ 卡片上**所有特征标签尽量完整展示**
+  （自动换行，不再只露前几枚加 `+N`），原型 / 职业与名字同行，长名字不把职业挤掉；
+  ⑤ 卡片可勾选，勾选后的集合作为批量生图目标。
 - 落点：`src/components/studio/characters/CharacterLibrary.tsx`（视图）、
   `src/components/studio/characters/hooks/use-character-library.ts`（逻辑层）、
   `src/components/studio/NavItems.tsx` + `WorkspaceViewStack.tsx` + `LazyViews.tsx`（导航 / 渲染）
@@ -1981,16 +2009,33 @@
 - 需求：接工作流库（如 minimax_h3_image），对全部待生成（或点名的）角色逐个
   入队生图任务；产物复制进角色库自有目录；生成状态可追踪，失败不阻断其余角色。
 - 行为与验收：① 入参封装与工坊批量同一条链（`prepareWorkflowRun` +
-  `buildWorkflowRunParams`），提示词由角色描述折算（`buildPortraitPrompt`）；
+  `buildWorkflowRunParams`），提示词由角色描述折算（`buildPortraitPrompts`）；
   ② 自动模式只取 draft / failed，已就绪角色仅显式点名时重跑（新候选不覆盖旧图）；
-  ③ 对账（`syncGeneration`）按任务终态回写：SUCCEEDED → 产物复制进
-  `generated/character-library/<id>/`、立绘入候选（最新在前）、状态 ready；
-  FAILED / CANCELED / 任务丢失 → 状态 failed（保留原立绘）；④ 界面在存在
-  生成中角色时每 5 秒自动对账，也可手动触发。
+  同一角色可用**同一模型或不同模型重复生成**多次：每次在弹窗重新选工作流并对
+  指定 / 勾选的 ids 入队，新候选不覆盖旧图；③ 对账（`syncGeneration`）按任务终态
+  回写：SUCCEEDED → 产物复制进 `generated/character-library/<id>/`、立绘入候选
+  （最新在前）、状态 ready；FAILED / CANCELLED / 任务丢失 → 状态 failed（保留原立绘）；
+  ④ 界面在存在生成中角色时每 5 秒自动对账，也可手动触发；⑤ **负面提示词两套**：
+  工作流接负向口时走负向词表；不接负向口（如 minimax_h3_image）时不传负向，改把
+  「除角色服饰上的装饰文字以外，其他地方不要出现文字 / 字幕 / 标题 / 人名 / 水印 /
+  签名」以正向表述拼在正向提示词末尾，避免机械折成「无文字」误禁服饰装饰字。
+  能力判据是作者是否把 `negative` 契约口连到工作流端口，不新增模型元数据。
 - 落点：`src/server/api/routers/character-library.ts`（`enqueueGeneration` / `syncGeneration`）、
   `src/lib/character/portrait-prompt.ts`（提示词）、`src/lib/character/character-store.ts`（落盘）、
   `src/lib/core/repository-character-profile.ts`（状态机回写）、
   `src/components/studio/characters/CharacterGenerateDialog.tsx`（弹窗）
+
+#### FR-CL-05 角色详情：候选历史与勾选删除（#5068）
+
+- 状态：已上线
+- 需求：每个角色图片的详情能看到该角色对应的**所有历史**生成记录，且生成内容可勾选删除。
+- 行为与验收：① 详情列出全部候选立绘（最多 12 张，与落库上限一致），点选一张即显示其对应任务的
+  模型名 / 工作流 / 状态 / 时刻 / 提示词摘要 / 错误，并可在历史列表里切换查看；查不到任务的历史项跳过，不报错；
+  ② 候选可多选并「删除选中」，服务端只删命中的候选，若删掉当前展示图则把剩余第一张提升为新的主立绘，
+  磁盘文件只删该角色目录内的对应文件（防路径穿越），不影响来源任务；③ 删除有非阻塞确认，成功后刷新详情与列表。
+- 落点：`src/server/api/routers/character-library.ts`（`history` / `deletePortraits`）、
+  `src/lib/character/character-store.ts`（单张安全删除）、
+  `src/components/studio/characters/CharacterDetailModal.tsx`、`hooks/use-character-library.ts`
 
 ## 18. 风格库（FR-SL）
 

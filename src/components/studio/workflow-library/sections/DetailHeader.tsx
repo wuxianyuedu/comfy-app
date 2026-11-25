@@ -209,10 +209,13 @@ export function DetailHeader({
           {/* 模型标签绑定：与导入画布同款描边样式，点开多选管理 */}
           <ModelTagPicker meta={meta} />
           <ActionButton
+            /* 主操作唯一实心（#5058）：对一条工作流做得最多的动作是进编辑器，
+             *  其余保持描边次级，删除另作危险隔离。 */
             icon={<Edit3 className="size-3.5" />}
             label="编辑"
             onClick={onEdit}
             title="在工作流编辑器中打开"
+            variant="primary"
           />
           {showUpdateJson && (
             <ActionButton
@@ -263,6 +266,9 @@ export function DetailHeader({
             label={busyDownload ? "准备中" : "下载"}
             onClick={onDownload}
           />
+          {/* 危险操作与中性操作之间加一道细分隔线（#5058）：删除不与日常
+              动作混排，视线扫到行尾先遇到隔断再遇到红色，误触概率更低。 */}
+          <span aria-hidden className="bg-border-subtle mx-1 h-5 w-px" />
           <ActionButton
             icon={<Trash2 className="size-3.5" />}
             label="删除"

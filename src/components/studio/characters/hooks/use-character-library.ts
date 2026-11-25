@@ -5,7 +5,7 @@
 // 轮询、详情与删除。CharacterLibrary 视图只消费本 hook 返回的 controller。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { runAsyncAction } from "~/lib/async-action";
@@ -29,12 +29,22 @@ export type CharacterDetail = RouterOutputs["characterLibrary"]["detail"];
 /** 工作流库列表行（生图工作流选择器用）。 */
 export type WorkflowRow = RouterOutputs["workflow"]["list"]["workflows"][number];
 
+/**
+ * 生成历史行：一张候选立绘对应一次生图任务，由详情页按候选的 taskId / url 对上号。
+ * 形状直接取服务端 router 出参，避免 UI 侧另抄一份会漂移的契约。
+ */
+export type CharacterHistoryRow = RouterOutputs["characterLibrary"]["history"][number];
+
 /** 生成对账的轮询间隔（有生成中角色时；确定性短间隔，ISSUE #4118 口径）。 */
 const SYNC_INTERVAL_MS = 5000;
 
 export type CharacterLibraryController = {
   /** 取消删除（ConfirmDialog 的关闭侧）。 */
   cancelRemove: () => void;
+  /** 清空角色多选。 */
+  clearCharacterSelection: () => void;
+  /** 清空详情里的候选立绘勾选。 */
+  clearPortraitSelection: () => void;
   /** 关闭详情弹层（open 由 detailId 派生，不清掉它就「关不掉」）。 */
   closeDetail: () => void;
   /** 删除（非阻塞确认由视图挂 ConfirmDialog 承接）。 */
@@ -48,8 +58,12 @@ export type CharacterLibraryController = {
   }) => Promise<boolean>;
   /** 创建进行中（按钮禁用）。 */
   creating: boolean;
+  /** 删除详情里勾选的候选立绘；成功清勾选并刷新 detail / list。 */
+  deleteSelectedPortraits: () => Promise<boolean>;
   /** 删除进行中（按钮禁用）。 */
   deleting: boolean;
+  /** 删除选中候选进行中（按钮禁用）。 */
+  deletingPortraits: boolean;
   /** 详情弹层的内容（打开时现取；关闭时为 null）。 */
   detail: CharacterDetail | null;
   /** 详情弹层正在展示的角色 id。 */
@@ -57,14 +71,18 @@ export type CharacterLibraryController = {
   detailLoading: boolean;
   /** 空态文案（区分「还没有角色」与「当前筛选下没有」）。 */
   empty: { hint: string; title: string };
-  /** 批量生图（入队后立即刷新列表；进度由轮询对账推进）。 */
-  enqueueGeneration: (workflowId: string, limit: number) => Promise<boolean>;
+  /** 批量生图（入队后立即刷新列表；进度由轮询对账推进）。显式 ids 可重跑已就绪角色。 */
+  enqueueGeneration: (workflowId: string, limit: number, ids?: Array<string>) => Promise<boolean>;
   /** 生图入队进行中（按钮禁用）。 */
   enqueuing: boolean;
   /** 最近一次批量打分发现的问题立绘数（null = 还没打过分）。 */
   flaggedCount: number | null;
   /** 是否存在「生成中」角色（驱动轮询与按钮态）。 */
   generating: boolean;
+  /** 当前角色的全部生成历史（null = 没打开详情 / 还没取到）。 */
+  history: Array<CharacterHistoryRow> | null;
+  /** 生成历史在取数中。 */
+  historyLoading: boolean;
   /** 角色行（列表接口的形状）。 */
   items: Array<CharacterListItem>;
   loading: boolean;
@@ -90,6 +108,10 @@ export type CharacterLibraryController = {
   /** 预置一批角色（组合式生成器；同种子重跑幂等）。 */
   seed: (count: number) => Promise<boolean>;
   seeding: boolean;
+  /** 角色卡多选（批量生图只对选中的 id 入队）。 */
+  selectedCharacterIds: Array<string>;
+  /** 详情里勾选待删的候选立绘 url。 */
+  selectedPortraitUrls: Array<string>;
   /** 当前选中的标签（多选，AND 语义）。 */
   selectedTags: Array<string>;
   /** 关键词输入。 */
@@ -103,6 +125,10 @@ export type CharacterLibraryController = {
   syncNow: () => void;
   /** 标签分面（当前过滤条件下每个标签的命中数，降序）。 */
   tagFacets: Array<{ count: number; tag: string }>;
+  /** 切换一张角色卡的多选态。 */
+  toggleCharacterSelection: (id: string) => void;
+  /** 切换一张候选立绘的删除勾选态。 */
+  togglePortraitSelection: (url: string) => void;
   /** 切换一个标签的选中态。 */
   toggleTag: (tag: string) => void;
   /** 更新角色档案（描述 / 原型变了由服务端重提标签）。 */
@@ -117,10 +143,130 @@ export type CharacterLibraryController = {
   workflowsLoading: boolean;
 };
 
+/** 角色卡多选 + 详情候选勾选的状态与切换（从主 controller 拆出，守住函数长度硬闸）。 */
+function useCharacterSelections() {
+  const [selectedCharacterIds, setSelectedCharacterIds] = useState<Array<string>>([]);
+  const [selectedPortraitUrls, setSelectedPortraitUrls] = useState<Array<string>>([]);
+
+  const toggleCharacterSelection = useCallback((id: string) => {
+    setSelectedCharacterIds((prev) =>
+      prev.includes(id) ? prev.filter((entry) => entry !== id) : [...prev, id],
+    );
+  }, []);
+
+  const clearCharacterSelection = useCallback(() => {
+    setSelectedCharacterIds([]);
+  }, []);
+
+  const togglePortraitSelection = useCallback((url: string) => {
+    setSelectedPortraitUrls((prev) =>
+      prev.includes(url) ? prev.filter((entry) => entry !== url) : [...prev, url],
+    );
+  }, []);
+
+  const clearPortraitSelection = useCallback(() => {
+    setSelectedPortraitUrls([]);
+  }, []);
+
+  return {
+    clearCharacterSelection,
+    clearPortraitSelection,
+    selectedCharacterIds,
+    selectedPortraitUrls,
+    toggleCharacterSelection,
+    togglePortraitSelection,
+  };
+}
+
+/** 详情新能力（生成历史 + 候选删除）的依赖面；全部由主 controller 注入，不另立判定。 */
+type DetailExtrasInput = {
+  clearPortraitSelection: () => void;
+  detailId: string | null;
+  invalidateList: () => void;
+  queryClient: QueryClient;
+  selectedPortraitUrls: Array<string>;
+  toast: ReturnType<typeof useToast>;
+  trpc: ReturnType<typeof useTRPC>;
+};
+
+/** 生成历史取数与候选立绘删除：同属详情域，一起拆出以守住函数长度硬闸。 */
+function useCharacterDetailExtras(input: DetailExtrasInput) {
+  const {
+    clearPortraitSelection,
+    detailId,
+    invalidateList,
+    queryClient,
+    selectedPortraitUrls,
+    toast,
+    trpc,
+  } = input;
+  const historyQ = useQuery(
+    trpc.characterLibrary.history.queryOptions(
+      { id: detailId ?? "" },
+      { enabled: detailId !== null },
+    ),
+  );
+  const deletePortraitsMut = useMutation(trpc.characterLibrary.deletePortraits.mutationOptions());
+
+  const deleteSelectedPortraits = useCallback(async (): Promise<boolean> => {
+    if (detailId === null || selectedPortraitUrls.length === 0) {
+      return false;
+    }
+    const result = await runAsyncAction(
+      async () => {
+        const res = await deletePortraitsMut.mutateAsync({
+          id: detailId,
+          urls: selectedPortraitUrls,
+        });
+        return { ok: true, detail: `已删除 ${res.removed} 张候选立绘` };
+      },
+      {
+        report: (kind, detail) => (kind === "ok" ? toast.success(detail) : toast.error(detail)),
+        failureText: "删除候选立绘失败，请稍后重试",
+      },
+    );
+    if (result.ok) {
+      clearPortraitSelection();
+      /* 历史 queryKey 取自 tRPC 工厂，不手拼（失效口径与 list / detail 一致）。 */
+      void queryClient.invalidateQueries({
+        queryKey: trpc.characterLibrary.history.queryKey({ id: detailId }),
+      });
+      void queryClient.invalidateQueries({ queryKey: trpc.characterLibrary.detail.queryKey() });
+      invalidateList();
+    }
+    return result.ok;
+  }, [
+    clearPortraitSelection,
+    deletePortraitsMut,
+    detailId,
+    invalidateList,
+    queryClient,
+    selectedPortraitUrls,
+    toast,
+    trpc,
+  ]);
+
+  return {
+    deleteSelectedPortraits,
+    deletingPortraits: deletePortraitsMut.isPending,
+    history: historyQ.isSuccess ? historyQ.data : null,
+    historyLoading: historyQ.isFetching,
+  };
+}
+
 export function useCharacterLibrary(): CharacterLibraryController {
   const trpc = useTRPC();
   const toast = useToast();
   const queryClient = useQueryClient();
+
+  const {
+    clearCharacterSelection,
+    clearPortraitSelection,
+    selectedCharacterIds,
+    selectedPortraitUrls,
+    toggleCharacterSelection,
+    togglePortraitSelection,
+  } = useCharacterSelections();
 
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<CharacterStatusFilter>("all");
@@ -148,10 +294,20 @@ export function useCharacterLibrary(): CharacterLibraryController {
       { enabled: detailId !== null },
     ),
   );
-
   const invalidateList = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: trpc.characterLibrary.list.queryKey() });
   }, [queryClient, trpc]);
+
+  /* 生成历史与候选删除同属详情域，拆到 useCharacterDetailExtras（函数长度硬闸）。 */
+  const detailExtras = useCharacterDetailExtras({
+    clearPortraitSelection,
+    detailId,
+    invalidateList,
+    queryClient,
+    selectedPortraitUrls,
+    toast,
+    trpc,
+  });
 
   const items = useMemo<CharacterListItem[]>(
     () =>
@@ -243,10 +399,13 @@ export function useCharacterLibrary(): CharacterLibraryController {
   );
 
   const enqueueGeneration = useCallback(
-    async (workflowId: string, limit: number): Promise<boolean> => {
+    async (workflowId: string, limit: number, ids?: Array<string>): Promise<boolean> => {
       const result = await runAsyncAction(
         async () => {
-          const res = await enqueueMut.mutateAsync({ workflowId, limit });
+          /* 显式 ids 走「重跑指定角色」（已就绪也会出新候选）；不传则服务端取 draft / failed。 */
+          const res = await enqueueMut.mutateAsync(
+            ids === undefined ? { workflowId, limit } : { workflowId, limit, ids },
+          );
           return {
             ok: true,
             detail: `已入队 ${res.enqueued} 个角色的生图任务（工作流：${res.workflowName}）`,
@@ -258,9 +417,12 @@ export function useCharacterLibrary(): CharacterLibraryController {
         },
       );
       invalidateList();
+      if (result.ok) {
+        clearCharacterSelection();
+      }
       return result.ok;
     },
-    [enqueueMut, invalidateList, toast],
+    [clearCharacterSelection, enqueueMut, invalidateList, toast],
   );
 
   /** 对账一次：把生成中角色的任务终态回写，再刷新列表。 */
@@ -414,24 +576,32 @@ export function useCharacterLibrary(): CharacterLibraryController {
     cancelRemove: () => {
       setRemoveTarget(null);
     },
+    clearCharacterSelection,
+    clearPortraitSelection,
+    closeDetail: () => {
+      setDetailId(null);
+      clearPortraitSelection();
+    },
     confirmRemove,
     createCharacter,
     creating: createMut.isPending,
+    deleteSelectedPortraits: detailExtras.deleteSelectedPortraits,
     deleting: deleteMut.isPending,
+    deletingPortraits: detailExtras.deletingPortraits,
     detail: detailQ.isSuccess ? detailQ.data : null,
     detailId,
     detailLoading: detailQ.isFetching,
-    closeDetail: () => {
-      setDetailId(null);
-    },
     empty,
     enqueueGeneration,
     enqueuing: enqueueMut.isPending,
     generating,
+    history: detailExtras.history,
+    historyLoading: detailExtras.historyLoading,
     items,
     loading: listQ.isPending,
     openDetail: (id: string) => {
       setDetailId(id);
+      clearPortraitSelection();
     },
     openRemove: (id: string) => {
       setRemoveTarget(id);
@@ -441,6 +611,8 @@ export function useCharacterLibrary(): CharacterLibraryController {
     removeTarget,
     seed,
     seeding: seedMut.isPending,
+    selectedCharacterIds,
+    selectedPortraitUrls,
     selectedTags,
     setQ,
     setStatus,
@@ -456,6 +628,8 @@ export function useCharacterLibrary(): CharacterLibraryController {
     regenerating: regenerateMut.isPending,
     flaggedCount,
     tagFacets: listQ.data?.tagFacets ?? [],
+    toggleCharacterSelection,
+    togglePortraitSelection,
     toggleTag,
     updateCharacter,
     updating: updateMut.isPending,

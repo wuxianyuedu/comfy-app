@@ -26,6 +26,10 @@ export const DETAIL_TABS = [
   /* IO 预览：不进编辑器就能改显隐 / 默认值 / 必填 / 显示名（ISSUE #3632）。
    * 与「编辑对外参数」相邻 —— 两者都是对外参数配置，只是后者要拉画布引擎。 */
   { key: "io", label: "IO 预览" },
+  /* App Mode 选引脚：在 ComfyUI 原生前端里用 App Mode builder 勾选要暴露的
+   * 输入 / 输出，读回 workflowIO。与 IO 预览同族（对外参数配置），轻面板：
+   * 不拉画布引擎，只带一条状态查询与导出 / 打开 / 读回三个动作。 */
+  { key: "appMode", label: "App Mode 选引脚" },
   { key: "use", label: "实际使用" },
   /* 说明：工作流内 note 节点（含英文）的正文清单 + 逐条翻译成中文（ISSUE #4963）。
    * 轻页签：不拉画布引擎、不解析 rawJson —— note 已随 detailFull 富化好。 */
