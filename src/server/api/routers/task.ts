@@ -130,13 +130,15 @@ export const taskRouter = createTRPCRouter({
       /* hasMore 的语义（#4044）：「这一页之外还可能有更多」——只要扫描没有
        * 触到表尾（exhausted）就为 true；精确与否由调用方的下一页兜底
        * （下一页拉回 0 行时 hasMore 自然变 false）。 */
-      /* 总数（历史页「已加载 X / 总数 Y」）：与列表同一套过滤（状态 / 项目），
-       * 只数行数不拉行。media 过滤是内存判据，不进这个 SQL 计数——带 media
-       * 筛选时前端的总数显示退回「已加载」口径。 */
-      const total = await taskRepository.countByUser(ctx.user.id, {
-        projectId: input.projectId,
-        statusList,
-      });
+      /* 总数与各状态计数（历史页「已加载 X / 总数 Y」与状态筛选枚上的真实
+       * 计数）：与列表同一套过滤（状态 / 项目），只数行数不拉行。media 过滤
+       * 是内存判据，不进这个 SQL 计数——带 media 筛选时前端的总数显示退回
+       * 「已加载」口径。 */
+      const countFilter = { projectId: input.projectId, statusList };
+      const [total, statusCounts] = await Promise.all([
+        taskRepository.countByUser(ctx.user.id, countFilter),
+        taskRepository.countByStatusByUser(ctx.user.id, countFilter),
+      ]);
       if (!input.media) {
         /* 多取一行判 hasMore（#4594）：请求 PAGE+1 行，返回行数超过 PAGE = 还有下一页。
          * 此前 scanOnce 只取 PAGE 行，`rows.length > PAGE` 恒假 ⇒ hasMore 恒 false，
@@ -151,6 +153,7 @@ export const taskRouter = createTRPCRouter({
           scanned: rows.length,
           nextScanCursor: input.cursor + Math.min(rows.length, PAGE),
           total,
+          statusCounts,
         };
       }
 
@@ -186,6 +189,7 @@ export const taskRouter = createTRPCRouter({
         scanned,
         nextScanCursor: input.cursor + scanned,
         total,
+        statusCounts,
       };
     }),
 

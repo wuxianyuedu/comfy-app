@@ -73,7 +73,8 @@ export type HistoryListController = {
   /** 「复制去重投」：把本次提交的全部参数折成 JSON 复制到剪贴板（ISSUE #4769，
    *  粘贴侧 = 测试模型的 JSON 输入模式）。 */
   copyForReprint: (task: TaskItem) => Promise<void>;
-  /** 各状态计数，key 为 FilterKey 或任务 status。 */
+  /** 各状态计数（服务端 GROUP BY 的**真实总数**，不是已拉取行的计数）；
+   *  key 为 FilterKey 或任务 status。 */
   counts: Record<string, number>;
   detail: TaskDetail | null;
   detailId: string | null;
@@ -244,7 +245,14 @@ export function useHistoryList(args: {
     () => sortTasks(filterTasks(tasks, filter), sort),
     [tasks, filter, sort],
   );
-  const counts = useMemo(() => countByStatus(tasks), [tasks]);
+  /* 状态枚上的计数用服务端的 GROUP BY（真实总数，不是「已拉取的行」的计数，
+   * ISSUE #5009 反馈：历史有多少就显示多少）；首页未到时退回已拉取行的计数。
+   * ALL = 终态任务总数。 */
+  const serverStatusCounts = tasksQ.data?.pages.at(-1)?.statusCounts ?? null;
+  const counts = useMemo<Record<string, number>>(() => {
+    const base = serverStatusCounts ?? countByStatus(tasks);
+    return { ALL: total ?? base.ALL ?? 0, ...base };
+  }, [serverStatusCounts, tasks, total]);
   /* 已拉取的行全部可见（分页走服务端 cursor，#4044）；「还有没有下一页」由
    * 服务端的 hasMore 回答——media 过滤的 400 行截断也因此对调用方可见。 */
   const { visibleGroups, visibleTotal } = useMemo(
