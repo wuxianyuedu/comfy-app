@@ -243,8 +243,12 @@ export function useQueueMonitor(): QueueMonitorController {
       void listQ.refetch();
     });
   }, [action, listQ, report]);
-  const requestCancelAll = useCallback(() => setCancelAllOpen(true), []);
-  const closeCancelAll = useCallback(() => setCancelAllOpen(false), []);
+  const requestCancelAll = useCallback(() => {
+    setCancelAllOpen(true);
+  }, []);
+  const closeCancelAll = useCallback(() => {
+    setCancelAllOpen(false);
+  }, []);
 
   /* 生图暂停（ISSUE #5055）：状态在库里（应用重启不丢），队列页用播放 / 暂停
    * 图标切换。暂停语义在执行器闸门（executor-dispatch）：当前任务照常跑完，
