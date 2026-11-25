@@ -195,6 +195,23 @@ function durationValueFor(args: {
   return typeof matched === "number" ? matched : undefined;
 }
 
+/** 把负向提示词改写成**正向表述**（逐项「无X」，ISSUE #5042）。
+ *
+ *  用于不接负向词的模型 / 工作流：负向词没有落点时，把它按中英文顿号 / 逗号
+ *  切项、逐项改成「无X」折进正向词，约束仍然生效（「文字，水印」→
+ *  「无文字，无水印」）。确定性纯函数：同样的负向词永远得到同样的改写，可单测。
+ *  切不出任何项（空白 / 纯分隔符）返回空串，调用方不折。 */
+export function negativeAsPositiveText(negative: string): string {
+  const items = negative
+    .split(/[，,、;；\n]/)
+    .map((item) => item.trim())
+    .filter((item) => item !== "");
+  if (items.length === 0) {
+    return "";
+  }
+  return `无${items.join("，无")}`;
+}
+
 /** 工坊的对外值 → **契约口 id → 值**（映射层的入参形状）。
  *
  *  契约口 id 见 `workflow-exposed-params` 的 `exposedParamsForMode`：
@@ -218,6 +235,22 @@ function toContractValues(args: {
   }
   if (values.negativePrompt !== undefined) {
     out.negative = values.negativePrompt;
+  }
+  /* 负向词没有落点（模型 / 工作流不接负向词，ISSUE #5042）：把它改写成正向
+   * 表述折进正向词一起下发，不再静默丢。落点判据就是作者连线（`resolved`）：
+   * 没线 / 显式断开都算「没有落点」。正向词自己也没落点时不折（折了也发不
+   * 出去）—— 此时负向词保持原样，由映射层如实报进 unmatched。折过的口不再
+   * 进载荷，映射层也就不会把它报成「负向词未生效」（它已经生效了）。 */
+  const negative = values.negativePrompt?.trim() ?? "";
+  const negativeLands = typeof resolved.negative === "string" && resolved.negative !== "";
+  const promptLands = typeof resolved.prompt === "string" && resolved.prompt !== "";
+  if (negative !== "" && !negativeLands && promptLands) {
+    const folded = negativeAsPositiveText(negative);
+    if (folded !== "") {
+      delete out.negative;
+      const base = typeof out.prompt === "string" ? out.prompt : "";
+      out.prompt = base === "" ? folded : `${base}，${folded}`;
+    }
   }
 
   /* 尺寸：工坊给的是「比例 + 档位（+ 倍数）」，映射层按**落点子口身份**派成各自
