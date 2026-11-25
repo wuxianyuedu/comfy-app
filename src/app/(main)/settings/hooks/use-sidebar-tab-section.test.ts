@@ -15,7 +15,6 @@ const hooks = vi.hoisted(() => ({
     data: undefined as
       | {
           config: SidebarTabConfig;
-          projectDefaultEditable: boolean;
           projectDefaults: SidebarTabConfig;
         }
       | undefined,
@@ -26,9 +25,7 @@ const hooks = vi.hoisted(() => ({
     /* 入参是整份草稿（改一档即存，ISSUE #3948）—— 桩的形参要跟着写，
        否则用例读不到 `calls[0][0]`。 */
     save: vi.fn((_config: SidebarTabConfig) => Promise.resolve({})),
-    saveAsProjectDefaults: vi.fn(() => Promise.resolve("src/lib/shell/sidebar-tab-defaults.json")),
     saving: false,
-    savingProjectDefaults: false,
   },
 }));
 
@@ -48,7 +45,6 @@ beforeEach(() => {
   hooks.query.data = {
     config: { ...project },
     projectDefaults: project,
-    projectDefaultEditable: false,
   };
 });
 
@@ -56,7 +52,6 @@ describe("侧边栏分区的控制器", () => {
   it("草稿由取回来的生效值播种", () => {
     const { result } = renderHook(() => useSidebarTabSection());
     expect(result.current.draft).toEqual(projectSidebarTabConfig());
-    expect(result.current.projectDefaultEditable).toBe(false);
   });
 
   it("改一档只动那一项（草稿是逐项的）", () => {
@@ -96,14 +91,6 @@ describe("侧边栏分区的控制器", () => {
     expect(result.current.status).toContain("磁盘满了");
   });
 
-  it("「保存为项目默认」把写盘的路径念出来", async () => {
-    const { result } = renderHook(() => useSidebarTabSection());
-    await act(async () => {
-      await result.current.saveAsProjectDefaults();
-    });
-    expect(result.current.status).toContain("sidebar-tab-defaults.json");
-  });
-
   it("还原默认：调那个动作，并给一句结果（草稿按服务端回的生效值重种）", async () => {
     const { result } = renderHook(() => useSidebarTabSection());
     await act(async () => {
@@ -118,7 +105,6 @@ describe("侧边栏分区的控制器", () => {
     hooks.query.data = {
       config: { ...project, console: "shared" },
       projectDefaults: project,
-      projectDefaultEditable: false,
     };
     const { result } = renderHook(() => useSidebarTabSection());
     expect(result.current.customized).toBe(true);

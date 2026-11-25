@@ -23,19 +23,19 @@ import {
 } from "~/lib/workflow/workflow-exposed-params";
 import type { WorkshopInputType } from "~/lib/workshop/remote-model-adapter";
 
-/* 项目默认（#3603 起即**完整基线**）：界面「保存为项目默认」写出来的那份，
- * 入库、跟代码走。静态 import（不走 fs）——编译进产物后读到的就是这份快照，
- * 与写回侧（`mode-contract.server.ts` 落 `MODE_CONTRACT_DEFAULTS_REL_PATH`）
- * 指向同一份文件。
+/* 项目默认（#3603 起即**完整基线**）：入库、跟代码走的那份。静态 import（不走
+ * fs）——编译进产物后读到的就是这份快照，与开发检出里现读磁盘的那份
+ * （`mode-contract.server.ts` 按 `MODE_CONTRACT_DEFAULTS_REL_PATH` 读）指向同一
+ * 份文件。运行期只读不写（ISSUE #5001）：改它走改代码 / 提 PR 那条路。
  *
  * #3603 起这份 JSON 是**全部生成类模式的完整注册表**（不再是「与推导的差集」）：
- * 每个模式的口清单 / 输出 / 必备口都显式写在文件里（`required` 一并固化），
- * 编辑器写回时也是全量落盘。为什么不再留「差集 + 代码推导」两层：改多了之后
- * 几乎所有模式都会被显式配置过（业主原话），到那时「JSON 里有的以 JSON 为准、
- * 没有的跟推导」就是两套出处各管一半 —— 现在单一出处是这份 JSON；推导
- * （`derivedModeContract`）退居两处：本 PR 迁移的**生成源**（一次性逐字导出），
- * 以及手改 JSON 误删某模式时的**兜底**（那个模式照常出现在界面上，而不是
- * 静默消失 —— 完整性由 `model-mode-contract.test.ts` 的基线判据守着）。 */
+ * 每个模式的口清单 / 输出 / 必备口都显式写在文件里（`required` 一并固化）。
+ * 为什么不再留「差集 + 代码推导」两层：改多了之后几乎所有模式都会被显式配置过
+ * （业主原话），到那时「JSON 里有的以 JSON 为准、没有的跟推导」就是两套出处各管
+ * 一半 —— 现在单一出处是这份 JSON；推导（`derivedModeContract`）退居两处：本 PR
+ * 迁移的**生成源**（一次性逐字导出），以及手改 JSON 误删某模式时的**兜底**（那个
+ * 模式照常出现在界面上，而不是静默消失 —— 完整性由 `model-mode-contract.test.ts`
+ * 的基线判据守着）。 */
 import defaultsJson from "./mode-contract-defaults.json";
 
 /* ── 模式契约注册表：每种模式的统一输入（可配置，工坊全局生效）──

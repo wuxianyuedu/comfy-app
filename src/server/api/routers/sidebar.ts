@@ -1,12 +1,10 @@
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import {
   loadSidebarTabConfig,
   loadSidebarTabProjectDefaults,
   resetSidebarTabConfig,
   saveSidebarTabConfig,
-  saveSidebarTabConfigAsProjectDefaults,
 } from "~/lib/shell/sidebar-tab-behavior.server";
 
 /** 一份配置的入参形状：视图 id → 两档行为。
@@ -30,26 +28,23 @@ const sidebarTabConfigSchema = z.object({
  * 配置是 map 形状、键为任意非空视图 id，新增视图只需在项目默认 JSON 里补一行，
  * 不必动这里的 zod 白名单。
  *
- * 两种保存方式与「模式契约」同一条口径：
- *   · `tabConfigSave` —— 落**本机**（`data/`），开发版与正式包都能用；
- *   · `tabConfigSaveProjectDefaults` —— 落**本机项目默认覆盖**（data/，不入库；
- *     ISSUE #4150），
- *     只有开发检出有可写的目标文件。
+ * 保存走 `tabConfigSave` —— 落**本机**（`data/`），开发版与正式包都能用。
+ * 项目默认那份入库 JSON 是编译期基线，运行期只读不写（ISSUE #5001）：
+ * 改它走改代码 / 提 PR 那条路。
  */
 export const sidebarRouter = createTRPCRouter({
   /**
    * 读生效配置（项目默认 + 本机覆盖）。
    *
    * 一并下发「项目默认」那份：设置页要拿它当「还原默认」的基准与差集基准，
-   * 界面自己再存一份就会与磁盘上的那份漂移。`projectDefaultEditable` 供界面决定
-   * 要不要渲染「保存为项目默认」—— 只有开发检出有可写的目标文件。
+   * 界面自己再存一份就会与磁盘上的那份漂移。
    */
   tabConfigGet: authedProcedure.query(async () => {
     const [config, projectDefaults] = await Promise.all([
       loadSidebarTabConfig(),
       loadSidebarTabProjectDefaults(),
     ]);
-    return { config, projectDefaults, projectDefaultEditable: isDevCheckout() };
+    return { config, projectDefaults };
   }),
 
   /** 「保存」：落本机覆盖（差集化后写 `data/sidebar-tab-behavior.json`）。 */
@@ -58,15 +53,6 @@ export const sidebarRouter = createTRPCRouter({
     // 回下发生效值：界面拿它刷新草稿（差集落盘后生效值 = 项目默认 + 差集）。
     return { config: await loadSidebarTabConfig() };
   }),
-
-  /** 「保存为项目默认（本机）」：全量写进本机项目默认覆盖（data/，#4150）。
-   *  只有开发检出可用 —— 正式包大声失败（判据与出口都在服务端那一层）。 */
-  tabConfigSaveProjectDefaults: authedProcedure
-    .input(sidebarTabConfigSchema)
-    .mutation(async ({ input }) => {
-      const { config, file } = await saveSidebarTabConfigAsProjectDefaults(input.config);
-      return { config, file };
-    }),
 
   /** 「还原默认」：删掉本机覆盖，生效值回落项目默认。 */
   tabConfigReset: authedProcedure.mutation(async () => {

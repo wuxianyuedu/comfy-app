@@ -26,7 +26,7 @@ export type ModeContractEditorController = {
   addCustomInput: (label: string, kind: ModeContractCustomKind) => void;
   /** 追加一个输入口（参考图由调用方传 `nextReferenceImageId` 的结果）。 */
   appendInput: (id: ModeContractInputId) => void;
-  /** 成品配置基准（项目默认）—— 判「已改」用它（服务端现读，写完即生效）。 */
+  /** 成品配置基准（项目默认）—— 判「已改」用它（服务端现读，改基线即生效）。 */
   configured: Array<ModeContract>;
   /** 当前草稿相对生效值有没有待落盘的修改（左栏「未保存」标记；自动保存的依据）。 */
   dirty: boolean;
@@ -42,8 +42,6 @@ export type ModeContractEditorController = {
   moveInput: (id: ModeContractInputId, delta: number) => void;
   /** 下一个可追加的参考图口 id（没有选中模式时为 null）。 */
   nextReferenceImageId: ModeContractInputId | null;
-  /** 这份检出能不能「保存为项目默认」（正式包 false，入口随之隐藏）。 */
-  projectDefaultEditable: boolean;
   /** 移除某个输入口（自定义口连着它的定义一起移除）。 */
   removeInput: (id: ModeContractInputId) => void;
   /** 改一个自定义口的展示名（空名不生效，保持原名）。 */
@@ -54,19 +52,14 @@ export type ModeContractEditorController = {
   resetToDefault: () => Promise<void>;
   /** 保存当前草稿（并入整份注册表）。 */
   save: () => Promise<void>;
-  /** 把当前草稿并入整份注册表后写回**项目默认**（跟代码走；只有开发检出可用，
-   *  正式包该入口不渲染、服务端也会拒）。解析为写盘的文件路径。 */
-  saveAsProjectDefault: () => Promise<string | null>;
   /** 本次打开期间是否已成功保存过（视图据此提示「另一处已生效」）。 */
   saved: boolean;
-  savedKind: "local" | "project" | null;
+  savedKind: "local" | null;
   /** 最近一次保存失败的**用户可读**原因（null = 没有挂起的失败）。
    *  失败路径必须有用户可见出口（#3637）：此前错误一路抛到无人接的
    *  `void controller.save()` 上，界面只转圈、不提示、改动也不生效。 */
   saveError: string | null;
   saving: boolean;
-  /** 「保存为项目默认」进行中。 */
-  savingProjectDefaults: boolean;
   /** 打开某模式的契约编辑（初值 = 已改过的用改过的，否则内置默认）。
    *  修改即自动保存（#3949）：切走前先把挂起的修改落盘，不需要确认弹窗。 */
   selectMode: (mode: string) => void;
@@ -82,7 +75,7 @@ export function useModeContractEditor(): ModeContractEditorController {
   const [mode, setMode] = useState<string | null>(null);
   const [draft, setDraft] = useState<ModeContract | null>(null);
   const [saved, setSaved] = useState(false);
-  const [savedKind, setSavedKind] = useState<"local" | "project" | null>(null);
+  const [savedKind, setSavedKind] = useState<"local" | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   /* 最新一版 save 的稳定引用：自动保存的去抖回调与切模式前的补存都经它调用，
    * 不必把 save 排进各自的依赖数组（save 的身份随注册表刷新而变）。 */
@@ -319,23 +312,6 @@ export function useModeContractEditor(): ModeContractEditorController {
     [],
   );
 
-  const saveAsProjectDefault = useCallback(async (): Promise<string | null> => {
-    const all = mergedRegistry();
-    if (!all) {
-      return null;
-    }
-    setSaveError(null);
-    try {
-      const file = await registry.saveAsProjectDefaults(all);
-      setSaved(true);
-      setSavedKind("project");
-      return file;
-    } catch (error) {
-      setSaveError(errorMessage(error, "写入项目默认失败，请稍后重试"));
-      return null;
-    }
-  }, [mergedRegistry, registry]);
-
   return {
     mode,
     draft,
@@ -343,8 +319,6 @@ export function useModeContractEditor(): ModeContractEditorController {
     stored: registry.contracts,
     resetting: registry.resetting,
     saving: registry.saving,
-    savingProjectDefaults: registry.savingProjectDefaults,
-    projectDefaultEditable: registry.projectDefaultEditable,
     isRequired,
     toggleRequired,
     hasAnyRequired: effectiveRequired.length > 0,
@@ -363,7 +337,6 @@ export function useModeContractEditor(): ModeContractEditorController {
     renameCustomInput,
     nextReferenceImageId: draft ? nextReferenceImageId(draft.inputs) : null,
     save,
-    saveAsProjectDefault,
     saveError,
     saved,
     savedKind,

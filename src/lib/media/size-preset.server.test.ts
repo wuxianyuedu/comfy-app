@@ -30,7 +30,6 @@ import {
   loadSizePresetTable,
   resetSizePresetSceneOverride,
   saveSizePresetTable,
-  saveSizePresetTableAsProjectDefaults,
   SIZE_PRESET_DEFAULTS_REL_PATH,
   SIZE_PRESETS_REL_PATH,
 } from "./size-preset.server";
@@ -50,6 +49,13 @@ beforeEach(() => {
 afterEach(async () => {
   await fsp.rm(root, { recursive: true, force: true });
 });
+
+/** 把项目默认那份直接写进临时 root（基线随代码更新的模拟；运行期不再有写入口）。 */
+function writeDefaultsFile(table: SizePresetTable): void {
+  const file = path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH);
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(table, null, 2), "utf8");
+}
 
 /** 取一格（表是 `Record<string, …>`，索引访问在 strict 下是可选值）。 */
 function cell(
@@ -144,46 +150,12 @@ describe("size-preset.server（ISSUE #3788）", () => {
     expect(await loadSizePresetProjectDefaults(root)).toEqual(DEFAULT_SIZE_PRESET_TABLE);
   });
 
-  it("「保存到项目代码库」写进入库那份 JSON，写完即生效（不必重启进程）", async () => {
-    /* 开发检出的判据：检出里有启动编排器 */
-    mkdirSync(path.join(root, "scripts"), { recursive: true });
-    writeFileSync(path.join(root, "scripts", "dev-launcher.mjs"), "// dev", "utf8");
-
-    const { file, table } = await saveSizePresetTableAsProjectDefaults(customizedTable(), root);
-    expect(file).toBe(path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH));
-    expect(cell(table, "image", "16:9 横屏", "1k")).toEqual({ width: 1280, height: 720 });
-
-    /* 写进去的那份就是磁盘上那份（入库、跟代码走） */
-    const written: unknown = JSON.parse(
-      await fsp.readFile(path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH), "utf8"),
-    );
-    expect(written).toMatchObject({
-      image: { "16:9 横屏": { "1k": { width: 1280, height: 720 } } },
-    });
-
-    /* 写完即生效：读侧现读磁盘那份（没有本机覆盖时，生效表 = 新的项目默认） */
-    expect(cell(await loadSizePresetTable(root), "image", "16:9 横屏", "1k")).toEqual({
-      width: 1280,
-      height: 720,
-    });
-  });
-
-  it("正式包（检出里没有编排器）大声失败，不假装成功", async () => {
-    await expect(saveSizePresetTableAsProjectDefaults(customizedTable(), root)).rejects.toThrow(
-      /保存为项目默认只在开发检出可用/,
-    );
-    /* 没有写出去任何东西 */
-    await expect(fsp.access(path.join(root, SIZE_PRESET_DEFAULTS_REL_PATH))).rejects.toThrow();
-  });
-
   it("本机覆盖的合并基准是**当前项目默认**那份（项目默认改过之后，新写入的覆盖不再带旧值）", async () => {
-    mkdirSync(path.join(root, "scripts"), { recursive: true });
-    writeFileSync(path.join(root, "scripts", "dev-launcher.mjs"), "// dev", "utf8");
-    /* 项目默认改一格（image / 16:9 / 1k → 1280×720） */
+    /* 项目默认改一格（image / 16:9 / 1k → 1280×720）：基线随代码更新（直接落盘模拟）。 */
     const newDefaults = structuredClone(DEFAULT_SIZE_PRESET_TABLE);
     cell(newDefaults, "image", "16:9 横屏", "1k").width = 1280;
     cell(newDefaults, "image", "16:9 横屏", "1k").height = 720;
-    await saveSizePresetTableAsProjectDefaults(newDefaults, root);
+    writeDefaultsFile(newDefaults);
 
     /* 覆盖里只留「这台机器真改过的那一格」，其余跟着新项目默认走 */
     await saveSizePresetTable(
@@ -214,13 +186,11 @@ describe("size-preset.server 差集落盘（ISSUE #3973）", () => {
     /* 这台机器改了一格（image 16:9 / 1k → 1280×720）并存了本机覆盖 */
     await saveSizePresetTable(customizedTable(), root);
 
-    /* 别的检出把项目默认的 video 16:9 / 1k 改成 1920×1080 并提交 */
-    mkdirSync(path.join(root, "scripts"), { recursive: true });
-    writeFileSync(path.join(root, "scripts", "dev-launcher.mjs"), "// dev", "utf8");
+    /* 别的检出把项目默认的 video 16:9 / 1k 改成 1920×1080 并提交（基线随代码更新） */
     const newDefaults = structuredClone(DEFAULT_SIZE_PRESET_TABLE);
     cell(newDefaults, "video", "16:9 横屏", "1k").width = 1920;
     cell(newDefaults, "video", "16:9 横屏", "1k").height = 1080;
-    await saveSizePresetTableAsProjectDefaults(newDefaults, root);
+    writeDefaultsFile(newDefaults);
 
     const table = await loadSizePresetTable(root);
     /* 本机真改过的格子仍是覆盖值 */

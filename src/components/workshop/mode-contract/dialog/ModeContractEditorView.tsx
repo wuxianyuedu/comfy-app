@@ -90,8 +90,7 @@ export function ModeContractEditorView({
       </div>
 
       {/* 修改即自动保存（#3949 需求 1）：草稿有改动就自动落本机覆盖，
-          不再有「保存模式契约」按钮与切换确认弹窗；「保存为项目默认（跟代码走）」
-          是仅存的显式保存动作。 */}
+          不再有「保存模式契约」按钮与切换确认弹窗。 */}
     </div>
   );
 }
@@ -191,8 +190,7 @@ function ModeContractDraftPanel({
       )}
       {/* 修改即自动保存（#3949 需求 1）：本机覆盖不再要手动点保存；失败在此可见（#3637）。 */}
       <p className="text-muted-foreground text-2xs">
-        修改即自动保存到本机应用数据（data/workshop-mode-contracts.json），无需手动保存；
-        要跟着代码走用「保存为项目默认」。{" "}
+        修改即自动保存到本机应用数据（data/workshop-mode-contracts.json），无需手动保存；{" "}
         <span className="tabular-nums">
           {controller.saving
             ? "正在保存…"
@@ -223,20 +221,9 @@ function ModeContractDraftPanel({
             {controller.resetting ? "还原中…" : "还原默认"}
           </Button>
         )}
-        {/* 只在开发检出出现：正式包没有源码可写，「项目默认」无从谈起（ISSUE #3396）。 */}
-        {controller.projectDefaultEditable && (
-          <Button
-            disabled={controller.savingProjectDefaults}
-            onClick={() => {
-              void controller.saveAsProjectDefault();
-            }}
-            variant="outline"
-          >
-            {controller.savingProjectDefaults ? "写入中…" : "保存为项目默认（跟代码走）"}
-          </Button>
-        )}
         {/* 契约有两层，各存在一处（ISSUE #3625）：本机覆盖跟着这台机器走、项目默认
-            入库跟代码走。徽标说清「保存落到哪儿」，迁移时才不会只搬走一半。 */}
+            入库跟代码走（运行期只读不写，ISSUE #5001）。徽标说清「数据落在哪儿」，
+            迁移时才不会只搬走一半。 */}
         <DataLocationBadge id="mode-contract-local" />
         <DataLocationBadge id="mode-contract-project" />
       </div>

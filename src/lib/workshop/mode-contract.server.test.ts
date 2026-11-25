@@ -33,18 +33,12 @@ import {
   readConfiguredModeContracts,
   resetModeContractOverride,
   saveModeContracts,
-  saveModeContractsAsProjectDefaults,
 } from "./mode-contract.server";
-import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
 import {
   MODE_CONTRACTS_REL_PATH,
   MODE_CONTRACT_DEFAULTS_REL_PATH,
 } from "./mode-contract-write-path";
-import {
-  configuredModeContracts,
-  derivedModeContract,
-  parseModeContracts,
-} from "./model-mode-contract";
+import { configuredModeContracts, derivedModeContract } from "./model-mode-contract";
 
 let root: string;
 
@@ -251,80 +245,5 @@ describe("项目默认：现读磁盘，不必重启（ISSUE #3634）", () => {
     expect(layers.override.map((c) => c.mode)).toEqual(["I2I"]);
     expect(layers.contracts.find((c) => c.mode === "T2I")).toEqual(tweaked);
     expect(layers.contracts.find((c) => c.mode === "I2I")?.required).toEqual(["prompt", "size"]);
-  });
-});
-
-describe("保存为项目默认：开发检出的写回入口（ISSUE #3396 / #3634）", () => {
-  /** 把临时 root 布置成一份「开发检出」：编排器在位 + src 目标目录在。 */
-  async function asDevCheckout(): Promise<void> {
-    const launcher = path.join(root, "scripts", "dev-launcher.mjs");
-    await fs.mkdir(path.dirname(launcher), { recursive: true });
-    await fs.writeFile(launcher, "// 桩：形态判据只看它在不在", "utf8");
-  }
-
-  it("判据与壳的形态判据同口径：检出里有编排器才是开发检出", async () => {
-    expect(isDevCheckout(root)).toBe(false);
-    await asDevCheckout();
-    expect(isDevCheckout(root)).toBe(true);
-  });
-
-  it("非开发检出大声拒绝（正式包没有源码可写，这条调用就是错用）", async () => {
-    await expect(
-      saveModeContractsAsProjectDefaults([{ mode: "T2I", inputs: ["prompt"] }], root),
-    ).rejects.toThrow(/只在开发检出可用/);
-    // 拒绝的同时什么都没写
-    await expect(
-      fs.readFile(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH), "utf8"),
-    ).rejects.toThrow();
-  });
-
-  it("全量落盘（#3603）：编辑器现状逐模式写入，required 固化成自描述基线", async () => {
-    await asDevCheckout();
-    const derivedT2I = derivedModeContract("T2I");
-    const tweaked: typeof derivedT2I = {
-      ...derivedModeContract("I2I"),
-      required: ["prompt", "size"],
-    };
-    const res = await saveModeContractsAsProjectDefaults(
-      [derivedT2I, tweaked, derivedModeContract("T2A")],
-      root,
-    );
-    /* 全量语义：写出去的是**完整基线** —— 编辑器给的那三条原样落盘，其余生成类
-     * 模式由成品配置补齐（成品配置那份这时也在这台机器上，所以基线不缺模式）。 */
-    expect(res.contracts.map((c) => c.mode)).toContain("T2I");
-    expect(res.contracts.map((c) => c.mode)).toContain("I2I");
-    expect(res.contracts.map((c) => c.mode)).toContain("T2A");
-    expect(res.contracts).toHaveLength(configuredModeContracts().length);
-    // required 固化：显式数组，哪怕与内置默认相同也写出来。
-    for (const contract of res.contracts) {
-      expect(Array.isArray(contract.required), contract.mode).toBe(true);
-    }
-    const raw = await fs.readFile(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH), "utf8");
-    expect(JSON.parse(raw)).toEqual(res.contracts);
-    // 落点就是入库的那一份（跟代码走的文件）
-    expect(res.file).toBe(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH));
-  });
-
-  it("写出的文件始终是完整基线：其余模式的内容不消失（#3634）", async () => {
-    await asDevCheckout();
-    /* 先在本机覆盖里改一条（模拟「这台机器上改过」）—— 此前正是这条覆盖让
-     * 「保存为项目默认」只写得出被改过的那一项，其余模式的内容全被抹掉。 */
-    await saveModeContracts(
-      [{ ...derivedModeContract("T2I"), required: ["prompt", "size"] }],
-      root,
-    );
-    const effective = await loadModeContracts(root);
-    await saveModeContractsAsProjectDefaults(effective, root);
-
-    const raw = await fs.readFile(path.join(root, MODE_CONTRACT_DEFAULTS_REL_PATH), "utf8");
-    const parsed: unknown = JSON.parse(raw);
-    const written = parseModeContracts(parsed);
-    expect(written).toHaveLength(configuredModeContracts().length);
-    for (const contract of configuredModeContracts()) {
-      expect(written.map((c) => c.mode)).toContain(contract.mode);
-    }
-    // 写完之后读取侧现读磁盘：生效值立刻是新基线，不必重启。
-    const reloaded = await loadModeContracts(root);
-    expect(reloaded.find((c) => c.mode === "T2I")?.required).toEqual(["prompt", "size"]);
   });
 });

@@ -30,13 +30,8 @@ import {
   loadModeContractLayers,
   resetModeContractOverride,
   saveModeContracts,
-  saveModeContractsAsProjectDefaults,
 } from "~/lib/workshop/mode-contract.server";
-import {
-  effectiveModelAdaptersDoc,
-  saveModelAdaptersAsDefaults,
-} from "~/lib/workshop/model-adapter-defaults.server";
-import { isDevCheckout } from "~/lib/shell/dev-checkout.server";
+import { effectiveModelAdaptersDoc } from "~/lib/workshop/model-adapter-defaults.server";
 
 /* workshopAdapters 文档的「读整份 → 合并 → 整份写回」按模型名串行化（ISSUE #3871）：
  * 「接口端点」（modelSave）与「模型适配」（workshopAdaptersSave）两处都基于各自
@@ -344,14 +339,13 @@ export const llmRouter = createTRPCRouter({
   /** 模式契约注册表：每种模式的统一输入。
    *
    *  下发**两层**：`configured` = 成品配置（项目默认基线，开发检出里现读磁盘，
-   *  写完即生效不必重启）；`contracts` = 生效注册表（成品配置逐模式压上本机
+   *  改了基线即生效不必重启）；`contracts` = 生效注册表（成品配置逐模式压上本机
    *  覆盖）。界面读 `contracts` 显示与编辑，读 `configured` 判「已改」——
    *  两层各给一份，省得界面自己再合一次（合的规则只有一处：`mode-contract-registry`）。
-   *  `projectDefaultEditable` 供界面决定要不要渲染「保存为项目默认」——
-   *  只有开发检出有可写的目标文件（ISSUE #3396）。 */
+   *  项目默认那份入库 JSON 运行期只读不写（ISSUE #5001）：改它走改代码 / 提 PR。 */
   modeContractsGet: authedProcedure.query(async () => {
     const { configured, contracts } = await loadModeContractLayers();
-    return { configured, contracts, projectDefaultEditable: isDevCheckout() };
+    return { configured, contracts };
   }),
 
   modeContractsSave: authedProcedure.input(modeContractsInputSchema).mutation(async ({ input }) => {
@@ -363,19 +357,6 @@ export const llmRouter = createTRPCRouter({
     const { contracts } = await loadModeContractLayers();
     return { contracts };
   }),
-
-  /** 「保存为项目默认」：编辑器现状**全量**写进入库 JSON（跟代码走）。
-   *  只有开发检出可用 —— 正式包大声失败（判据与出口都在
-   *  `saveModeContractsAsProjectDefaults`）。写完读取侧现读磁盘 ⇒ 不必重启。 */
-  modeContractsSaveProjectDefaults: authedProcedure
-    .input(modeContractsInputSchema)
-    .mutation(async ({ input }) => {
-      const { file } = await saveModeContractsAsProjectDefaults(input.contracts);
-      // 重读三层：刚写进项目默认的那份立刻成为成品配置，生效注册表随之更新
-      // （界面这一跳就能看到新口径，不必重启应用）。
-      const { contracts } = await loadModeContractLayers();
-      return { contracts, file };
-    }),
 
   /** 「还原默认」：把一个模式从本机覆盖里移除（生效值回落成品配置）。
    *  返回移除后的生效注册表与该模式的生效契约（界面直接拿它刷新草稿）。 */
@@ -425,38 +406,6 @@ export const llmRouter = createTRPCRouter({
           endpointPath:
             input.endpointPath === undefined
               ? existing.endpointPath
-              : (input.endpointPath.trim() ?? ""),
-          adapters,
-        });
-      });
-    }),
-
-  /** 把当前编辑的适配器写进入库的**项目默认**
-   *  （`src/lib/workshop/model-adapter-defaults.json`，跟代码走；ISSUE #3951）。
-   *  与「模式契约」的保存为项目默认同一档：只有开发检出可写（正式包没有源码，
-   *  调用即错用，大声失败）；写完现读即生效，不必重启。端点路径与
-   *  workshopAdaptersSave 同口径：省略 = 取生效档现值（本页不编辑它）。 */
-  workshopAdaptersSaveAsDefaults: authedProcedure
-    .input(
-      z.object({
-        endpointPath: z.string().optional(),
-        name: z.string().min(1),
-        adapters: z.array(adapterSchema),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      const adapters = parseRemoteModeAdapters(
-        input.adapters.map((a) => ({ ...a, mode: a.mode.toUpperCase() })),
-      );
-      return workshopAdaptersMutex.run(input.name, async () => {
-        const effective = await effectiveModelAdaptersDoc(
-          input.name,
-          await remoteModelRepository.getWorkshopAdaptersDoc(input.name),
-        );
-        return saveModelAdaptersAsDefaults(input.name, {
-          endpointPath:
-            input.endpointPath === undefined
-              ? effective.endpointPath
               : (input.endpointPath.trim() ?? ""),
           adapters,
         });

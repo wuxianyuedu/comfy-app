@@ -291,7 +291,7 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     kind: "size-presets",
     kindLabel: "尺寸配置表",
     migration:
-      "项目默认跟代码走：src/lib/media/size-preset-defaults.json 就是这份基线（设置页「保存到项目代码库」写的就是它），改默认值等于改代码。",
+      "项目默认跟代码走：src/lib/media/size-preset-defaults.json 就是这份基线（改默认值等于改代码，走提交 / PR），运行期只读不写。",
     target: "src/lib/media/size-preset-defaults.json",
   },
   "task-artifacts-db": {

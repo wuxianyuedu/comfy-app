@@ -29,10 +29,9 @@ function asTable(value: unknown): SizePresetTable {
   return mergeSizePresetTable(value);
 }
 
-/** 服务端 GET 现在回**两层**（ISSUE #3948）：项目默认 + 生效表 + 那个开关。 */
+/** 服务端 GET 现在回**两层**（ISSUE #3948）：项目默认 + 生效表。 */
 type ServerPayload = {
   defaults?: SizePresetTable;
-  projectDefaultEditable?: boolean;
   table?: SizePresetTable;
 } | null;
 
@@ -59,7 +58,6 @@ function mockFetch(payload: ServerPayload) {
 function serverPayload(table?: SizePresetTable, defaults?: SizePresetTable) {
   return {
     defaults: defaults ?? DEFAULT_SIZE_PRESET_TABLE,
-    projectDefaultEditable: false,
     table: table ?? DEFAULT_SIZE_PRESET_TABLE,
   };
 }
@@ -157,8 +155,8 @@ describe("size-preset-store（ISSUE #3788：应用数据 + 项目默认两层）
     expect(cell(lastPut, "image", "16:9 横屏", "1k")).toEqual({ width: 1280, height: 720 });
   });
 
-  /* ISSUE #3948：项目默认能被「保存到项目代码库」改过 —— 还原的基准必须是**那份**
-   * （服务端下发的项目默认），而不是编译进包的旧快照。 */
+  /* ISSUE #3948：项目默认会随代码更新 —— 还原的基准必须是**那份**（服务端下发的
+   * 项目默认），而不是编译进包的旧快照。 */
   it("还原到服务端下发的项目默认（不是编译进包的旧快照）", async () => {
     const newDefaults = mergeSizePresetTable({
       image: { "1:1 正方": { "2k": { width: 3000, height: 3000 } } },
@@ -174,12 +172,5 @@ describe("size-preset-store（ISSUE #3788：应用数据 + 项目默认两层）
       width: 3000,
       height: 3000,
     });
-  });
-
-  it("「保存到项目代码库」那个开关跟着服务端那份读数走", async () => {
-    mockFetch({ ...serverPayload(), projectDefaultEditable: true });
-    const store = await loadStore();
-    await store.hydrateSizePresetsFromServer();
-    expect(store.getSizePresetProjectDefaultEditable()).toBe(true);
   });
 });

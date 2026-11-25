@@ -1,8 +1,8 @@
 /**
- * 模型适配器的「项目默认」（ISSUE #3951）：基线读取 / 生效档合并 / 保存为项目默认。
+ * 模型适配器的「项目默认」（ISSUE #3951）：基线读取 / 生效档合并。
+ * 运行期只读不写（ISSUE #5001），没有「保存为项目默认」的写入方可测。
  *
- * 全部走临时根目录（用假件 `scripts/dev-launcher.mjs` 钉住「开发检出」判据，
- * 与 `dev-checkout.server` 的唯一判据同形），一次也不碰真实检出。
+ * 全部走临时根目录，一次也不碰真实检出。
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -14,7 +14,6 @@ import {
   effectiveModelAdaptersDoc,
   parseModelAdapterDefaults,
   readModelAdapterDefaultDocs,
-  saveModelAdaptersAsDefaults,
 } from "../src/lib/workshop/model-adapter-defaults.server";
 import bundledDefaultsJson from "../src/lib/workshop/model-adapter-defaults.json";
 
@@ -26,9 +25,6 @@ let root: string;
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "adapter-defaults-"));
-  /* 「开发检出」判据 = `scripts/dev-launcher.mjs` 在场（dev-checkout.server 的唯一判据）。 */
-  fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
-  fs.writeFileSync(path.join(root, "scripts", "dev-launcher.mjs"), "// 测试假件\n");
 });
 
 afterEach(() => {
@@ -124,47 +120,5 @@ describe("effectiveModelAdaptersDoc", () => {
     );
     const eff = await effectiveModelAdaptersDoc("M1", docWith("SHOT", "y", "/mine"), root);
     expect(eff.endpointPath).toBe("/mine");
-  });
-});
-
-describe("saveModelAdaptersAsDefaults", () => {
-  it("非开发检出 ⇒ 大声失败，一个字都不写", async () => {
-    const bare = fs.mkdtempSync(path.join(os.tmpdir(), "adapter-defaults-bare-"));
-    try {
-      await expect(saveModelAdaptersAsDefaults("M1", docWith("SHOT", "x"), bare)).rejects.toThrow(
-        "只在开发检出可用",
-      );
-      expect(fs.existsSync(path.join(bare, "src"))).toBe(false);
-    } finally {
-      fs.rmSync(bare, { recursive: true, force: true });
-    }
-  });
-
-  it("写入 + 归一化（端点补根斜杠）+ 保留其他模型", async () => {
-    fs.mkdirSync(path.dirname(defaultsFile()), { recursive: true });
-    fs.writeFileSync(
-      defaultsFile(),
-      JSON.stringify({ version: 1, models: { OTHER: docWith("VIDEO", "keep") } }),
-      "utf8",
-    );
-    const { doc, relPath } = await saveModelAdaptersAsDefaults(
-      "M1",
-      {
-        endpointPath: "v1",
-        adapters: [{ mode: "shot", inputs: [{ type: "prompt", field: "p" }], outputField: "url" }],
-      },
-      root,
-    );
-    expect(relPath).toBe("src/lib/workshop/model-adapter-defaults.json");
-    expect(doc.endpointPath).toBe("/v1");
-    const raw: unknown = JSON.parse(fs.readFileSync(defaultsFile(), "utf8"));
-    /* 整份精确比对（键序无关）：写进去的就是「原有模型原样 + 本次这一条归一化」。 */
-    expect(raw).toEqual({
-      version: 1,
-      models: {
-        OTHER: docWith("VIDEO", "keep"),
-        M1: docWith("SHOT", "p", "/v1"),
-      },
-    });
   });
 });

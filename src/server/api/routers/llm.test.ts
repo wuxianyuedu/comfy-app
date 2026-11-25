@@ -38,11 +38,6 @@ const { llmServer, contracts, defaults, workshopLlm } = vi.hoisted(() => ({
       contracts: [{ mode: "TXT2IMG" }],
     })),
     saveModeContracts: vi.fn((c: unknown) => c),
-    isDevCheckout: vi.fn(() => false),
-    saveModeContractsAsProjectDefaults: vi.fn(() => ({
-      contracts: [{ mode: "TXT2IMG" }],
-      file: "src/lib/workshop/mode-contract-defaults.json",
-    })),
     resetModeContractOverride: vi.fn(() => ({
       contracts: [],
       effective: { mode: "TXT2IMG", inputs: ["prompt"] },
@@ -51,11 +46,6 @@ const { llmServer, contracts, defaults, workshopLlm } = vi.hoisted(() => ({
   defaults: {
     /* 生效档缺省直通 DB 存档（合并逻辑的单元测试在 model-adapter-defaults.server.test.ts）。 */
     effectiveModelAdaptersDoc: vi.fn((_name: string, dbDoc: RemoteModelAdaptersDoc) => dbDoc),
-    saveModelAdaptersAsDefaults: vi.fn((_name: string, doc: RemoteModelAdaptersDoc) => ({
-      doc,
-      file: "src/lib/workshop/model-adapter-defaults.json",
-      relPath: "src/lib/workshop/model-adapter-defaults.json",
-    })),
   },
 }));
 
@@ -80,17 +70,10 @@ vi.mock("~/server/workshop/llm", () => ({
 vi.mock("~/lib/workshop/mode-contract.server", () => ({
   loadModeContractLayers: contracts.loadModeContractLayers,
   saveModeContracts: contracts.saveModeContracts,
-  saveModeContractsAsProjectDefaults: contracts.saveModeContractsAsProjectDefaults,
   resetModeContractOverride: contracts.resetModeContractOverride,
 }));
 vi.mock("~/lib/workshop/model-adapter-defaults.server", () => ({
   effectiveModelAdaptersDoc: defaults.effectiveModelAdaptersDoc,
-  saveModelAdaptersAsDefaults: defaults.saveModelAdaptersAsDefaults,
-}));
-/* 「是不是开发检出」这条判据已搬到 `~/lib/shell/dev-checkout.server`（ISSUE #3623
-   起两处配置面共用它）—— 桩跟着搬家，不搬的话这条真函数在仓库根跑会答 true。 */
-vi.mock("~/lib/shell/dev-checkout.server", () => ({
-  isDevCheckout: contracts.isDevCheckout,
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
@@ -529,18 +512,6 @@ describe("modeContracts —— 契约口 id 的类型守卫", () => {
     expect(res.contracts).toEqual([{ mode: "TXT2IMG" }]);
     /* 下发两层：成品配置基准（判「已改」）+ 生效注册表（显示 / 编辑）。 */
     expect(res.configured).toEqual([{ mode: "TXT2IMG" }]);
-    /* 「保存为项目默认」入口的开关来自服务端判据（isDevCheckout），不是界面猜的
-     *（ISSUE #3396）。 */
-    expect(res.projectDefaultEditable).toBe(false);
-    expect(contracts.isDevCheckout).toHaveBeenCalledTimes(1);
-  });
-
-  it("保存为项目默认：整份契约交给服务端差集写回（台账 E3 执行者）", async () => {
-    const res = await caller().modeContractsSaveProjectDefaults(
-      contract(["prompt", "negative", "size"]),
-    );
-    expect(contracts.saveModeContractsAsProjectDefaults).toHaveBeenCalledTimes(1);
-    expect(res.file).toBe("src/lib/workshop/mode-contract-defaults.json");
   });
 
   it("还原默认：模式码交给服务端移除覆盖（台账 E3 执行者）", async () => {
@@ -632,33 +603,6 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
     ).toBe("BAD_REQUEST");
     expect(save).not.toHaveBeenCalled();
     save.mockRestore();
-  });
-
-  it("保存为项目默认（#3951）：mode 归一成大写后交给服务端写基线", async () => {
-    const res = await caller().workshopAdaptersSaveAsDefaults({
-      name: "gpt-x",
-      adapters: [{ mode: "txt2img", inputs: [{ type: "prompt", field: "prompt" }] }],
-    });
-    expect(defaults.saveModelAdaptersAsDefaults).toHaveBeenCalledTimes(1);
-    const passed = defaults.saveModelAdaptersAsDefaults.mock.calls[0]?.[1];
-    expect(passed?.adapters[0]?.mode).toBe("TXT2IMG");
-    expect(res.relPath).toBe("src/lib/workshop/model-adapter-defaults.json");
-  });
-
-  it("保存为项目默认：端点路径省略 = 取生效档现值（本页不编辑这格）", async () => {
-    seedRemoteModel(tdb, {
-      name: "agnes-image",
-      workshopAdapters: {
-        endpointPath: "/v1/videos",
-        adapters: [],
-      },
-    });
-    await caller().workshopAdaptersSaveAsDefaults({
-      name: "agnes-image",
-      adapters: [{ mode: "t2v", inputs: [{ type: "prompt", field: "prompt" }] }],
-    });
-    const passed = defaults.saveModelAdaptersAsDefaults.mock.calls.at(-1)?.[1];
-    expect(passed?.endpointPath).toBe("/v1/videos");
   });
 
   it("概览只收非空存档：每条给模型名与该模型已配的模式码清单", async () => {
