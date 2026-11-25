@@ -814,6 +814,10 @@
   的模型标签），当前在队列中的是哪些模型一眼可见。排队 / 最近行可**就地展开
   看输入参数**（展开才拉 `task.detail`，经 `queue-task-params` 纯派生成
   中文标签键值行；内部键剔除、长值截断）。
+  顶部操作区还有生图**暂停 / 恢复**（播放 / 暂停图标随状态切换，暂停后当前任务
+  跑完即不再领生图任务，状态落库重启不丢）与**取消全部**（危险色按钮 + 二次
+  确认，一键取消当前用户所有非终态任务，含正在生成的那一条；他人任务与终态
+  任务不动，部分失败如实报数）。
 - 落点：`src/components/studio/queue/QueueMonitor.tsx`、
   `src/components/studio/queue/hooks/use-queue-model-tree.ts`（左树与过滤）、
   `src/components/studio/queue/queue-task-params.ts`（参数派生）

@@ -64,7 +64,12 @@ import { connect } from "./executor-ws";
 import { finalizeFailure } from "./executor-finalize";
 import { registerQueueAnnounce, registerQueueKick } from "./executor-continuation";
 import { clampText, TASK_ERROR_MAX } from "../text-clamp";
-import type { TaskClaimMode, TaskRepoImpl } from "../core/repository-task-impl";
+/* 生图暂停闸的判据（纯函数，宿主本就加载同一模块）与领取类型同源导入。 */
+import {
+  isImageTaskType,
+  type TaskClaimMode,
+  type TaskRepoImpl,
+} from "../core/repository-task-impl";
 
 /** 领取节拍。与 host 侧原 `CLAIM_TICK_MS` 同值（2s）：它是「安全网」的节奏，
  *  正常路径靠提交后与收口后的即时 kick，不靠等这一拍。 */
@@ -73,7 +78,12 @@ export const DISPATCH_TICK_MS = 2000;
 /** 本模块要的那三条仓储能力（结构化最小，方便宿主注入自己的 impl 实例）。 */
 export type DispatchRepo = Pick<
   TaskRepoImpl,
-  "claimNextQueued" | "findExecJob" | "finalizeFailure" | "listQueuedIds"
+  | "claimNextQueued"
+  | "peekNextQueued"
+  | "getGenerationPauseState"
+  | "findExecJob"
+  | "finalizeFailure"
+  | "listQueuedIds"
 >;
 
 let repoOverride: DispatchRepo | null = null;
@@ -197,6 +207,17 @@ async function claimAndDispatchOnceInner(options?: {
   }
   if (s.pendingDispatch.size >= MAX_CONCURRENCY) {
     return null;
+  }
+
+  /* 生图暂停闸（ISSUE #5055）：暂停期间不领生图类排队任务——正在跑的那条
+   * 照常收尾（本闸只挡「领新行」），恢复后由常驻循环按队列序继续。状态落库，
+   * 重启后仍是库里那份。视频 / 音频任务不受影响；队首是生图任务时整拍不领
+   * （FIFO 不跳发，队首让位给后面任务的那种「插队」不在本闸的语义里）。 */
+  if ((await repo.getGenerationPauseState()).paused) {
+    const next = await repo.peekNextQueued(owner);
+    if (next !== null && isImageTaskType(next.type)) {
+      return null;
+    }
   }
 
   let claimed: Array<string>;

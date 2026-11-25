@@ -325,6 +325,41 @@ describe("task.cancel", () => {
   });
 });
 
+// ─────────────────────────────── cancelAll (#5064) ───────────────────────────────
+
+describe("task.cancelAll", () => {
+  it("只取消当前用户的非终态任务：终态与他人行原样不动，计数如实", async () => {
+    seedTask(tdb, { id: "mine-queued", userId: "user-a", status: "QUEUED" });
+    seedTask(tdb, { id: "mine-running", userId: "user-a", status: "RUNNING" });
+    seedTask(tdb, { id: "mine-done", userId: "user-a", status: "SUCCEEDED" });
+    seedTask(tdb, { id: "others-queued", userId: "user-b", status: "QUEUED" });
+
+    const res = await createCaller(makeCtx()).cancelAll();
+    expect(res).toEqual({ cancelled: 2, failed: 0, total: 2 });
+
+    const status = (id: string) => tdb.$tables.tasks.find((t) => t.id === id)!.status;
+    expect(status("mine-queued")).toBe("CANCELLED");
+    expect(status("mine-running")).toBe("CANCELLED");
+    expect(status("mine-done")).toBe("SUCCEEDED");
+    expect(status("others-queued")).toBe("QUEUED");
+  });
+
+  it("重复点幂等：第二轮候选为空，不重复记取消", async () => {
+    seedTask(tdb, { id: "t1", userId: "user-a", status: "QUEUED" });
+    const caller = createCaller(makeCtx());
+    expect((await caller.cancelAll()).cancelled).toBe(1);
+    expect(await caller.cancelAll()).toEqual({ cancelled: 0, failed: 0, total: 0 });
+  });
+
+  it("空队列返回三个 0，不发任何取消", async () => {
+    expect(await createCaller(makeCtx()).cancelAll()).toEqual({
+      cancelled: 0,
+      failed: 0,
+      total: 0,
+    });
+  });
+});
+
 // ─────────────────────────────── workflow snapshot ───────────────────────────────
 
 describe("task.workflow", () => {

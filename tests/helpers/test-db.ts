@@ -82,6 +82,7 @@ const TABLES = [
   "character",
   "episode_character",
   "characterProfile",
+  "generationControl",
 ];
 
 const CREATE_SQL = `
@@ -260,6 +261,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS episode_project_uniq ON episode (projectId);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_character_uniq ON episode_character (episodeId, characterId);
 CREATE UNIQUE INDEX IF NOT EXISTS wmtt_tag_wt_uniq ON workflowModelTag_workflowTemplate (workflowModelTag, workflowTemplate);
 CREATE UNIQUE INDEX IF NOT EXISTS character_series_name_uniq ON "character" (seriesId, name);
+CREATE TABLE IF NOT EXISTS generationControl (
+  id TEXT PRIMARY KEY, paused INTEGER NOT NULL DEFAULT 0, pausedAt TEXT, updatedAt TEXT NOT NULL
+);
 CREATE UNIQUE INDEX IF NOT EXISTS characterProfile_user_name_uniq ON characterProfile (userId, name);
 CREATE UNIQUE INDEX IF NOT EXISTS season_series_number_uniq ON season (seriesId, seasonNumber);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_season_number_uniq ON episode (seasonId, episodeNumber);

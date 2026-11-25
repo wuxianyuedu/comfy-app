@@ -4,10 +4,13 @@ import { useMemo } from "react";
 import {
   Activity,
   AlertCircle,
+  Ban,
   Boxes,
   CheckCircle2,
   ListChecks,
   ListOrdered,
+  Pause,
+  Play,
   RefreshCcw,
   WifiOff,
   X,
@@ -19,6 +22,7 @@ import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ViewActions } from "~/components/studio/ViewActions";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -40,6 +44,113 @@ import {
   offlineRunningCardNote,
   runningHintText,
 } from "./queue-monitor-config";
+
+/**
+ * 顶部操作条：位次读数 + 暂停 / 恢复 + 取消全部 + 刷新（#5055 / #5064）。
+ * 从主视图切出只为守住函数长度 400 行硬闸（§12.13）：这一段是独立的一组控件，
+ * 收齐 props 即可整块搬迁，读屏顺序与主视图一致。
+ */
+function QueueActionBar({
+  cancelAllBusy,
+  hasActive,
+  pauseBusy,
+  paused,
+  refresh,
+  requestCancelAll,
+  togglePause,
+  waitingCount,
+}: {
+  cancelAllBusy: boolean;
+  hasActive: boolean;
+  pauseBusy: boolean;
+  paused: boolean;
+  refresh: () => void;
+  requestCancelAll: () => void;
+  togglePause: () => void;
+  waitingCount: number;
+}) {
+  return (
+    <ViewActions>
+      <span className="text-ink-faint text-xs tabular-nums">
+        {`待执行 ${String(waitingCount)}`}
+      </span>
+      {/* 生图暂停态角标 + 播放 / 暂停按钮（ISSUE #5055）：暂停语义在执行器
+          闸门——当前任务照常跑完，之后不再领取生图任务；图标随状态切换。 */}
+      {paused ? (
+        <span className="bg-warning/10 text-warning-strong rounded-full px-2.5 py-0.5 text-xs font-medium">
+          生图已暂停
+        </span>
+      ) : null}
+      <Button
+        aria-label={paused ? "恢复生成" : "暂停生成"}
+        className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+        disabled={pauseBusy}
+        onClick={togglePause}
+        size="xs"
+        variant="outline"
+      >
+        {paused ? (
+          <Play aria-hidden className="size-3" data-icon="inline-start" />
+        ) : (
+          <Pause aria-hidden className="size-3" data-icon="inline-start" />
+        )}
+        {paused ? "恢复生成" : "暂停生成"}
+      </Button>
+      {/* 「取消全部」整表动作（ISSUE #5064）：danger 变体 + 二次确认，
+          与删除项目同一口径；没有可取消的任务时禁用。 */}
+      <Button
+        aria-label="打开取消全部确认"
+        className="border-destructive/40 h-auto gap-1.5 rounded-lg px-3 py-1.5"
+        disabled={!hasActive || cancelAllBusy}
+        onClick={requestCancelAll}
+        size="xs"
+        variant="danger"
+      >
+        <Ban aria-hidden className="size-3" data-icon="inline-start" />
+        取消全部
+      </Button>
+      <Button
+        aria-label="立即重新读取队列"
+        className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+        onClick={refresh}
+        size="xs"
+        variant="outline"
+      >
+        <RefreshCcw aria-hidden className="size-3" data-icon="inline-start" />
+        刷新
+      </Button>
+    </ViewActions>
+  );
+}
+
+/** 「取消全部」二次确认（ISSUE #5064）：破坏面写在弹窗里 —— 正在生成的一条会
+ * 被中断、排队行全部作废且不可恢复；已产出的文件不删。与操作条一样从主视图切出，
+ * 守住函数长度硬闸。 */
+function CancelAllDialog({
+  busy,
+  onClose,
+  onConfirm,
+  open,
+}: {
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  open: boolean;
+}) {
+  return (
+    <ConfirmDialog
+      cancelLabel="返回"
+      confirmLabel="取消全部任务"
+      danger
+      description="将取消当前所有未结束的任务：正在生成的这一条会被中断，排队中的条目一并作废且不可恢复。已经生成的文件不会删除，可在「历史」里查到取消记录。"
+      onClose={onClose}
+      onConfirm={onConfirm}
+      open={open}
+      pending={busy}
+      title="取消全部任务？"
+    />
+  );
+}
 
 /** 队列与运行 · 第③层（纯视图）：只渲染 controller，不发请求、不含业务规则。
  * 三段顺序即读屏顺序：跑动中（还要多久）→ 排队中（下一条是不是我的）→ 最近结果（失败原因）。
@@ -73,6 +184,9 @@ export function QueueMonitorView({
   /* 空态判据看**未筛选**的全量：筛到一个不剩时不能误报「一条任务都没有」。 */
   const hasAny =
     running !== null || c.runningRows.length > 0 || c.queued.length > 0 || c.recent.length > 0;
+  /* 「取消全部」的判据只看**还能取消**的行：终态任务留在「最近结果」里不算。
+   * 用 `hasAny` 会让只有历史记录时也亮着按钮，点了只回一句「已取消 0 条」。 */
+  const hasActive = running !== null || c.runningRows.length > 0 || c.queued.length > 0;
   const empty = offlineEmptyText();
   const banner = offlineBannerText();
   const runningHint = runningHintText(c.online, c.waitingCount);
@@ -117,23 +231,18 @@ export function QueueMonitorView({
           由顶栏标题右侧那颗问号承载（`viewHelp()`），页头里不再放第二颗。 */}
       <PageHeader srTitle={pageHeaderTitle("queue")} />
 
-      {/* 位次统计与刷新挂到顶栏（`ViewActions`）—— 见 `ViewActions` 里那段
+      {/* 位次统计与操作挂到顶栏（`ViewActions`）—— 见 `ViewActions` 里那段
           「屏名由页签给出之后，留在屏内那一行只剩右对齐的几颗控件」（ISSUE #1871）。 */}
-      <ViewActions>
-        <span className="text-ink-faint text-xs tabular-nums">
-          {`待执行 ${String(c.waitingCount)}`}
-        </span>
-        <Button
-          aria-label="立即重新读取队列"
-          className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
-          onClick={c.refresh}
-          size="xs"
-          variant="outline"
-        >
-          <RefreshCcw aria-hidden className="size-3" data-icon="inline-start" />
-          刷新
-        </Button>
-      </ViewActions>
+      <QueueActionBar
+        cancelAllBusy={c.cancelAllBusy}
+        hasActive={hasActive}
+        pauseBusy={c.pauseBusy}
+        paused={c.paused}
+        refresh={c.refresh}
+        requestCancelAll={c.requestCancelAll}
+        togglePause={c.togglePause}
+        waitingCount={c.waitingCount}
+      />
 
       {c.loadError !== null && c.loadError !== "" ? (
         <EmptyState
@@ -432,6 +541,15 @@ export function QueueMonitorView({
           </div>
         </div>
       ) : null}
+
+      <CancelAllDialog
+        busy={c.cancelAllBusy}
+        onClose={c.closeCancelAll}
+        onConfirm={() => {
+          void c.confirmCancelAll();
+        }}
+        open={c.cancelAllOpen}
+      />
     </DocumentFrame>
   );
 }
