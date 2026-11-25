@@ -700,6 +700,28 @@
   `src/lib/llm/prompts.ts`（翻译 system prompt）、
   `src/components/studio/workflow-library/workflow-library-detail-config.ts`（`DETAIL_TABS`）
 
+#### FR-WF-16 详情「App Mode 选引脚」页签（原生 builder 选暴露面）
+
+- 状态：已上线
+- 需求：在工作流库详情用 ComfyUI 原生前端的 App Mode builder 勾选要暴露的输入 / 输出引脚
+  （ISSUE #5053）；显示名 / 必填 / seed 行为 / 按模式覆盖等元数据仍全部留在应用内编辑器
+  （IO 预览与编辑器），编辑器内既有勾选方式保留，两通道并存。
+- 行为与验收：详情在「IO 预览」后新增「App Mode 选引脚」页签，显示源文件是否在、文件里
+  有无 `extra.linearData` 选择、输入输出计数与原生前端地址。无源文件时可将当前 rawJson
+  导出为 ComfyUI 用户工作流目录里的新文件（`ComfyAPP-` 前缀，缺根 `id` 时补 UUID，已存在
+  则报冲突、**绝不覆盖**），并按导入链登记 `sourcePath` / 校验和 / mtime；有源文件时可按
+  工作流根 `id` 深链在复用页签中打开原生前端。用户在原生界面进 App Mode 勾选并 Ctrl+S 后，
+  点「读回引脚选择」从源文件取 `extra.linearData`，按节点图把输入判为 widget / param、
+  输出取首槽位名，映射成 `workflowIO` 暴露面并落库；幸存引脚保留显示名 / 必填 / seed /
+  模式覆盖 / 排序等元数据，图里找不到的引用逐条计入跳过并提示，不静默丢。图编辑仍以应用
+  DB 的 rawJson 为准，不做原生图回灌。
+- 落点：`src/lib/workflow/workflow-app-mode.ts`（纯映射）、
+  `src/server/api/routers/workflow-app-mode.ts`（`appModeInfo` / `exportForAppMode` /
+  `applyAppModeSelection`，与既有并发写共用同一把锁）、
+  `src/components/studio/workflow-library/sections/WorkflowLibraryAppModePanel.tsx`、
+  `src/components/studio/workflow-library/hooks/use-app-mode-actions.ts`、
+  `src/components/studio/workflow-library/workflow-library-detail-config.ts`（`DETAIL_TABS`）
+
 ---
 
 ## 6. 生成与任务（FR-GN）
