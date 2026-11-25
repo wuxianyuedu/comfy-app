@@ -5,20 +5,26 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { Readable } from "node:stream";
 
-const { stat, open, readCalls, disk, userMock } = vi.hoisted(() => ({
-  stat: vi.fn(),
-  open: vi.fn(),
-  /* SAFETY: type assertion reviewed */
-  readCalls: [] as Array<{
-    length: number;
-    position: number;
-  }>,
-  disk: { bytes: Buffer.from("") },
-  userMock: vi.fn<() => Promise<{ id: string } | null>>(),
-}));
+const { stat, open, createReadStream, createdStreams, readCalls, disk, userMock } = vi.hoisted(
+  () => ({
+    stat: vi.fn(),
+    open: vi.fn(),
+    createReadStream: vi.fn(),
+    /* 整档分支创建的 Node 流：断言「未消费 body 时也被释放」用它回读生命周期。 */
+    createdStreams: [] as Array<{ destroyed: boolean }>,
+    /* SAFETY: type assertion reviewed */
+    readCalls: [] as Array<{
+      length: number;
+      position: number;
+    }>,
+    disk: { bytes: Buffer.from("") },
+    userMock: vi.fn<() => Promise<{ id: string } | null>>(),
+  }),
+);
 
-vi.mock("fs", () => ({ promises: { stat, open } }));
+vi.mock("fs", () => ({ promises: { stat, open }, createReadStream }));
 vi.mock("~/server/auth/request-user", () => ({
   requireRequestUser: userMock,
 }));
@@ -40,6 +46,11 @@ function paramsOf(path: Array<string> | undefined) {
   return { params: Promise.resolve({ path }) };
 }
 
+/** 最小请求桩只实现 GET 用到的 headers 与 signal；用类型守卫替代不安全断言。 */
+function isRequestStub(value: unknown): value is NextRequest {
+  return typeof value === "object" && value !== null && "headers" in value && "signal" in value;
+}
+
 function get(path: Array<string> | undefined, range?: string) {
   return import("./route").then(({ GET }) =>
     GET(
@@ -51,7 +62,8 @@ function get(path: Array<string> | undefined, range?: string) {
   );
 }
 
-/** 种一份「磁盘上的文件」：`stat` 报它的长度，`open` 之后按请求的位置与长度读它。 */
+/** 种一份「磁盘上的文件」：`stat` 报它的长度，`open` 供 Range 分支按位置与长度读，
+ * `createReadStream` 供整档分支按需分块（#5039 起不再自建 FileHandle）。 */
 function putFile(bytes: Uint8Array | string) {
   disk.bytes = typeof bytes === "string" ? Buffer.from(bytes) : Buffer.from(bytes);
   stat.mockImplementation(() => ({
@@ -69,11 +81,36 @@ function putFile(bytes: Uint8Array | string) {
     },
     close: () => undefined,
   }));
+  createReadStream.mockImplementation(
+    (_abs: string, opts: { highWaterMark?: number; signal?: AbortSignal }) => {
+      let pos = 0;
+      const stream = new Readable({
+        read() {
+          if (pos >= disk.bytes.length) {
+            this.push(null);
+            return;
+          }
+          const end = Math.min(pos + (opts.highWaterMark ?? 64 * 1024), disk.bytes.length);
+          this.push(disk.bytes.subarray(pos, end));
+          pos = end;
+        },
+      });
+      createdStreams.push(stream);
+      if (opts.signal) {
+        const onAbort = () => stream.destroy(new Error("aborted"));
+        if (opts.signal.aborted) onAbort();
+        else opts.signal.addEventListener("abort", onAbort, { once: true });
+      }
+      return stream;
+    },
+  );
 }
 
 beforeEach(() => {
   stat.mockReset();
   open.mockReset();
+  createReadStream.mockReset();
+  createdStreams.length = 0;
   readCalls.length = 0;
   disk.bytes = Buffer.from("");
   userMock.mockReset();
@@ -151,11 +188,11 @@ describe("整份读（没有 Range）", () => {
       throw new Error("stat 的首个调用参数不是路径字符串");
     }
     expect(normalize(statArg)).toBe(`${artifactRoot}/t1/a.png`);
-    const openArg: unknown = open.mock.calls[0]?.[0];
-    if (typeof openArg !== "string") {
-      throw new Error("open 的首个调用参数不是路径字符串");
+    const streamArg: unknown = createReadStream.mock.calls[0]?.[0];
+    if (typeof streamArg !== "string") {
+      throw new Error("createReadStream 的首个调用参数不是路径字符串");
     }
-    expect(normalize(openArg)).toBe(`${artifactRoot}/t1/a.png`);
+    expect(normalize(streamArg)).toBe(`${artifactRoot}/t1/a.png`);
   });
 
   it("Accept-Ranges 在场，客户端才知道可以分段要", async () => {
@@ -177,63 +214,71 @@ describe("整份读（没有 Range）", () => {
     expect(await res.text()).toBe("");
   });
 
-  it("句柄短读也照常收尾：读到多少发多少，读完关句柄", async () => {
-    // 流式改写（ISSUE #4252）后，「短读」的契约是：把读到的字节发出去，
-    // 读不到更多（EOF）就收尾关句柄，不许无限空转。
-    let reads = 0;
-    let closed = 0;
-    open.mockImplementationOnce(() => ({
-      read: (buf: Buffer, offset: number) => {
-        reads += 1;
-        if (reads > 1) {
-          return { bytesRead: 0, buffer: buf };
-        }
-        Buffer.from("01").copy(buf, offset);
-        return { bytesRead: 2, buffer: buf };
-      },
-      close: () => {
-        closed += 1;
-      },
-    }));
+  it("短读（文件被裁短）也照常收尾：读到多少发多少，底层流正常结束并释放", async () => {
+    // 分块流改写（ISSUE #4252）后，「短读」的契约是：把读到的字节发出去，
+    // 读不到更多（EOF）就收尾，不许无限空转。
+    createReadStream.mockImplementationOnce(() => {
+      const stream = new Readable({
+        read() {
+          this.push(Buffer.from("01"));
+          this.push(null);
+        },
+      });
+      createdStreams.push(stream);
+      return stream;
+    });
     const res = await get(["t1", "a.png"]);
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("01");
     expect(res.headers.get("Content-Range")).toBeNull();
-    expect(closed).toBe(1);
+    expect(createdStreams[0]?.destroyed).toBe(true);
   });
 
-  it("读完必须 close 句柄（漏了它，Windows 上产物会被自己锁住，重生成即失败）", async () => {
-    let closed = 0;
-    open.mockImplementationOnce(() => ({
-      read: (buf: Buffer, offset: number, length: number, position: number) => {
-        readCalls.push({ length, position });
-        disk.bytes.subarray(position, position + length).copy(buf, offset);
-        return { bytesRead: length, buffer: buf };
-      },
-      close: () => {
-        closed += 1;
-      },
-    }));
+  it("整档分支不再 open FileHandle：读完底层流释放，产物不再被自己锁住", async () => {
     const res = await get(["t1", "a.png"]);
-    /* 流式响应要**消费完 body** 句柄才会关（读到位 → EOF → close）。 */
     expect(await res.text()).toBe("0123456789");
-    expect(closed).toBe(1);
+    /* 没有 FileHandle 对象，Node 26 的 GC finalizer 就没有可报 ERR_INVALID_STATE 的目标。 */
+    expect(open).not.toHaveBeenCalled();
+    expect(createReadStream).toHaveBeenCalledTimes(1);
+    const opts: unknown = createReadStream.mock.calls[0]?.[1];
+    expect(opts).toMatchObject({ autoClose: true, highWaterMark: 1024 * 1024 });
+    expect(createdStreams[0]?.destroyed).toBe(true);
   });
 
-  it("读取抛错时也要关句柄，并把错误顺着流抛给消费方", async () => {
-    let closed = 0;
-    open.mockImplementationOnce(() => ({
-      read: () => {
-        throw new Error("EIO");
-      },
-      close: () => {
-        closed += 1;
-      },
-    }));
+  it("底层流报错时顺着 Web 流抛给消费方，并确定性释放", async () => {
+    createReadStream.mockImplementationOnce(() => {
+      const stream = new Readable({
+        read() {
+          this.destroy(new Error("EIO"));
+        },
+      });
+      createdStreams.push(stream);
+      return stream;
+    });
     const res = await get(["t1", "a.png"]);
     expect(res.status).toBe(200);
     await expect(res.text()).rejects.toThrow("EIO");
-    expect(closed).toBe(1);
+    expect(createdStreams[0]?.destroyed).toBe(true);
+  });
+
+  it("响应体从未被消费也不留未关闭句柄：客户端断开时 fd 随流释放（#5039）", async () => {
+    const ac = new AbortController();
+    // GET 只用到 headers.signal 两处；NextRequest 会另造 signal，这里用最小
+    // 请求桩把外部 signal 原样送进去，才能验「断开信号传到干活的流」。
+    const stub: unknown = { headers: new Headers(), signal: ac.signal };
+    if (!isRequestStub(stub)) throw new Error("最小请求桩缺少 headers / signal");
+    const { GET } = await import("./route");
+    const res = await GET(stub, paramsOf(["t1", "a.png"]));
+    expect(res.status).toBe(200);
+    // 整档分支不构造 FileHandle —— 这是旧实现「响应体被丢弃 → GC 抛
+    // ERR_INVALID_STATE uncaughtException」的复现点。
+    expect(open).not.toHaveBeenCalled();
+    expect(createReadStream).toHaveBeenCalledTimes(1);
+    const opts: unknown = createReadStream.mock.calls[0]?.[1];
+    expect(opts).toMatchObject({ autoClose: true, signal: ac.signal });
+    ac.abort();
+    // 断开信号传到真正干活的流：未读的 body 也被释放，不靠 GC 兜底。
+    expect(createdStreams[0]?.destroyed).toBe(true);
   });
 });
 
@@ -301,8 +346,9 @@ describe("Range：三种结论翻成三个状态码", () => {
       expect(res.status).toBe(200);
       expect(await res.text()).toBe("0123456789");
       expect(res.headers.get("Content-Range")).toBeNull();
-      // 忽略 = 读整份一次，不是读一段
-      expect(readCalls).toEqual([{ length: 10, position: 0 }]);
+      // 忽略 = 走整档流一次，不是走 Range 分支读一段
+      expect(createReadStream).toHaveBeenCalledTimes(1);
+      expect(open).not.toHaveBeenCalled();
     },
   );
 
