@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure, rateLimitedProcedure } from "~/server/api/trpc";
 import { taskRepository, workflowModelTagRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
-import { errorMessage } from "~/lib/error-message";
+import { errorMessage, errorText } from "~/lib/error-message";
 import { asRecord } from "~/lib/is-record";
 import { taskOutputDir } from "~/lib/media/output-paths";
 import { cancelTask as cancelExecutorTask } from "~/lib/comfyui/enqueue";
@@ -250,7 +250,8 @@ export const taskRouter = createTRPCRouter({
         cancelled += 1;
       } catch (error) {
         failed += 1;
-        logger.warn(`[task.cancelAll] 取消 ${id} 失败：${errorMessage(error, "取消失败")}`);
+        /* 错因文案走 errorText（P42）：动作前缀与详情由同一个出口拼，不在这里手拼。 */
+        logger.warn(`[task.cancelAll] ${errorText(error, `取消 ${id} 失败`)}`);
       }
     }
     return { cancelled, failed, total: ids.length };
