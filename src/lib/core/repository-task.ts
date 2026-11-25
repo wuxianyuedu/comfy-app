@@ -144,9 +144,36 @@ async function attachImages<R extends { id: string }>(
   return rows.map((r) => ({ ...r, images: byTask.get(r.id) ?? [] }));
 }
 
+/** listByUser / countByUser 共用的过滤条件（同一口径，别两处各写一套）。
+ *  过滤值空串与缺省同义 = 不加该条件（查询参数可能出现空串）。 */
+function taskListWhere(userId: string, opts?: { projectId?: string; statusList?: Array<string> }) {
+  return and(
+    eq(task.userId, userId),
+    opts?.projectId !== undefined && opts.projectId !== ""
+      ? eq(task.projectId, opts.projectId)
+      : undefined,
+    opts?.statusList !== undefined && opts.statusList.length > 0
+      ? inArray(task.status, opts.statusList)
+      : undefined,
+  );
+}
+
 export class TaskRepository extends DrizzleRepository<Task> {
   constructor() {
     super(task, task.id);
+  }
+
+  /** 终态总数（历史页「已加载 X / 总数 Y」的总数）：与 listByUser 同一套过滤，
+   *  只数行数，不拉行。 */
+  async countByUser(
+    userId: string,
+    opts?: { projectId?: string; statusList?: Array<string> },
+  ): Promise<number> {
+    const rows = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(task)
+      .where(taskListWhere(userId, opts));
+    return Number(rows[0]?.count ?? 0);
   }
 
   async createQueued(input: {
@@ -288,16 +315,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
   ): Promise<
     Array<Task> | Array<TaskWithCover> | Array<TaskCardRow & { images: Array<TaskImage> }>
   > {
-    const where = and(
-      eq(task.userId, userId),
-      /* 过滤值空串与缺省同义 = 不加该条件（查询参数可能出现空串） */
-      opts?.projectId !== undefined && opts.projectId !== ""
-        ? eq(task.projectId, opts.projectId)
-        : undefined,
-      opts?.statusList !== undefined && opts.statusList.length > 0
-        ? inArray(task.status, opts.statusList)
-        : undefined,
-    );
+    const where = taskListWhere(userId, opts);
     if (opts?.includeImages === true) {
       const withImages = <R extends { id: string }>(rows: Array<R>) => attachImages(rows);
       // 分页口径与下面普通 select 分支**必须一致**：drizzle 的 relational
