@@ -56,6 +56,44 @@ describe("行高估算", () => {
     expect(estimateRowHeight(long, true)).toBe(ROW_STD);
   });
 
+  it("尾随换行不产生空行：以换行符结尾的消息只数实际行，中间空行照数（#5035）", () => {
+    expect(
+      countLines(
+        String.raw`a
+b
+`,
+        0,
+      ),
+    ).toBe(2);
+    /* 连续两个尾随空段都剥掉；中间的空行（a 与 b 之间）照样算一行。 */
+    expect(
+      countLines(
+        String.raw`a
+
+`,
+        0,
+      ),
+    ).toBe(1);
+    expect(
+      countLines(
+        String.raw`a
+
+b
+`,
+        0,
+      ),
+    ).toBe(3);
+    /* 纯换行消息收窄到 1 行，不会塌成 0。 */
+    expect(
+      countLines(
+        String.raw`
+
+`,
+        0,
+      ),
+    ).toBe(1);
+  });
+
   it("量到宽度时按码点宽度求和估软换行（ASCII 窄、宽字符宽）", () => {
     /* 25 个 ASCII 字符 × 9px = 225px；容量 130px → 2 行（旧的单系数 13px 会
      * 高估成 3 行，行盒里留出一整行空白——ISSUE #4567）。 */

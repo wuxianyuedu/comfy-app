@@ -23,6 +23,9 @@ import type { TaskLogEntry } from "~/lib/workshop/generation-client";
  * （§4.11.1 / P71）：error→destructive、warn→warning、success→success、
  * progress→primary、info→info。token 内部含深浅两态，不再写 dark:。 */
 type Level = TaskLogEntry["level"];
+/* 稳定引用：VirtualLogList 用它做 layoutRows 的 useMemo 依赖，内联箭头每次父渲染
+ * 新建会让 199 行位置表每帧重算（#5035 卡顿）。 */
+const taskLogMessage = (log: TaskLogEntry): string => log.msg;
 const LEVEL_STYLES: Record<Level, string> = {
   error: "bg-destructive/15 text-destructive border-destructive/20",
   warn: "bg-warning/15 text-warning-strong border-warning/20",
@@ -145,7 +148,7 @@ export function TaskLogTimeline({
         emptySlot={emptySlot ?? null}
         entries={visible}
         following={autoscroll}
-        getMessage={(log) => log.msg}
+        getMessage={taskLogMessage}
         onFollowingChange={setAutoscroll}
         renderRow={renderRow ?? ((log) => <DefaultLogRow log={log} rowTestId={rowTestId} />)}
         topSlot={topSlot ?? null}
