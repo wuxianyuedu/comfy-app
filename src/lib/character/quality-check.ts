@@ -15,6 +15,8 @@
 
 import { inflateSync } from "node:zlib";
 
+import { clampInt } from "~/lib/clamp";
+
 /** 解码结果：像素按行存（RGB 或 RGBA，channels 1/3/4）。 */
 export type DecodedPng = {
   channels: number;
@@ -207,7 +209,7 @@ export function scorePortraitPng(file: Uint8Array): PortraitQuality {
     score -= 20;
     issues.push("文件过小（疑似近乎空白的图）");
   }
-  return { issues, metrics, score: Math.max(0, Math.min(100, score)) };
+  return { issues, metrics, score: clampInt(score, 0, 100) };
 }
 
 /** 一张立绘要不要按这次打分重新生成。 */
