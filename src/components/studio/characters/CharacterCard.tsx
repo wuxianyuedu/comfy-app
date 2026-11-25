@@ -86,6 +86,20 @@ export function CharacterCard({ character, onOpenDetail, onRemove }: CharacterCa
           {character.archetype === "" ? "未设原型" : character.archetype}
           {character.gender === "" ? "" : ` · ${character.gender}`}
         </p>
+        {character.qualityScore !== null && character.qualityScore !== undefined ? (
+          <p
+            className={cn(
+              "text-2xs font-medium",
+              character.qualityScore >= 80
+                ? "text-success-strong"
+                : character.qualityScore >= 60
+                  ? "text-warning-strong"
+                  : "text-danger-strong",
+            )}
+          >
+            质量 {character.qualityScore}
+          </p>
+        ) : null}
         {character.tags.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {visibleTags.map((tag) => (

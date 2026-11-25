@@ -61,6 +61,8 @@ export type CharacterLibraryController = {
   enqueueGeneration: (workflowId: string, limit: number) => Promise<boolean>;
   /** 生图入队进行中（按钮禁用）。 */
   enqueuing: boolean;
+  /** 最近一次批量打分发现的问题立绘数（null = 还没打过分）。 */
+  flaggedCount: number | null;
   /** 是否存在「生成中」角色（驱动轮询与按钮态）。 */
   generating: boolean;
   /** 角色行（列表接口的形状）。 */
@@ -73,8 +75,18 @@ export type CharacterLibraryController = {
   /** 关键词（受控输入）。 */
   q: string;
   refresh: () => void;
+  /** 重新生成有问题的立绘（低分者退回待生成并按原链入队）。 */
+  regenerateFlagged: () => Promise<boolean>;
+  /** 重生成进行中（按钮禁用）。 */
+  regenerating: boolean;
   /** 待删除目标（ConfirmDialog 的 open 侧）。 */
   removeTarget: string | null;
+  /** 质量打分（批量）：依次给每张已就绪立绘打分；返回有问题的张数（失败 = -1）。 */
+  scoreAllQuality: () => Promise<number>;
+  /** 质量打分（单张，详情弹窗用）。 */
+  scoreOne: (id: string) => Promise<boolean>;
+  /** 批量打分进行中（按钮禁用）。 */
+  scoring: boolean;
   /** 预置一批角色（组合式生成器；同种子重跑幂等）。 */
   seed: (count: number) => Promise<boolean>;
   seeding: boolean;
@@ -115,6 +127,8 @@ export function useCharacterLibrary(): CharacterLibraryController {
   const [selectedTags, setSelectedTags] = useState<Array<string>>([]);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+  /** 最近一次批量打分发现的问题立绘数（null = 还没打过分）。 */
+  const [flaggedCount, setFlaggedCount] = useState<number | null>(null);
   /** 轮询去重：一次只允许一个对账请求在飞。 */
   const syncingRef = useRef(false);
 
@@ -127,6 +141,7 @@ export function useCharacterLibrary(): CharacterLibraryController {
     }),
   );
   const workflowsQ = useQuery(trpc.workflow.list.queryOptions(undefined));
+  const workflows = useMemo(() => workflowsQ.data?.workflows ?? [], [workflowsQ.data]);
   const detailQ = useQuery(
     trpc.characterLibrary.detail.queryOptions(
       { id: detailId ?? "" },
@@ -156,6 +171,9 @@ export function useCharacterLibrary(): CharacterLibraryController {
   const deleteMut = useMutation(trpc.characterLibrary.delete.mutationOptions());
   const createMut = useMutation(trpc.characterLibrary.create.mutationOptions());
   const updateMut = useMutation(trpc.characterLibrary.update.mutationOptions());
+  const scoreAllMut = useMutation(trpc.characterLibrary.scoreAllQuality.mutationOptions());
+  const scoreOneMut = useMutation(trpc.characterLibrary.scoreQuality.mutationOptions());
+  const regenerateMut = useMutation(trpc.characterLibrary.regenerateFlagged.mutationOptions());
 
   /** 手工创建一个角色（标签由服务端从描述提取）。 */
   const createCharacter = useCallback(
@@ -280,6 +298,83 @@ export function useCharacterLibrary(): CharacterLibraryController {
     invalidateList();
   }, [deleteMut, invalidateList, items, removeTarget, toast]);
 
+  /** 质量打分（批量）：依次给每张已就绪立绘打分；返回有问题的张数。 */
+  const scoreAllQuality = useCallback(async (): Promise<number> => {
+    let flagged = 0;
+    const result = await runAsyncAction(
+      async () => {
+        const res = await scoreAllMut.mutateAsync();
+        flagged = res.flagged.length;
+        setFlaggedCount(res.flagged.length);
+        return {
+          ok: true,
+          detail:
+            res.flagged.length > 0
+              ? `已为 ${res.scored} 张立绘打分：${res.flagged.length} 张有问题，建议重新生成`
+              : `已为 ${res.scored} 张立绘打分：全部正常`,
+        };
+      },
+      {
+        report: (kind, detail) => (kind === "ok" ? toast.success(detail) : toast.error(detail)),
+        failureText: "质量打分失败，请稍后重试",
+      },
+    );
+    invalidateList();
+    return result.ok ? flagged : -1;
+  }, [invalidateList, scoreAllMut, toast]);
+
+  /** 质量打分（单张，详情弹窗用）。 */
+  const scoreOne = useCallback(
+    async (id: string): Promise<boolean> => {
+      const result = await runAsyncAction(
+        async () => {
+          const res = await scoreOneMut.mutateAsync({ id });
+          return {
+            ok: true,
+            detail: `「${res.name}」立绘质量分 ${res.score}${res.needsRegeneration ? "（建议重新生成）" : ""}`,
+          };
+        },
+        {
+          report: (kind, detail) => (kind === "ok" ? toast.success(detail) : toast.error(detail)),
+          failureText: "质量打分失败，请稍后重试",
+        },
+      );
+      invalidateList();
+      return result.ok;
+    },
+    [invalidateList, scoreOneMut, toast],
+  );
+
+  /** 重新生成有问题的立绘：低分角色退回待生成并按原链入队。 */
+  const regenerateFlagged = useCallback(async (): Promise<boolean> => {
+    const imageWorkflows = workflows.filter(
+      (workflow) => workflow.taskType === "T2I" || workflow.taskType === "TXT2IMG",
+    );
+    const workflowId =
+      imageWorkflows.find((workflow) => workflow.name.toLowerCase().includes("minimax"))?.id ??
+      imageWorkflows[0]?.id ??
+      null;
+    if (workflowId === null) {
+      toast.error("没有可用的文生图工作流，无法重新生成");
+      return false;
+    }
+    const result = await runAsyncAction(
+      async () => {
+        const res = await regenerateMut.mutateAsync({ workflowId });
+        return {
+          ok: true,
+          detail: `已重新生成 ${res.regenerated} 张问题立绘（工作流：${res.workflowName}）`,
+        };
+      },
+      {
+        report: (kind, detail) => (kind === "ok" ? toast.success(detail) : toast.error(detail)),
+        failureText: "重新生成失败，请稍后重试",
+      },
+    );
+    invalidateList();
+    return result.ok;
+  }, [invalidateList, regenerateMut, toast, workflows]);
+
   /* ── 生成中角色的确定性轮询（P12：轮询统一走 useInterval，不自己写
    * setInterval）。没有生成中角色时 run 直接返回、不发请求；轮询随页签
    * 隐藏自动暂停（useInterval 内建），回来时按 immediate 补跑一拍。 ── */
@@ -354,11 +449,17 @@ export function useCharacterLibrary(): CharacterLibraryController {
     syncNow: () => {
       void syncNow();
     },
+    scoreAllQuality,
+    scoring: scoreAllMut.isPending,
+    scoreOne,
+    regenerateFlagged,
+    regenerating: regenerateMut.isPending,
+    flaggedCount,
     tagFacets: listQ.data?.tagFacets ?? [],
     toggleTag,
     updateCharacter,
     updating: updateMut.isPending,
-    workflows: workflowsQ.data?.workflows ?? [],
+    workflows,
     workflowsLoading: workflowsQ.isPending,
   };
 }
