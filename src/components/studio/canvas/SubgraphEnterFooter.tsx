@@ -7,6 +7,7 @@
  * click / mousedown / pointerdown 都 stopPropagation：既别把点击
  * 当成 React Flow 的节点拖拽起点，也别让外层再处理同一事件。 */
 import { LogIn } from "lucide-react";
+import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 
 export function SubgraphEnterFooter({ onEnter }: { onEnter?: () => void }) {
@@ -15,8 +16,8 @@ export function SubgraphEnterFooter({ onEnter }: { onEnter?: () => void }) {
   }
   return (
     <Hint label="展开并进入该子工作流的内部画布">
-      <button
-        className="border-border-subtle text-ink-soft hover:bg-subtle hover:text-ink-bright mt-auto flex w-full shrink-0 items-center justify-center gap-1.5 rounded-b-lg border-t px-2 py-1.5 text-xs transition-colors select-none"
+      <Button
+        className="border-border-subtle text-ink-soft hover:bg-subtle hover:text-ink-bright mt-auto h-auto w-full shrink-0 items-center justify-center gap-1.5 rounded-b-lg border-t px-2 py-1.5 text-xs transition-colors select-none"
         onClick={(event) => {
           event.stopPropagation();
           onEnter();
@@ -27,11 +28,11 @@ export function SubgraphEnterFooter({ onEnter }: { onEnter?: () => void }) {
         onPointerDown={(event) => {
           event.stopPropagation();
         }}
-        type="button"
+        variant="ghost"
       >
         进入子图
         <LogIn aria-hidden size={13} strokeWidth={2} />
-      </button>
+      </Button>
     </Hint>
   );
 }
