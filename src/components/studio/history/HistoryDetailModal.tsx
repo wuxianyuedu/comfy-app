@@ -368,14 +368,25 @@ export function HistoryDetailModal({
                         value:
                           row.value === undefined ? (
                             <span className="text-ink-fainter">未提供</span>
-                          ) : isPromptParamRow(row.id) ? (
-                            /* 提示词定高滚动（ISSUE #4665）：长提示词不再把弹窗拉长。 */
-                            <PromptValueCell text={kvValueText(row.value)} />
-                          ) : isImageFilenameValue(row.value) ? (
-                            /* 图片参数值（ISSUE #4910）：缩略图 + 文件名。 */
-                            <ParamImageValue name={row.value} />
                           ) : (
-                            kvValueText(row.value)
+                            <span className="inline-flex flex-col items-start gap-1">
+                              {isPromptParamRow(row.id) ? (
+                                /* 提示词定高滚动（ISSUE #4665）：长提示词不再把弹窗拉长。 */
+                                <PromptValueCell text={kvValueText(row.value)} />
+                              ) : isImageFilenameValue(row.value) ? (
+                                /* 图片参数值（ISSUE #4910）：缩略图 + 文件名。 */
+                                <ParamImageValue name={row.value} />
+                              ) : (
+                                kvValueText(row.value)
+                              )}
+                              {/* 本次没传、取的是工作流图内默认值的口（ISSUE #5041）：
+                                  标注来路，免得被误读成「本次传了这个值」。 */}
+                              {row.source === "default" ? (
+                                <span className="bg-subtle text-ink-fainter text-2xs rounded px-1.5 py-0.5">
+                                  默认值
+                                </span>
+                              ) : null}
+                            </span>
                           ),
                         title: row.label,
                       }))}
