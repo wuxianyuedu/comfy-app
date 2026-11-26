@@ -2,10 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useAutoAnimate } from "@formkit/auto-animate/react";
 
 import { HistoryDetailModal } from "./HistoryDetailModal";
-import { HistoryTaskCard } from "./HistoryTaskCard";
+import { HistoryVirtualCardGrid } from "./HistoryVirtualCardGrid";
 /* 加入资产库弹窗（ISSUE #4868）：行上「加入资产库」打开；归属 / 分类选择 +
    入库 mutation 都在弹窗自己的逻辑里，列表只负责开与关。 */
 import { AddToAssetLibraryDialog } from "~/components/studio/assets/AddToAssetLibraryDialog";
@@ -35,79 +34,6 @@ import { FILTERS, type SortKey, type TaskItem } from "./history-types";
 /** 排序键的运行时判据：`SelectMenu` 只给字符串，合法档位就这两枚。 */
 function isSortKey(value: string): value is SortKey {
   return value === "newest" || value === "oldest";
-}
-
-/**
- * 单个日期分组下的任务卡片列表。
- * 独立成组件以便用 useAutoAnimate 给「增 / 删 / 排序换位」的条目级重排做平滑过渡，
- * 同时不把 hook 放进 map 循环（hooks 规则）。纯展示，无业务规则（规范 17 §17.2 第③层）。
- */
-function HistoryGroupTaskList({
-  items,
-  progressMap,
-  isRetrying,
-  isRowBusy,
-  onAddToLibrary,
-  onOpenDetail,
-  onCancel,
-  onRetry,
-  onRemove,
-  onOpenLog,
-  onOpenFolder,
-  onCopyForReprint,
-}: {
-  /** 「这一条在重试吗」的判据由导出它的出口给（规范 16 §16.2.4.40）——
-   * 视图不再自己写`retryingId === task.id`。 */
-  isRetrying: (id: string) => boolean;
-  /** 「这一条的动作（输出目录 / 复制去重投）在进行中吗」（ISSUE #4619）。 */
-  isRowBusy: (id: string) => boolean;
-  items: Array<TaskItem>;
-  /** 打开「加入资产库」弹窗（ISSUE #4868）。 */
-  onAddToLibrary: (task: TaskItem) => void;
-  onCancel: (id: string) => void;
-  onCopyForReprint: (task: TaskItem) => void;
-  onOpenDetail: (id: string) => void;
-  onOpenFolder: (task: TaskItem) => void;
-  onOpenLog: (task: TaskItem) => void;
-  onRemove: (id: string) => void;
-  onRetry: (task: TaskItem) => void;
-  progressMap: Record<string, number>;
-}) {
-  // 仅用 transform/opacity 的 FLIP 位移与淡入淡出（规范 §2.7），不动画
-  // width/height/left/top/margin 等触发整树 layout 重排的属性。
-  // 尊重系统减弱动画的限制已去掉：开启 disrespectUserMotionPreference，
-  // 让列表条目级增删/排序在系统开启「减弱动态效果」时也保留适量过渡动画。
-  const [listRef] = useAutoAnimate<HTMLDivElement>({
-    duration: 250,
-    easing: "ease-out",
-    disrespectUserMotionPreference: true,
-  });
-
-  return (
-    /* 双列卡片网格（重设计稿）：宽屏两列并排读日期分组里的任务；窄屏退回单列。
-       不设 items-start —— 同一行的两张卡（成功 / 失败）等高，底部动作区由卡内
-       `mt-auto` 钉在同一条底线上（用户反馈 #4710 的「对不齐」）。
-       auto-animate 的 FLIP 对 grid 重排同样按位移过渡（只动 transform/opacity，规范 §2.7）。 */
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2" ref={listRef}>
-      {items.map((task) => (
-        <HistoryTaskCard
-          busy={isRowBusy(task.id)}
-          key={task.id}
-          onAddToLibrary={onAddToLibrary}
-          onCancel={onCancel}
-          onCopyForReprint={onCopyForReprint}
-          onOpenDetail={onOpenDetail}
-          onOpenFolder={onOpenFolder}
-          onOpenLog={onOpenLog}
-          onRemove={onRemove}
-          onRetry={onRetry}
-          progress={progressMap[task.id] ?? 0}
-          retrying={isRetrying(task.id)}
-          task={task}
-        />
-      ))}
-    </div>
-  );
 }
 
 /**
@@ -264,7 +190,7 @@ export function HistoryList({
               </div>
 
               {/* ── 任务列表 ── */}
-              <HistoryGroupTaskList
+              <HistoryVirtualCardGrid
                 isRetrying={c.isRetrying}
                 isRowBusy={c.isRowBusy}
                 items={group.items}

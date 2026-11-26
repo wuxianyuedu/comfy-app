@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import {
   Activity,
   AlertCircle,
@@ -37,13 +37,18 @@ import { taskStatusLabel } from "~/lib/task-state";
 import type { QueueModelTreeController } from "./hooks/use-queue-model-tree";
 import type { QueueMonitorController, RunningCardView } from "./hooks/use-queue-monitor";
 import type { QueueRow } from "./queue-monitor-config";
-import { Field, QueueRowLine, RunningDetails, SectionHeading } from "./QueueMonitorParts";
+import { Field, RunningDetails, SectionHeading } from "./QueueMonitorParts";
+import { QueueRowVirtualList } from "./QueueRowVirtualList";
+import { RunningTiming } from "./RunningTiming";
 import {
   offlineBannerText,
   offlineEmptyText,
   offlineRunningCardNote,
   runningHintText,
 } from "./queue-monitor-config";
+
+/** 左树不需要「正在生成」标记：引用恒定的空集合，避免每次渲染造新 Set。 */
+const EMPTY_GENERATING_MODELS = new Set<string>();
 
 /**
  * 顶部操作条：位次读数 + 暂停 / 恢复 + 取消全部 + 刷新（#5055 / #5064）。
@@ -167,10 +172,12 @@ function RunningCard({ c, running }: { c: QueueMonitorController; running: Runni
       </div>
       <ProgressBar className="mt-3" label="采样进度" value={running.progressPct} />
       <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="已跑">{running.elapsedText}</Field>
-        <Field label="预计剩余">{running.remainingText}</Field>
-        <Field label="步数">{running.stepsText}</Field>
-        <Field label="速度">{running.rateText}</Field>
+        <RunningTiming
+          progressPct={running.progressPct}
+          progressValue={running.progressValue}
+          startedAt={running.startedAt}
+          stepsText={running.stepsText}
+        />
         <Field label="当前节点">{running.nodeText}</Field>
         <Field label="主模型">{running.modelText}</Field>
       </dl>
@@ -238,7 +245,7 @@ function RunningCard({ c, running }: { c: QueueMonitorController; running: Runni
  * 左栏树（ISSUE #5019）：与测试模型页同一份「用途 / 模式 / 模型」候选树
  * （useModelTestTree），选中一片叶子 = 按那个模型过滤三段列表；再点同一片取消。
  * 列表逐条带模型徽标，排队 / 最近行可就地展开看输入参数（#5010 的能力并入这里）。 */
-export function QueueMonitorView({
+export const QueueMonitorView = memo(function QueueMonitorView({
   c,
   onOpenComfyui,
   tree,
@@ -259,6 +266,12 @@ export function QueueMonitorView({
   const runningRows = c.runningRows.filter((row) => keepIds.has(row.id));
   const queued = c.queued.filter((entry) => keepIds.has(entry.row.id));
   const recent = c.recent.filter((row) => keepIds.has(row.id));
+  /* 虚拟列表的项形状在这里定型，位次文案也只算一次。 */
+  const queuedRows = useMemo(
+    () => queued.map(({ position, row }) => ({ leading: `第 ${String(position)} 位`, row })),
+    [queued],
+  );
+  const recentRows = useMemo(() => recent.map((row) => ({ row })), [recent]);
   /* 空态判据看**未筛选**的全量：筛到一个不剩时不能误报「一条任务都没有」。 */
   const hasAny =
     running !== null || c.runningRows.length > 0 || c.queued.length > 0 || c.recent.length > 0;
@@ -273,28 +286,23 @@ export function QueueMonitorView({
   const treeKind = tree.selection?.kind;
   const treeCurrentKind = treeKind === "video" || treeKind === "chat" ? treeKind : "image";
 
-  const rowProps = (row: QueueRow) => ({
-    row,
-    busy: c.isBusy(row.id),
-    paramsExpanded: c.expandedId === row.id,
-    paramRows: c.expandedId === row.id ? c.paramRows : [],
-    paramsLoading: c.expandedId === row.id && c.detailLoading,
-    onToggleParams: () => {
-      c.toggleExpanded(row.id);
-    },
-    onCancel: () => {
-      void c.cancel(row.id, row.workflowName);
-    },
-    onCopy: () => {
-      void c.copyForReprint(row);
-    },
-    onOpenFolder: () => {
-      void c.openFolder(row);
-    },
-    onOpenLog: () => {
-      c.openLog(row);
-    },
-  });
+  /* 逐行闭包收在行组件自己的 render 里（QueueRowLine 已 memo），视图这里
+   * 只传稳定 handler；行身份由 controller 给，轮询不会换掉静止行的 props。 */
+  const handleToggleParams = (id: string) => {
+    c.toggleExpanded(id);
+  };
+  const handleCancel = (row: QueueRow) => {
+    void c.cancel(row.id, row.workflowName);
+  };
+  const handleCopy = (row: QueueRow) => {
+    void c.copyForReprint(row);
+  };
+  const handleOpenFolder = (row: QueueRow) => {
+    void c.openFolder(row);
+  };
+  const handleOpenLog = (row: QueueRow) => {
+    c.openLog(row);
+  };
 
   return (
     <DocumentFrame
@@ -387,7 +395,7 @@ export function QueueMonitorView({
                   currentKind={treeCurrentKind}
                   currentMode={tree.selection?.mode ?? ""}
                   entries={tree.entries}
-                  generatingModels={new Set([])}
+                  generatingModels={EMPTY_GENERATING_MODELS}
                   loading={false}
                   onSelect={tree.select}
                   selectedValue={tree.selection?.value ?? ""}
@@ -536,13 +544,18 @@ export function QueueMonitorView({
                 {`排队中（${String(queued.length)}）`}
               </SectionHeading>
               {queued.length > 0 ? (
-                <ol className="border-border bg-card overflow-hidden rounded-2xl border">
-                  {queued.map(({ row, position }) => (
-                    <li className="border-border border-b px-4 py-3 last:border-b-0" key={row.id}>
-                      <QueueRowLine leading={`第 ${String(position)} 位`} {...rowProps(row)} />
-                    </li>
-                  ))}
-                </ol>
+                <QueueRowVirtualList
+                  expandedId={c.expandedId}
+                  isBusy={c.isBusy}
+                  onCancel={handleCancel}
+                  onCopy={handleCopy}
+                  onOpenFolder={handleOpenFolder}
+                  onOpenLog={handleOpenLog}
+                  onToggleParams={handleToggleParams}
+                  paramRows={c.paramRows}
+                  paramsLoading={c.detailLoading}
+                  rows={queuedRows}
+                />
               ) : (
                 <p className="text-ink-fainter flex items-center gap-1.5 text-xs">
                   <ListOrdered aria-hidden className="size-3.5" />
@@ -554,13 +567,18 @@ export function QueueMonitorView({
             <section aria-labelledby="queue-recent-heading">
               <SectionHeading id="queue-recent-heading">最近结果</SectionHeading>
               {recent.length > 0 ? (
-                <ul className="border-border bg-card overflow-hidden rounded-2xl border">
-                  {recent.map((row) => (
-                    <li className="border-border border-b px-4 py-3 last:border-b-0" key={row.id}>
-                      <QueueRowLine {...rowProps(row)} />
-                    </li>
-                  ))}
-                </ul>
+                <QueueRowVirtualList
+                  expandedId={c.expandedId}
+                  isBusy={c.isBusy}
+                  onCancel={handleCancel}
+                  onCopy={handleCopy}
+                  onOpenFolder={handleOpenFolder}
+                  onOpenLog={handleOpenLog}
+                  onToggleParams={handleToggleParams}
+                  paramRows={c.paramRows}
+                  paramsLoading={c.detailLoading}
+                  rows={recentRows}
+                />
               ) : (
                 <p className="text-ink-fainter text-xs">
                   还没有跑完过的任务。完整历史在侧栏「历史」里看。
@@ -581,4 +599,4 @@ export function QueueMonitorView({
       />
     </DocumentFrame>
   );
-}
+});

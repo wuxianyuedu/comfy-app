@@ -49,6 +49,7 @@ import {
   type TaskItem,
 } from "../history-types";
 import { PAGE_SIZE, useSimulatedProgress } from "../history-utils";
+import { useStableHistoryTasks } from "./use-stable-history-tasks";
 import { useTRPC } from "~/trpc/react";
 
 /** 有进行中任务时的轮询节奏（与画布历史面板同一档）：任务完成 / 新任务入队
@@ -188,25 +189,9 @@ export function useHistoryList(args: {
   const total = tasksQ.data?.pages.at(-1)?.total ?? null;
 
   /* 各页并集（按 id 去重、保持「新到旧」的页序）：渲染期从查询结果派生，
-   * 不在 effect 里 setState（规范 8.6 / 2.4）。 */
-  const tasks = useMemo<Array<TaskItem>>(() => {
-    const byId = new Map<string, TaskItem>();
-    for (const page of tasksQ.data?.pages ?? []) {
-      for (const task of page.tasks) {
-        byId.set(task.id, {
-          ...task,
-          createdAt: String(task.createdAt),
-          finishedAt:
-            task.finishedAt === null || task.finishedAt === undefined
-              ? null
-              : String(task.finishedAt),
-          claimedAt:
-            task.claimedAt === null || task.claimedAt === undefined ? null : String(task.claimedAt),
-        });
-      }
-    }
-    return [...byId.values()];
-  }, [tasksQ.data]);
+   * 不在 effect 里 setState（规范 8.6 / 2.4）；4s 轮询内容不变时沿用旧引用，
+   * 否则 100 张已 memo 的卡片会跟着新数组一起失效。 */
+  const tasks = useStableHistoryTasks(tasksQ.data?.pages);
   const loading = tasksQ.isLoading;
   const progressMap = useSimulatedProgress(tasks);
 
@@ -473,6 +458,11 @@ export function useHistoryList(args: {
     setLogTarget(null);
   }, []);
 
+  /* 行级判据收成稳定函数（规范 04 §4.8）：此前 return 里现造两个箭头，
+   * 每次 controller 重建都换身份，memo 的卡片列表因此陪跑。 */
+  const isRetrying = useCallback((id: string) => retryAction.isBusy(id), [retryAction]);
+  const isRowBusy = useCallback((id: string) => rowAction.isBusy(id), [rowAction]);
+
   return {
     tasks,
     loading,
@@ -488,8 +478,8 @@ export function useHistoryList(args: {
     empty,
     progressMap,
     retryingId: retryAction.busyId,
-    isRetrying: retryAction.isBusy,
-    isRowBusy: (id: string) => rowAction.isBusy(id),
+    isRetrying,
+    isRowBusy,
     logTarget,
     detailId,
     detail,

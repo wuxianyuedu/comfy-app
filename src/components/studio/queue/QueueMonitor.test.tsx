@@ -218,13 +218,12 @@ describe("QueueMonitor", () => {
     monitorMock.mockReturnValue(
       controller({
         running: {
-          elapsedText: "1s",
           id: "run-1",
           modelText: "MiniMax H3",
           nodeText: "—",
           progressPct: 0.2,
-          rateText: "—",
-          remainingText: "—",
+          progressValue: null,
+          startedAt: Date.now() - 1000,
           stepsText: "—",
           workflowName: "image_minimax_h3_image_t2i",
         },
@@ -359,11 +358,10 @@ describe("QueueMonitor", () => {
           workflowName: "正在跑的工作流",
           modelText: "sd.safetensors",
           nodeText: "尚未回报节点",
-          elapsedText: "00:30",
-          remainingText: "估算中",
           progressPct: 0,
+          progressValue: null,
+          startedAt: Date.now() - 30_000,
           stepsText: "—",
-          rateText: "—",
         },
       }),
     );
