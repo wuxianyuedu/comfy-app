@@ -31,22 +31,27 @@ export function artifactUrl(segments: ReadonlyArray<string | number>): string {
   return `${ARTIFACT_URL_PREFIX}/${segments.join("/")}`;
 }
 
-/** 布局的唯一形状：project 任务在 `projects/<projectId>/<taskId>` 下，其余直接在 `<taskId>` 下。
- *  磁盘与 URL 两条出口都由它派生。 */
-export function taskOutputSegments(taskId: string, projectId?: string | null): Array<string> {
-  return projectId !== undefined && projectId !== null && projectId !== ""
-    ? [PROJECTS_SUBDIR, projectId, taskId]
-    : [taskId];
+import type { ArtifactTaxonomy } from "./artifact-taxonomy";
+
+/** 任务产物的唯一形状：`generated/<媒体类型>/<模型名>/<模式码>/<taskId>/`。
+ *
+ *  三级分类在前、taskId 收尾，磁盘与 URL 两条出口都由它派生。projectId 不再进
+ *  产物路径——项目归属留在库里的 `task.projectId` 上；原先 project 任务独占一层
+ *  `projects/<pid>/`，导致同一批任务一半平铺一半分叉，目录一多就乱且没法按
+ *  媒体 / 模型 / 模式整体迁移。现在所有任务一律同一形状。 */
+export function taskOutputSegments(taxonomy: ArtifactTaxonomy, taskId: string): Array<string> {
+  return [taxonomy.mediaType, taxonomy.modelName, taxonomy.modeCode, taskId];
 }
 
-/** 浏览器地址前缀：写进 `TaskImage.localPath` / `resultImages` 的那一段。 */
-export function taskOutputUrl(taskId: string, projectId?: string | null): string {
-  return artifactUrl(taskOutputSegments(taskId, projectId));
+/** 浏览器地址前缀：写进 `TaskImage.localPath` / `resultImages` 的那一段。
+ *  每段单独编码（模型名可能含中文或空格），读侧 `artifactDiskPath` 解码后落盘。 */
+export function taskOutputUrl(taxonomy: ArtifactTaxonomy, taskId: string): string {
+  return artifactUrl(taskOutputSegments(taxonomy, taskId).map(encodeURIComponent));
 }
 
-/** 给人看的**相对**落点（`generated/projects/<pid>/<tid>/`）。
+/** 给人看的**相对**落点（`generated/image/<模型>/<模式>/<taskId>/`）。
  *  相对应用根而不给绝对路径：那台机器上根在哪儿由壳 / launcher 决定，
  *  界面写死一个绝对形状就一定会说错。 */
-export function artifactDirDisplay(taskId: string, projectId?: string | null): string {
-  return `${ARTIFACT_ROOT_DIR}/${taskOutputSegments(taskId, projectId).join("/")}/`;
+export function artifactDirDisplay(taxonomy: ArtifactTaxonomy, taskId: string): string {
+  return `${ARTIFACT_ROOT_DIR}/${taskOutputSegments(taxonomy, taskId).join("/")}/`;
 }
