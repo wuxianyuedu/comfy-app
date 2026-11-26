@@ -297,10 +297,12 @@ export function deriveWorkshopParams(
   mode: string | null | undefined,
   contracts: ReadonlyArray<ModeContract> | null | undefined,
   io: WorkflowIOMap | null | undefined,
+  /** 调用方若已派生过参考图就传进来，避免这里重复算一遍（#5124）。 */
+  references?: Array<string>,
 ): Array<WorkshopParamRow> {
   const params = paramsOf(detail);
   const inputs = workflowInputsOf<RawWorkflowInput>(detail);
-  const refs = deriveReferenceImages(detail);
+  const refs = references ?? deriveReferenceImages(detail);
   return modeContractEntries(mode, contracts).map((port) => {
     const resolved = resolvePort(port.id, { params, inputs, io, refs, detail });
     return {
