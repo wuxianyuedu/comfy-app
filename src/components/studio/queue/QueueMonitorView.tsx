@@ -35,7 +35,7 @@ import { displayValue } from "~/lib/display-value";
 import { taskStatusLabel } from "~/lib/task-state";
 
 import type { QueueModelTreeController } from "./hooks/use-queue-model-tree";
-import type { QueueMonitorController } from "./hooks/use-queue-monitor";
+import type { QueueMonitorController, RunningCardView } from "./hooks/use-queue-monitor";
 import type { QueueRow } from "./queue-monitor-config";
 import { Field, QueueRowLine, RunningDetails, SectionHeading } from "./QueueMonitorParts";
 import {
@@ -149,6 +149,81 @@ function CancelAllDialog({
       pending={busy}
       title="取消全部任务？"
     />
+  );
+}
+
+/** 在线时的跑动中富卡（#5075 从主视图拆出，守 400 行函数长度硬闸）：
+ *  六格读数 + 详情 / 日志 / 取消三个动作，详情展开走 controller 的同一个门控。 */
+function RunningCard({ c, running }: { c: QueueMonitorController; running: RunningCardView }) {
+  return (
+    <article className="bg-card border-border rounded-2xl border p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h3 className="text-ink-bright min-w-0 flex-1 text-sm font-semibold">
+          <TruncatedText className="block truncate">
+            {displayValue(running.workflowName, { fallback: "（未知工作流）" })}
+          </TruncatedText>
+        </h3>
+        <StatusBadge label={taskStatusLabel("RUNNING")} status="RUNNING" />
+      </div>
+      <ProgressBar className="mt-3" label="采样进度" value={running.progressPct} />
+      <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+        <Field label="已跑">{running.elapsedText}</Field>
+        <Field label="预计剩余">{running.remainingText}</Field>
+        <Field label="步数">{running.stepsText}</Field>
+        <Field label="速度">{running.rateText}</Field>
+        <Field label="当前节点">{running.nodeText}</Field>
+        <Field label="主模型">{running.modelText}</Field>
+      </dl>
+      <div className="mt-3 flex justify-end gap-1">
+        {/* #5075：展开统一输入 / 请求读数，与测试模型页同口径。 */}
+        <Button
+          aria-expanded={c.expandedId === running.id}
+          aria-label="查看正在跑这条的统一输入与请求信息"
+          className="h-auto gap-1"
+          onClick={() => {
+            c.toggleExpanded(running.id);
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          详情
+        </Button>
+        <Button
+          aria-label="查看正在跑这条的执行日志"
+          className="h-auto gap-1"
+          onClick={() => {
+            c.openLog({
+              id: running.id,
+              workflowName: running.workflowName,
+              status: "RUNNING",
+            });
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          日志
+        </Button>
+        <Button
+          aria-label="取消正在跑的这条"
+          className="border-border rounded-lg"
+          disabled={c.isBusy(running.id)}
+          onClick={() => {
+            void c.cancel(running.id, running.workflowName);
+          }}
+          size="xs"
+          variant="outline"
+        >
+          {c.isBusy(running.id) ? "处理中" : "取消这条"}
+        </Button>
+      </div>
+      {c.expandedId === running.id ? (
+        <RunningDetails
+          detail={c.runningDetail}
+          detailLoading={c.detailLoading}
+          paramRows={c.paramRows}
+        />
+      ) : null}
+    </article>
   );
 }
 
@@ -393,76 +468,7 @@ export function QueueMonitorView({
             <section aria-labelledby="queue-running-heading">
               <SectionHeading id="queue-running-heading">跑动中</SectionHeading>
               {running !== null && keepIds.has(running.id) ? (
-                <article className="bg-card border-border rounded-2xl border p-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h3 className="text-ink-bright min-w-0 flex-1 text-sm font-semibold">
-                      <TruncatedText className="block truncate">
-                        {displayValue(running.workflowName, {
-                          fallback: "（未知工作流）",
-                        })}
-                      </TruncatedText>
-                    </h3>
-                    <StatusBadge label={taskStatusLabel("RUNNING")} status="RUNNING" />
-                  </div>
-                  <ProgressBar className="mt-3" label="采样进度" value={running.progressPct} />
-                  <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
-                    <Field label="已跑">{running.elapsedText}</Field>
-                    <Field label="预计剩余">{running.remainingText}</Field>
-                    <Field label="步数">{running.stepsText}</Field>
-                    <Field label="速度">{running.rateText}</Field>
-                    <Field label="当前节点">{running.nodeText}</Field>
-                    <Field label="主模型">{running.modelText}</Field>
-                  </dl>
-                  <div className="mt-3 flex justify-end gap-1">
-                    {/* #5075：展开统一输入 / 请求读数，与测试模型页同口径。 */}
-                    <Button
-                      aria-expanded={c.expandedId === running.id}
-                      aria-label="查看正在跑这条的统一输入与请求信息"
-                      className="h-auto gap-1"
-                      onClick={() => {
-                        c.toggleExpanded(running.id);
-                      }}
-                      size="xs"
-                      variant="ghost"
-                    >
-                      详情
-                    </Button>
-                    <Button
-                      aria-label="查看正在跑这条的执行日志"
-                      className="h-auto gap-1"
-                      onClick={() => {
-                        c.openLog({
-                          id: running.id,
-                          workflowName: running.workflowName,
-                          status: "RUNNING",
-                        });
-                      }}
-                      size="xs"
-                      variant="ghost"
-                    >
-                      日志
-                    </Button>
-                    <Button
-                      aria-label="取消正在跑的这条"
-                      className="border-border rounded-lg"
-                      disabled={c.isBusy(running.id)}
-                      onClick={() => {
-                        void c.cancel(running.id, running.workflowName);
-                      }}
-                      size="xs"
-                      variant="outline"
-                    >
-                      {c.isBusy(running.id) ? "处理中" : "取消这条"}
-                    </Button>
-                  </div>
-                  {c.expandedId === running.id ? (
-                    <RunningDetails
-                      detail={c.runningDetail}
-                      detailLoading={c.detailLoading}
-                      paramRows={c.paramRows}
-                    />
-                  ) : null}
-                </article>
+                <RunningCard c={c} running={running} />
               ) : running === null && runningRows.length > 0 ? (
                 <ol className="flex flex-col gap-3">
                   {runningRows.map((row) => (
