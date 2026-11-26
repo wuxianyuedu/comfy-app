@@ -14,6 +14,12 @@ import {
 } from "./face-presets";
 
 describe("内置脸部形象预设（数据驱动）", () => {
+  it("至少 100 种，id 全库唯一（分类拆文件后也不许撞号）", () => {
+    expect(FACE_PRESETS.length).toBeGreaterThanOrEqual(100);
+    const ids = FACE_PRESETS.map((preset) => preset.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it("每条都有稳定 id、中文名 / 说明、非空提示词与标签", () => {
     const ids = FACE_PRESETS.map((preset) => preset.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -34,8 +40,8 @@ describe("内置脸部形象预设（数据驱动）", () => {
   it("搜索按名字 / 说明 / 标签 / 提示词命中，空词回全部", () => {
     expect(searchFacePresets("", FACE_PRESETS)).toHaveLength(FACE_PRESETS.length);
     expect(searchFacePresets("蓝瞳", FACE_PRESETS).map((p) => p.id)).toContain("silver-mage");
-    expect(searchFacePresets("精灵耳", FACE_PRESETS).map((p) => p.id)).toEqual(["green-elf"]);
-    expect(searchFacePresets("crimson iris", FACE_PRESETS).map((p) => p.id)).toEqual(["red-demon"]);
+    expect(searchFacePresets("精灵耳", FACE_PRESETS).map((p) => p.id)).toContain("green-elf");
+    expect(searchFacePresets("crimson iris", FACE_PRESETS).map((p) => p.id)).toContain("red-demon");
     expect(searchFacePresets("没有这张脸", FACE_PRESETS)).toEqual([]);
   });
 });

@@ -309,6 +309,10 @@ const DOMAIN_EXEMPT = new Set([
   "src/lib/app-version.ts",
   // 应用级特性:skill 种子(与 agent 无关)、更新提醒(与桌面壳无关)
   "src/lib/skills-seed.ts",
+  // 风格库内置画风种子:按美术分类拆分的数据文件,与 skills-seed.ts 同属顶层种子出口
+  "src/lib/skills-seed-anime-studio.ts",
+  "src/lib/skills-seed-anime-world.ts",
+  "src/lib/skills-seed-anime-manga.ts",
   "src/lib/update-check-client.ts",
   // 跨域 UI 与烘焙数据
   "src/lib/full-screen-layer.ts",
