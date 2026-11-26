@@ -212,12 +212,17 @@ function buildModelNameTree(entries: ReadonlyArray<ModelTreeEntry>): Array<Model
         ? dedupeLeaves(groupEntries, (e) => `leaf:${modelKey}:${e.value}`)
         : generativeModeCodes(first.kind).flatMap((code) => {
             const modeEntries = groupEntries.filter((e) => e.mode === code);
-            if (modeEntries.length === 0) {
+            const only = modeEntries[0];
+            if (only === undefined) {
               return [];
             }
+            /* 同一「模型 × 模式」只有一条候选（#5082）：模式节点本身就是可点
+             * 的叶子，不再套一层重复显示模型名的第三层。多出同键候选时只取
+             * 第一条，装配层本就不该产生重复（见 dedupeLeaves 的同款口径）。 */
             return [
               {
-                children: dedupeLeaves(modeEntries, (e) => `leaf:${modelKey}:${code}:${e.value}`),
+                children: [],
+                entry: only,
                 key: `${modelKey}:${code}`,
                 kind: first.kind,
                 label: workflowTypeLabel(code),

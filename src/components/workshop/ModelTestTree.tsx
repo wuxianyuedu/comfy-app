@@ -144,6 +144,8 @@ export function ModelTestTree({
          那一片，与页面的会话格对得上。 */
       const selected =
         entry.value === selectedValue && entry.kind === currentKind && entry.mode === currentMode;
+      /* 叶子是密集列表行：用 11px 具名档（text-2xs），否则长模型名（如
+       * MiniMax H3 Image）在侧栏里会被截成省略号（#5082）。 */
       return (
         <Button
           aria-checked={selected}
@@ -154,6 +156,7 @@ export function ModelTestTree({
               : "text-ink-muted hover:bg-subtle hover:text-ink",
           )}
           data-model-value={entry.value}
+          data-tree-key={node.key}
           key={node.key}
           onClick={() => {
             handleLeafClick(entry);
@@ -161,7 +164,9 @@ export function ModelTestTree({
           role="radio"
           variant="ghost"
         >
-          <TruncatedText className="min-w-0 flex-1 truncate text-left">{entry.label}</TruncatedText>
+          <TruncatedText className="text-2xs min-w-0 flex-1 truncate text-left">
+            {node.label}
+          </TruncatedText>
           {generatingModels.has(entry.value) && <GeneratingBadge />}
           {/* 「按来源」布局整组同源，行上不再重复标。 */}
           {layout !== "source" && (

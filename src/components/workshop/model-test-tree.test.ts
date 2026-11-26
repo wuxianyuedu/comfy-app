@@ -162,7 +162,7 @@ describe("buildModelTree", () => {
     expect(remoteGroup?.children.map((n) => n.entry?.value)).toEqual(["agnes", "nova"]);
   });
 
-  it("按模型：模型名 → 模式 → 条目；来源不同的同名模型不混组", () => {
+  it("按模型：模型名 → 模式（模式即叶子，无第三层）；来源不同的同名模型不混组", () => {
     const withClash: Array<ModelTreeEntry> = [
       ...entries,
       {
@@ -179,8 +179,12 @@ describe("buildModelTree", () => {
     expect(zImageGroups).toHaveLength(2);
     const localZ = zImageGroups.find((n) => n.local === true);
     expect(localZ?.children.map((n) => n.label)).toEqual(["文生图", "图像编辑"]);
-    expect(localZ?.children[0]?.children[0]?.entry?.value).toBe("wf::wf1");
-    expect(localZ?.children[1]?.children[0]?.entry?.value).toBe("wf::wf2");
+    /* 模式节点自己就是叶子（带 entry、无 children），不再套一层重复模型名。 */
+    expect(localZ?.children.every((n) => n.children.length === 0 && n.entry !== undefined)).toBe(
+      true,
+    );
+    expect(localZ?.children[0]?.entry?.value).toBe("wf::wf1");
+    expect(localZ?.children[1]?.entry?.value).toBe("wf::wf2");
   });
 });
 

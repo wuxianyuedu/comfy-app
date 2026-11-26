@@ -124,16 +124,24 @@ describe("ModelTestTree", () => {
     expect(onSelect).toHaveBeenCalledWith("image", "I2I", "dual");
   });
 
-  it("按模型布局：模型名 → 模式 → 条目，同一模型的多个工作流分开列", async () => {
+  it("按模型布局：模型名 → 模式（模式直接可选，没有第三层重复条目）", async () => {
     const { onSelect } = renderTree();
     await userEvent.setup().click(screen.getByRole("radio", { name: "按模型" }));
 
-    /* 模型组与其下的两个模式组都在（data-tree-key 是稳定锚，不随文案变）。 */
+    /* 模型组与其下两个模式都在（data-tree-key 是稳定锚，不随文案变）。 */
     expect(document.querySelector('[data-tree-key="model:l::z-image"]')).not.toBeNull();
     expect(document.querySelector('[data-tree-key="model:l::z-image:T2I"]')).not.toBeNull();
     expect(document.querySelector('[data-tree-key="model:l::z-image:I2I"]')).not.toBeNull();
 
-    await userEvent.setup().click(screen.getByRole("radio", { name: /z-image · 工作流B/ }));
+    /* 模式节点自己带取值、可直接点选；树里不再有重复的模型名叶子。 */
+    const modeLeaf = document.querySelector('[data-model-value="wf::2"]');
+    if (modeLeaf === null) {
+      throw new Error("模型布局里找不到 mode 叶子");
+    }
+    expect(modeLeaf.textContent).toContain("图像编辑");
+    expect(screen.queryByRole("radio", { name: /z-image · 工作流B/ })).toBeNull();
+
+    await userEvent.setup().click(modeLeaf);
     expect(onSelect).toHaveBeenCalledWith("image", "I2I", "wf::2");
   });
 
@@ -201,6 +209,22 @@ describe("树形容器的高度契约（ISSUE #4978）", () => {
 /* ISSUE #4997：左栏 aside 是**普通静态栏**——不吸顶、不设 max-h / 内部滚动、
  * 高度随内容（h-fit 都不用）。钉住 ModelTestView 里 aside 的类，防止这套
  * 「吸附 + 内部滚动 + 拉伸填补空白」的形态回流（#4983 / #4991 的账）。 */
+/* ISSUE #5082：模型名是密集列表行，叶子用 11px 具名档（text-2xs）——
+ * 14px 默认档会把「MiniMax H3 Image」这类长名字截成省略号。 */
+describe("叶子模型名的字号契约（ISSUE #5082）", () => {
+  it("模型名走密集列表行档位，不用字面 px，也不放大到正文档", () => {
+    renderTree();
+    const leaf = screen.getByRole("radio", { name: /agnes-image/ });
+    const label = leaf.querySelector("span");
+    expect(label).not.toBeNull();
+    const cls = label?.className ?? "";
+    expect(cls).toContain("text-2xs");
+    expect(cls).not.toMatch(/text-\[\d+px\]/);
+    expect(cls).not.toContain("text-sm");
+    expect(cls).not.toContain("text-base");
+  });
+});
+
 describe("左栏 aside 的静态栏契约（ISSUE #4997）", () => {
   it("aside 不带 sticky / max-h / 内部滚动 / h-fit 类", () => {
     /* happy-dom 里 import.meta.url 不是 file:// 协议，改按 cwd 相对路径读源码
