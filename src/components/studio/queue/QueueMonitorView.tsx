@@ -294,6 +294,9 @@ export const QueueMonitorView = memo(function QueueMonitorView({
   const handleCancel = (row: QueueRow) => {
     void c.cancel(row.id, row.workflowName);
   };
+  const handleMoveUp = (row: QueueRow) => {
+    void c.moveUp(row);
+  };
   const handleCopy = (row: QueueRow) => {
     void c.copyForReprint(row);
   };
@@ -549,6 +552,7 @@ export const QueueMonitorView = memo(function QueueMonitorView({
                   isBusy={c.isBusy}
                   onCancel={handleCancel}
                   onCopy={handleCopy}
+                  onMoveUp={handleMoveUp}
                   onOpenFolder={handleOpenFolder}
                   onOpenLog={handleOpenLog}
                   onToggleParams={handleToggleParams}
@@ -572,6 +576,7 @@ export const QueueMonitorView = memo(function QueueMonitorView({
                   isBusy={c.isBusy}
                   onCancel={handleCancel}
                   onCopy={handleCopy}
+                  onMoveUp={handleMoveUp}
                   onOpenFolder={handleOpenFolder}
                   onOpenLog={handleOpenLog}
                   onToggleParams={handleToggleParams}

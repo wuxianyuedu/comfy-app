@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS favorite (
 CREATE TABLE IF NOT EXISTS task (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, type TEXT NOT NULL, prompt TEXT NOT NULL, negativePrompt TEXT,
   params TEXT NOT NULL, workflowName TEXT NOT NULL, workflowSnapshot TEXT, projectId TEXT, shotId TEXT, referenceImages TEXT,
-  status TEXT NOT NULL DEFAULT 'QUEUED', parentId TEXT, promptId TEXT, progress INTEGER NOT NULL DEFAULT 0, resultImages TEXT,
+  status TEXT NOT NULL DEFAULT 'QUEUED', sortOrder INTEGER NOT NULL DEFAULT 0, parentId TEXT, promptId TEXT, progress INTEGER NOT NULL DEFAULT 0, resultImages TEXT,
   logs TEXT, error TEXT, validationErrors TEXT, createdAt TEXT NOT NULL, finishedAt TEXT, claimedBy TEXT, execPayload TEXT, progressNode TEXT, claimedAt TEXT, rawCli TEXT
 );
 CREATE TABLE IF NOT EXISTS taskImage (
@@ -676,6 +676,8 @@ export type SeedTaskInput = {
   prompt?: string;
   referenceImages?: unknown;
   shotId?: string | null;
+  /** 队列顺序（领取与列表排序的判据；缺省 0 = 先入先出）。 */
+  sortOrder?: number;
   status?: string;
   type?: string;
   userId: string;
@@ -700,6 +702,7 @@ export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
     referenceImages: input.referenceImages ?? null,
     parentId: input.parentId ?? null,
     execPayload: input.execPayload ?? null,
+    sortOrder: input.sortOrder ?? 0,
     progress: input.progress ?? 0,
     error: input.error ?? null,
     createdAt: input.createdAt ?? new Date(),

@@ -116,6 +116,43 @@ test.describe("队列与运行屏 @critical", () => {
     expect(rows[2]).toContain("第 3 位");
   });
 
+  /**
+   * 提前执行：点排队行的「提前」后，服务端换序、列表重读，被点的那条要真的排到队首。
+   * 桩用 getter 按请求取值 —— stubTrpc 每帧读一次 handler 表，这样才能让「重读」
+   * 拿到点完之后的新队列序，判据才是「行序变化」而不是「按钮存在」。
+   */
+  test("点「提前」后被点的行排到队首", async ({ page }) => {
+    const rows = [
+      task("newest", "2026-01-01T00:00:03Z", "最后提交的"),
+      task("middle", "2026-01-01T00:00:02Z", "中间提交的"),
+      task("oldest", "2026-01-01T00:00:01Z", "最早提交的"),
+    ];
+    let moved = false;
+    const handlers: Record<string, unknown> = {
+      "task.reorder": { ok: true, detail: "已提前到队首，下一轮就轮到它" },
+    };
+    Object.defineProperty(handlers, "task.list", {
+      enumerable: true,
+      get: () => ({
+        /* 服务端按 sortOrder 倒序回：被提前的行 sortOrder 最小 ⇒ 在列表末尾，
+         * 页面反转位次后它才是第 1 位。 */
+        tasks: moved ? [rows[0], rows[2], rows[1]] : rows,
+        total: rows.length,
+      }),
+    });
+    await stubTrpc(page, handlers);
+
+    await openQueue(page);
+    await expect(waitingSection(page).locator("li")).toHaveCount(3);
+    const middleRow = waitingSection(page).locator("li").filter({ hasText: "中间提交的" });
+    const moveUp = middleRow.getByRole("button", { name: "把这一条提前到队首" });
+    await expect(moveUp).toBeVisible();
+    moved = true;
+    await moveUp.click();
+    await expect(waitingSection(page).locator("li").first()).toContainText("中间提交的");
+    await expect(waitingSection(page).locator("li").first()).toContainText("第 1 位");
+  });
+
   test("每 2 秒的重读真的在发请求（不是一次性快照）", async ({ page }) => {
     let listCalls = 0;
     page.on("request", (req) => {

@@ -67,6 +67,7 @@ function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorCon
     loading: false,
     loadError: null,
     logRow: null,
+    moveUp: vi.fn(),
     expandedId: null,
     runningDetail: null,
     runningLogs: [],
@@ -210,6 +211,25 @@ describe("QueueMonitor", () => {
     expect(openLog).not.toHaveBeenCalledWith(
       expect.objectContaining({ id: "q1", status: "QUEUED" }),
     );
+  });
+
+  it("提前按钮只出现在排队中的行，点一下把整行交给 controller", async () => {
+    const user = userEvent.setup();
+    const moveUp = vi.fn();
+    monitorMock.mockReturnValue(
+      controller({
+        queued: [{ row: row({ id: "q1", status: "QUEUED" }), position: 1 }],
+        runningRows: [row({ id: "r1", status: "RUNNING" })],
+        recent: [row({ id: "done1", status: "SUCCEEDED" })],
+        moveUp,
+      }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    const buttons = screen.getAllByRole("button", { name: "把这一条提前到队首" });
+    /* 运行中 / 终态不该有这个动作：服务端也只认 QUEUED。 */
+    expect(buttons).toHaveLength(1);
+    await user.click(buttons[0]!);
+    expect(moveUp).toHaveBeenCalledWith(expect.objectContaining({ id: "q1", status: "QUEUED" }));
   });
 
   it("运行中可展开统一输入与请求信息（#5075）", () => {

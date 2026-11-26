@@ -223,6 +223,8 @@ export const characterLibraryRouter = createTRPCRouter({
           tags: normalizeTags(row.tags),
           status: row.status,
           source: row.source,
+          /* 单条取消要知道当前生成任务；详情行原本就带这个字段，列表补齐同一形状。 */
+          taskId: row.taskId,
           portraitUrl: row.portraitUrl,
           portraitCount: normalizePortraits(row.portraits).length,
           width: row.width,

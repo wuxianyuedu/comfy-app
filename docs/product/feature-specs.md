@@ -839,10 +839,12 @@
   顶部操作区还有生图**暂停 / 恢复**（播放 / 暂停图标随状态切换，暂停后当前任务
   跑完即不再领生图任务，状态落库重启不丢）与**取消全部**（危险色按钮 + 二次
   确认，一键取消当前用户所有非终态任务，含正在生成的那一条；他人任务与终态
-  任务不动，部分失败如实报数）。顶部四张统计卡（运行中 / 排队中 / 今日完成 / 失败）一律取**服务端按状态分组的全量计数**，不受列表 `take` 上限截断，与「还有 N 个在排队」的操作条 / 横幅同一口径；列表仍限量展示，挤满排队行时统计卡不得偏小（ISSUE #5073）。跑动中卡片可展开「统一输入 / 请求信息」：统一输入与测试模型页同源（完整可读），请求面板复用同款读数组件显示提交时落库的本地任务输入；模型适配器翻译后的上游请求是实时预览、未随任务落库，面板如实标注不编造（ISSUE #5075）。展开区同时给出生成进度条、就地执行日志与请求返回读数，不另跳弹窗才能看（ISSUE #5093）。
+  任务不动，部分失败如实报数）。顶部四张统计卡（运行中 / 排队中 / 今日完成 / 失败）一律取**服务端按状态分组的全量计数**，不受列表 `take` 上限截断，与「还有 N 个在排队」的操作条 / 横幅同一口径；列表仍限量展示，挤满排队行时统计卡不得偏小（ISSUE #5073）。跑动中卡片可展开「统一输入 / 请求信息」：统一输入与测试模型页同源（完整可读），请求面板复用同款读数组件显示提交时落库的本地任务输入；模型适配器翻译后的上游请求是实时预览、未随任务落库，面板如实标注不编造（ISSUE #5075）。展开区同时给出生成进度条、就地执行日志与请求返回读数，不另跳弹窗才能看（ISSUE #5093）。排队行可**提前执行**：行上「提前」按钮把该条挪到队首，只改排序值、不改提交时刻；运行中 / 终态没有该动作，行在这期间被领走时如实回报「已开跑无法调整」，不假装成功。
 - 落点：`src/components/studio/queue/QueueMonitor.tsx`、
   `src/components/studio/queue/hooks/use-queue-model-tree.ts`（左树与过滤）、
-  `src/components/studio/queue/queue-task-params.ts`（参数派生）
+  `src/components/studio/queue/queue-task-params.ts`（参数派生）、
+  `src/server/api/routers/task.ts`（`reorder`）、
+  `src/lib/core/repository-task-impl.ts`（领取顺序）
 
 #### FR-QE-02 执行器 inline / host 两档
 
@@ -2008,9 +2010,10 @@
 
 #### FR-CL-04 批量生图（工作流库工作流）与生成对账
 
-- 状态：已上线（#5009）
+- 状态：已上线（#5009 / #5098）
 - 需求：接工作流库（如 minimax_h3_image），对全部待生成（或点名的）角色逐个
-  入队生图任务；产物复制进角色库自有目录；生成状态可追踪，失败不阻断其余角色。
+  入队生图任务；产物复制进角色库自有目录；生成状态可追踪，失败不阻断其余角色；
+  生成中的角色可在卡片或详情里单条取消。
 - 行为与验收：① 入参封装与工坊批量同一条链（`prepareWorkflowRun` +
   `buildWorkflowRunParams`），提示词由角色描述折算（`buildPortraitPrompts`）；
   ② 自动模式只取 draft / failed，已就绪角色仅显式点名时重跑（新候选不覆盖旧图）；
@@ -2022,11 +2025,17 @@
   工作流接负向口时走负向词表；不接负向口（如 minimax_h3_image）时不传负向，改把
   「除角色服饰上的装饰文字以外，其他地方不要出现文字 / 字幕 / 标题 / 人名 / 水印 /
   签名」以正向表述拼在正向提示词末尾，避免机械折成「无文字」误禁服饰装饰字。
-  能力判据是作者是否把 `negative` 契约口连到工作流端口，不新增模型元数据。
-- 落点：`src/server/api/routers/character-library.ts`（`enqueueGeneration` / `syncGeneration`）、
-  `src/lib/character/portrait-prompt.ts`（提示词）、`src/lib/character/character-store.ts`（落盘）、
+  能力判据是作者是否把 `negative` 契约口连到工作流端口，不新增模型元数据；
+  ⑥ 单条取消只对「生成中且带 taskId」的角色开放：点一次打 `cancelTask` 并立刻
+  `syncGeneration` 对账（不等下一轮轮询），连点只发一次；列表带出当前 taskId 供入口判可用，
+  失败给可见提示。
+- 落点：`src/server/api/routers/character-library.ts`（`enqueueGeneration` / `syncGeneration` /
+  `list` 带出 taskId）、`src/lib/character/portrait-prompt.ts`（提示词）、
+  `src/lib/character/character-store.ts`（落盘）、
   `src/lib/core/repository-character-profile.ts`（状态机回写）、
-  `src/components/studio/characters/CharacterGenerateDialog.tsx`（弹窗）
+  `src/components/studio/characters/CharacterGenerateDialog.tsx`（弹窗）、
+  `src/components/studio/characters/hooks/use-character-cancel.ts`（单条取消）、
+  `src/components/studio/characters/CharacterCard.tsx` + `CharacterDetailModal.tsx`（入口）
 
 #### FR-CL-05 角色详情：候选历史与勾选删除（#5068）
 
@@ -2068,16 +2077,20 @@
 
 #### FR-SL-03 多画风生图与画风扩展
 
-- 状态：已上线（#5069）
+- 状态：已上线（#5069 / #5098）
 - 需求：对每个勾选画风用其提示词描述分别生图；只列支持文生图（T2I）的模型；
-  用户能在界面新建画风，新增后立刻可选，不改代码。
+  用户能在界面新建画风，新增后立刻可选，不改代码；生成中的格子可单条取消。
 - 行为与验收：① 模型候选经 `useModelCatalog("image", "T2I")` 收窄（本地工作流声明 T2I /
   远端模型配了 T2I 适配器），其他模式不出现；
   ② 本地走工作流封装 + `generate.generate` + SSE 观察取产物，远端走 `/api/workshop-api/generate`，
   两条链路都不新造；③ 画风模板含 `{subject}` 时替换主体，否则作为后缀，负向词去重；
   ④ 每格独立失败（一张失败不影响其他画风），有界并发 2；
-  ⑤ 新建画风写 `skill.create`，保存后刷新列表并自动勾选，slug 重复给明确冲突提示。
+  ⑤ 新建画风写 `skill.create`，保存后刷新列表并自动勾选，slug 重复给明确冲突提示；
+  ⑥ 本地工作流通道在结果上记 taskId，单格「取消生成」打 `cancelTask` 后退订 SSE 并落到已取消；
+  远端模型通道不产生任务行，按钮禁用并明确说明，不能假装取消成功。
 - 落点：`src/components/studio/styles/hooks/use-style-library.ts`（编排，规范 17 ②）、
+  `src/components/studio/hooks/use-library-selection.ts`（勾选态）、
+  `src/components/studio/hooks/library-image-task.ts`（SSE 退订与取消落定）、
   `src/lib/workshop/generation-client.ts` + `generation-api-client.ts`（既有生成链路）、
   `src/lib/async-pool.ts`（有界并发）。
 
@@ -2085,12 +2098,13 @@
 
 #### FR-FL-01 侧栏脸库与可搜索的脸部形象列表
 
-- 状态：已上线（#5087）
-- 需求：侧栏「脸库」进入；脸部形象提示词可搜索、可选中查看完整描述。
+- 状态：已上线（#5087 / #5098）
+- 需求：侧栏「脸库」进入；脸部形象提示词可搜索、可多选（全选 / 清空）后批量入队。
 - 行为与验收：① 侧栏有「脸库」入口且可点开（与资产库 / 角色库 / 风格库同族的全局视图）；
   ② 列表按名字 / 说明 / 提示词 / 标签模糊搜索，空词回全部；
-  ③ 每条显示名字、中文说明与标签，选中态可见；
-  ④ 数据来自内置预设数组，不在本页再抄一份脸部词表。
+  ③ 每条显示名字、中文说明与标签，选中态可见，可勾选多条；
+  ④ 数据来自内置预设数组，不在本页再抄一份脸部词表；
+  ⑤ 默认选中第一张脸，勾选态走与风格库、角色库同一份共享 hook。
 - 落点：`src/components/studio/NavItems.tsx`（入口）、
   `src/components/studio/LazyViews.tsx` + `WorkspaceViewStack.tsx`（视图注册）、
   `src/components/studio/faces/FaceLibrary.tsx`（视图）、`face-presets.ts`（数据与纯函数）。
@@ -2108,13 +2122,17 @@
 
 #### FR-FL-03 一键复制与直接生图
 
-- 状态：已上线（#5087）
-- 需求：复制提示词走平台唯一出口；选支持 T2I 的模型直接用该提示词生成脸图。
-- 行为与验收：① 复制走 `useCopyFeedback`（视图层不碰剪贴板 API）；
+- 状态：已上线（#5087 / #5098）
+- 需求：复制提示词走平台唯一出口；选支持 T2I 的模型对勾选的脸批量生成，逐张可取消。
+- 行为与验收：① 复制走 `useCopyFeedback`（视图层不碰剪贴板 API），多张脸的提示词逐行排列；
   ② 模型候选经 `useModelCatalog("image","T2I")` 收窄（本地声明 T2I 的工作流 /
   配了 T2I 适配器的远端模型），其他模式不出现；
   ③ 本地走工作流封装 + `generate.generate` + SSE 观察取产物，远端走
-  `/api/workshop-api/generate`，两条链路都不新造；④ 失败有按条可读的出口。
+  `/api/workshop-api/generate`，两条链路都不新造，有界并发 2；④ 失败有按条可读的出口；
+  ⑤ 本地通道逐张结果记 taskId，「取消生成」打 `cancelTask` 后退订 SSE 并落到已取消；
+  远端通道无任务行，按钮禁用并说明；脸库无持久化表，刷新后不恢复在途任务（本期范围外）。
 - 落点：`src/components/studio/faces/hooks/use-face-library.ts`（编排，规范 17 ②）、
+  `src/components/studio/hooks/use-library-selection.ts`（勾选态）、
+  `src/components/studio/hooks/library-image-task.ts`（SSE 退订与取消落定）、
   `src/components/ui/use-copy-feedback.ts`（复制唯一出口）、
   `src/lib/workshop/generation-client.ts` + `generation-api-client.ts`（既有生成链路）。

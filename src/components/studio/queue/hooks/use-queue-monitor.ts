@@ -71,6 +71,8 @@ export type QueueMonitorController = {
   loading: boolean;
   /** 正在查看执行日志的那条；null = 弹窗关着。 */
   logRow: QueueTaskLogTarget | null;
+  /** 把一条排队任务提前到队首。服务端只认 QUEUED，已开跑会如实回报。 */
+  moveUp: (row: QueueRow) => Promise<void>;
   /** ComfyUI 是否可达。false 时列表照常渲染（数据来自本地库），只多一条
    * 「未连接」横幅说明队列不会开始。 */
   online: boolean;
@@ -276,6 +278,23 @@ export function useQueueMonitor(): QueueMonitorController {
     setCancelAllOpen(false);
   }, []);
 
+  /* 排队任务提前执行：服务端只发一条条件 UPDATE（ userId + QUEUED），不改
+   * createdAt、不 renumber 其余行。行若在这期间被领走，服务端回 ok:false +
+   * 人话原因，runAsyncAction 原样报给用户，不假装调整成功。 */
+  const reorderM = useMutation(trpc.task.reorder.mutationOptions());
+  const moveUp = useCallback(
+    async (row: QueueRow) => {
+      await action.run(row.id, async () => {
+        await runAsyncAction(() => reorderM.mutateAsync({ id: row.id }), {
+          report,
+          failureText: `提前「${row.workflowName}」失败，请稍后重试`,
+        });
+        void listQ.refetch();
+      });
+    },
+    [action, listQ, report, reorderM],
+  );
+
   /* 生图暂停（ISSUE #5055）：状态在库里（应用重启不丢），队列页用播放 / 暂停
    * 图标切换。暂停语义在执行器闸门（executor-dispatch）：当前任务照常跑完，
    * 之后不再领取生图任务；恢复后按队列序继续。 */
@@ -372,6 +391,7 @@ export function useQueueMonitor(): QueueMonitorController {
       loading,
       loadError,
       logRow,
+      moveUp,
       expandedId,
       runningDetail,
       runningLogs: runningLogStream.logs,
@@ -406,6 +426,7 @@ export function useQueueMonitor(): QueueMonitorController {
       loading,
       loadError,
       logRow,
+      moveUp,
       expandedId,
       runningDetail,
       runningLogStream.logs,

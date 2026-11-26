@@ -226,6 +226,12 @@ export const task = sqliteTable(
      *  只作追溯展示（产物面板「来源任务」），不参与执行；常规提交为 NULL。 */
     parentId: text("parentId"),
     status: text("status").notNull().default("QUEUED"),
+    /**
+     * 队列顺序：领取按它升序，列表按它降序；同值仍以 createdAt / id 决胜。
+     * 新行默认 0 保持原有先入先出语义；「提前执行」写入比队首更小的值，
+     * 不改 createdAt —— 提交时刻是历史事实，调整队列不该篡改它。
+     */
+    sortOrder: integer("sortOrder").notNull().default(0),
     promptId: text("promptId"),
     progress: integer("progress").notNull().default(0),
     resultImages: text("resultImages", { mode: "json" }),
@@ -274,10 +280,12 @@ export const task = sqliteTable(
     index("task_status_finished_idx").on(t.status, t.finishedAt),
     // promptId → task 反查（执行器对账 / history 回捞），此前无索引。
     index("task_prompt_id_idx").on(t.promptId),
-    // 队列领取读路径（claimNextQueued 按 status=QUEUED + claimedBy 归属过滤）。
-    // 与 task_status_finished_idx 分开：那条服务孤儿判决（status, finishedAt），
-    // 本条服务领取谓词（status, claimedBy），语义不同不合并。
     index("task_claimed_by_idx").on(t.status, t.claimedBy),
+    // 队列领取读路径（claimNextQueued / peekNextQueued / listQueuedIds 按
+    // status=QUEUED + claimedBy 归属过滤，ORDER BY sortOrder, createdAt, id）。
+    // 只新增、不替换上面那条旧索引：替换会让 drizzle-kit 产出 DROP INDEX，
+    // 被启动链路判成「要人决定丢不丢得起」而拒绝自动同步。
+    index("task_claim_order_idx").on(t.status, t.claimedBy, t.sortOrder, t.createdAt),
     // ⚠️ 刻意**没有** (projectId, shotId) 的活动任务唯一索引（#3849）：同一镜头
     // 同时至多一条 QUEUED/RUNNING 任务（重复扣款形态）的库级闸做不了 ——
     // drizzle-kit 0.31 的 SQLite diff 对部分索引（WHERE）与表达式索引都会

@@ -6,10 +6,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 const mocks = vi.hoisted(() => {
+  const cancelOne = vi.fn();
   const toggleStyle = vi.fn();
   const generate = vi.fn();
   const setSearch = vi.fn();
   const controller = {
+    cancelOne,
     catalog: {
       allCandidates: [],
       candidates: [],
@@ -43,7 +45,7 @@ const mocks = vi.hoisted(() => {
     sceneId: "sakura-tree",
     search: "",
     selectAll: vi.fn(),
-    selectedSlugs: ["anime-illustration"],
+    selectedSlugs: ["anime-illustration", "oil-painting"],
     setCharacterId: vi.fn(),
     setDraft: vi.fn(),
     setDraftOpen: vi.fn(),
@@ -70,7 +72,7 @@ const mocks = vi.hoisted(() => {
     toggleStyle,
     userPrompt: "a girl",
   };
-  return { controller, generate, setSearch, toggleStyle };
+  return { cancelOne, controller, generate, setSearch, toggleStyle };
 });
 
 vi.mock("./hooks/use-style-library", () => ({ useStyleLibrary: () => mocks.controller }));
@@ -105,7 +107,10 @@ vi.mock("~/components/ui/select-menu", () => ({
 
 const { StyleLibrary } = await import("./StyleLibrary");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mocks.controller.results = {};
+});
 
 describe("风格库视图（ISSUE #5069）", () => {
   it("列出可搜索的画风，勾选与生成都把动作交给 controller", () => {
@@ -122,5 +127,20 @@ describe("风格库视图（ISSUE #5069）", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "生成画风对比" }));
     expect(mocks.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("本地通道的生成中格子可单条取消；远端通道禁用并说明原因", () => {
+    mocks.controller.results = {
+      "anime-illustration": { status: "pending", taskId: "task-1" },
+      "oil-painting": { status: "pending" },
+    };
+    render(<StyleLibrary />);
+
+    fireEvent.click(screen.getByLabelText("取消生成：日系动漫插画"));
+    expect(mocks.cancelOne).toHaveBeenCalledWith("anime-illustration");
+
+    const remote = screen.getByLabelText("取消生成：油画厚涂写实");
+    expect(remote.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText("远端通道不可取消")).toBeTruthy();
   });
 });

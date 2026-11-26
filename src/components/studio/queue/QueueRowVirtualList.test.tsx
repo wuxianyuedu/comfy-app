@@ -35,6 +35,7 @@ function renderList(onCancel: (row: QueueRow) => void) {
       isBusy={() => false}
       onCancel={onCancel}
       onCopy={noop}
+      onMoveUp={noop}
       onOpenFolder={noop}
       onOpenLog={noop}
       onToggleParams={noop}

@@ -411,6 +411,74 @@ describe("task.cancelAll", () => {
   });
 });
 
+// ──────────────────────────────── reorder ────────────────────────────────
+
+describe("task.reorder", () => {
+  it("把排队行提前到队首：只改 sortOrder，不动 createdAt / 他人行；列表顺序跟着变", async () => {
+    const first = new Date("2026-01-01T00:00:00Z");
+    seedTask(tdb, {
+      id: "head",
+      userId: "user-a",
+      status: "QUEUED",
+      sortOrder: 0,
+      createdAt: first,
+    });
+    seedTask(tdb, {
+      id: "target",
+      userId: "user-a",
+      status: "QUEUED",
+      sortOrder: 0,
+      createdAt: new Date(first.getTime() + 1000),
+    });
+    seedTask(tdb, { id: "foreign", userId: "user-b", status: "QUEUED", sortOrder: 0 });
+
+    const caller = createCaller(makeCtx());
+    expect(await caller.reorder({ id: "target" })).toEqual({
+      ok: true,
+      detail: "已提前到队首，下一轮就轮到它",
+    });
+    const target = tdb.$tables.tasks.find((t) => t.id === "target")!;
+    expect(target.sortOrder).toBe(-1);
+    expect(target.createdAt).toEqual(new Date(first.getTime() + 1000));
+    expect(tdb.$tables.tasks.find((t) => t.id === "head")!.sortOrder).toBe(0);
+    expect(tdb.$tables.tasks.find((t) => t.id === "foreign")!.sortOrder).toBe(0);
+    /* 列表按 sortOrder 倒序：target 在末尾 = 队列页反转后的第 1 位。 */
+    expect((await caller.list({ take: 10 })).tasks.map((t) => t.id)).toEqual(["head", "target"]);
+  });
+
+  it("运行中 / 终态 / 他人行 / 不存在的行都不可重排：回 ok:false 并落日志", async () => {
+    seedTask(tdb, { id: "head", userId: "user-a", status: "QUEUED" });
+    seedTask(tdb, { id: "running", userId: "user-a", status: "RUNNING" });
+    seedTask(tdb, { id: "done", userId: "user-a", status: "SUCCEEDED" });
+    seedTask(tdb, { id: "foreign", userId: "user-b", status: "QUEUED" });
+
+    const caller = createCaller(makeCtx());
+    for (const id of ["running", "done", "foreign", "nope"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
+      const res = await caller.reorder({ id });
+      expect(res).toEqual({ ok: false, detail: "这条已开跑或已结束，无法调整顺序" });
+      /* 不存在的行取不到 sortOrder，按 0 兜底即可（这条用例判的是没被改过）。 */
+      expect(tdb.$tables.tasks.find((t) => t.id === id)?.sortOrder ?? 0).toBe(0);
+    }
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("task.reorder"));
+    expect((await caller.list({ take: 10 })).tasks.map((t) => t.id).sort()).toEqual([
+      "done",
+      "head",
+      "running",
+    ]);
+  });
+
+  it("已经是队首时幂等回报，不写入新的 sortOrder", async () => {
+    seedTask(tdb, { id: "head", userId: "user-a", status: "QUEUED", sortOrder: -5 });
+    seedTask(tdb, { id: "tail", userId: "user-a", status: "QUEUED", sortOrder: 0 });
+    expect(await createCaller(makeCtx()).reorder({ id: "head" })).toEqual({
+      ok: true,
+      detail: "这条已经在队首了",
+    });
+    expect(tdb.$tables.tasks.find((t) => t.id === "head")!.sortOrder).toBe(-5);
+  });
+});
+
 // ─────────────────────────────── workflow snapshot ───────────────────────────────
 
 describe("task.workflow", () => {

@@ -6,7 +6,7 @@
  * 状态徽标放信息区、不压在立绘上（反馈：徽标挡图影响观看）。
  * 纯展示组件：数据与回调都由 CharacterLibrary 注入（规范 17 §17.2 第③层）。
  */
-import { Trash2, UserRound } from "lucide-react";
+import { Trash2, UserRound, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -18,7 +18,10 @@ import { characterStatusClass, CHARACTER_STATUS_LABELS } from "./character-statu
 import type { CharacterListItem } from "./hooks/use-character-library";
 
 export type CharacterCardProps = {
+  /** 该角色的取消动作进行中（禁用入口，防连点）。 */
+  cancellingGeneration?: boolean;
   character: CharacterListItem;
+  onCancelGeneration?: (id: string) => void;
   onOpenDetail: (id: string) => void;
   onRemove: (character: CharacterListItem) => void;
   /** 选择模式下勾选本卡（由工具行「选择角色」开关驱动）。 */
@@ -30,7 +33,9 @@ export type CharacterCardProps = {
 };
 
 export function CharacterCard({
+  cancellingGeneration = false,
   character,
+  onCancelGeneration,
   onOpenDetail,
   onRemove,
   onToggleSelection,
@@ -67,6 +72,21 @@ export function CharacterCard({
               onToggleSelection?.(character.id);
             }}
           />
+        ) : null}
+        {/* 单条取消：只给「生成中且有任务号」的卡，与右上角删除入口分居两角。 */}
+        {character.status === "generating" && character.taskId ? (
+          <Button
+            aria-label={`取消生成 ${character.name}`}
+            className="absolute right-2 bottom-2 size-7 rounded-md bg-black/45 text-white"
+            disabled={cancellingGeneration}
+            onClick={() => {
+              onCancelGeneration?.(character.id);
+            }}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <X aria-hidden className="size-3.5" data-icon="inline-start" />
+          </Button>
         ) : null}
         {/* 删除入口（悬停浮现，与资产卡同纪律）。 */}
         <Button

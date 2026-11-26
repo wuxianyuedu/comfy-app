@@ -85,6 +85,13 @@
       "when": 1795611101262,
       "tag": "0011_aberrant_shadowcat",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1795676048909,
+      "tag": "0012_crazy_cloak",
+      "breakpoints": true
     }
   ]
 }
