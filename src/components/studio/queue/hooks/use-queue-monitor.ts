@@ -379,8 +379,12 @@ export function useQueueMonitor(): QueueMonitorController {
       refresh();
     });
   }, [action, refresh, report]);
-  const requestCancelAll = useCallback(() => setCancelAllOpen(true), []);
-  const closeCancelAll = useCallback(() => setCancelAllOpen(false), []);
+  const requestCancelAll = useCallback(() => {
+    setCancelAllOpen(true);
+  }, []);
+  const closeCancelAll = useCallback(() => {
+    setCancelAllOpen(false);
+  }, []);
 
   /* 排队任务提前执行：服务端只发一条条件 UPDATE，已开跑如实回报。 */
   const reorderM = useMutation(trpc.task.reorder.mutationOptions());
@@ -418,8 +422,12 @@ export function useQueueMonitor(): QueueMonitorController {
   }, [pauseQ.data, setPausedM, report]);
 
   const isBusy = useCallback((id: string) => action.isBusy(id), [action]);
-  const openLog = useCallback((task: QueueTaskLogTarget) => setLogRow(task), []);
-  const closeLog = useCallback(() => setLogRow(null), []);
+  const openLog = useCallback((task: QueueTaskLogTarget) => {
+    setLogRow(task);
+  }, []);
+  const closeLog = useCallback(() => {
+    setLogRow(null);
+  }, []);
 
   return {
     online: queue.online,

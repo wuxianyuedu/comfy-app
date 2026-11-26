@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
-import type { ModelTestResult } from "./hooks/use-model-test-generate";
+import type { ModelTestResult } from "./model-test-result";
 import type { ModelTestKind, ModelTestValues } from "./model-test-config";
 
 export type ModelTestRun = {

@@ -14,6 +14,7 @@ import { runAsyncAction } from "~/lib/async-action";
 import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import type { RouterInputs, RouterOutputs } from "~/trpc/react";
 import type { ModelTestRunInput } from "../model-test-runs";
+import type { ModelTestResult } from "../model-test-result";
 import { createReentrancyLock, type ReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 import { createThrottleGate, type ThrottleGate } from "~/components/ui/use-throttled-progress";
 import {
@@ -35,12 +36,7 @@ import type {
   TestCandidate,
 } from "../model-test-config";
 
-/** 一次测试的结果（工坊同款输出：图片 URL / 视频 URL / 对话回复文本）。 */
-export type ModelTestResult =
-  | { kind: "image"; url: string }
-  | { kind: "video"; url: string }
-  | { kind: "chat"; text: string }
-  | null;
+export type { ModelTestResult };
 
 /** 一格（用途 + 模式 + 模型）的运行态（#4080 评论 12）：切走再切回各看各的，
  *  不同格可同时测试。 */
