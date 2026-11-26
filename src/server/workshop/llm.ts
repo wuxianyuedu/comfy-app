@@ -75,6 +75,7 @@ function headersFor(cfg: WorkshopLLMConfig): Record<string, string> {
 export async function completeWorkshopLLM(
   cfg: WorkshopLLMConfig,
   messages: Array<LLMMessage>,
+  signal?: AbortSignal,
 ): Promise<string> {
   if (!cfg.model.trim()) {
     throw new Error(
@@ -93,7 +94,9 @@ export async function completeWorkshopLLM(
         max_tokens: cfg.maxTokens,
         stream: false,
       }),
-      signal: AbortSignal.timeout(180_000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(180_000)])
+        : AbortSignal.timeout(180_000),
       scenario: "llm-upstream",
     });
   } catch (error) {

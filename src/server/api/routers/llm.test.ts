@@ -29,7 +29,9 @@ const { llmServer, contracts, defaults, workshopLlm } = vi.hoisted(() => ({
       model: "configured-default",
       temperature: 0.7,
     })),
-    completeWorkshopLLM: vi.fn(() => "pong"),
+    completeWorkshopLLM: vi.fn(
+      (_cfg: unknown, _messages: unknown, _signal?: AbortSignal) => "pong",
+    ),
   },
   contracts: {
     loadModeContractLayers: vi.fn(() => ({
@@ -85,7 +87,7 @@ import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(llmRouter);
 const tdb: TestDb = getTestDb();
-const caller = () => createCaller(makeCtx());
+const caller = (signal?: AbortSignal) => createCaller(makeCtx(), { signal });
 
 /** upsertSingleton 的最小回执行：测试只消费 provider / apiKey 派生的脱敏视图与调用账。 */
 const upsertedConfig = {
@@ -642,8 +644,19 @@ describe("configGet —— 脱敏出口", () => {
 });
 
 describe("chatTest —— 对话测试（ISSUE #4080）", () => {
+  it("调用方取消信号原样传给上游执行层", async () => {
+    const controller = new AbortController();
+    await caller(controller.signal).chatTest({ name: "qwen3-8b", local: true, prompt: "ping" });
+    expect(workshopLlm.completeWorkshopLLM.mock.calls.at(-1)?.[2]).toBe(controller.signal);
+  });
+
   it("本地模型：连接参数取生效 LLM 配置，模型名换成被测的那个", async () => {
-    const res = await caller().chatTest({ name: "qwen3-8b", local: true, prompt: "ping" });
+    const controller = new AbortController();
+    const res = await caller(controller.signal).chatTest({
+      name: "qwen3-8b",
+      local: true,
+      prompt: "ping",
+    });
     expect(workshopLlm.completeWorkshopLLM).toHaveBeenCalledWith(
       expect.objectContaining({
         baseUrl: "http://127.0.0.1:11434",
@@ -651,6 +664,7 @@ describe("chatTest —— 对话测试（ISSUE #4080）", () => {
         model: "qwen3-8b",
       }),
       [{ role: "user", content: "ping" }],
+      expect.any(AbortSignal),
     );
     expect(res).toMatchObject({
       reply: "pong",
@@ -661,7 +675,12 @@ describe("chatTest —— 对话测试（ISSUE #4080）", () => {
   });
 
   it("远端模型：按名解析连接参数（模型自己或其供应商的）", async () => {
-    const res = await caller().chatTest({ name: "remote-model", local: false, prompt: "ping" });
+    const controller = new AbortController();
+    const res = await caller(controller.signal).chatTest({
+      name: "remote-model",
+      local: false,
+      prompt: "ping",
+    });
     expect(workshopLlm.completeWorkshopLLM).toHaveBeenCalledWith(
       expect.objectContaining({
         baseUrl: "https://remote.example/v1",
@@ -669,6 +688,7 @@ describe("chatTest —— 对话测试（ISSUE #4080）", () => {
         model: "remote-model",
       }),
       [{ role: "user", content: "ping" }],
+      expect.any(AbortSignal),
     );
     expect(res.reply).toBe("pong");
   });

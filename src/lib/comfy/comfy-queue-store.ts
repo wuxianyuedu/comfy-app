@@ -23,10 +23,7 @@ import { fireAndForget } from "~/lib/async-action";
 import { isRecord } from "~/lib/is-record";
 import type { ComfyQueueStatus, ComfyRunningTask } from "~/lib/comfyui/queue-status-types";
 
-/** 状态轮询节奏（2s）：与 dev server 存活探测同频。注意——本常量仍被
- * `use-queue-monitor` 借去当 `task.list` 的 `refetchInterval`，**不是**本 store 的
- * 轮询节奏；本 store 的主通道是 SSE（见 `subscribeComfyQueueEvents`），这条 2s 已
- * 降级为「SSE 掉了才用的兜底」。改这里的值会同时动到队列面板里任务列表的刷新频率。 */
+/** 事件通道掉线时的兜底轮询节奏；空闲时不频繁拉真值，实时变化交给 SSE。 */
 export const COMFY_QUEUE_POLL_MS = 2000;
 /** 本地秒表周期（只为让「已运行」连续，不发请求）。 */
 const ELAPSED_TICK_MS = 1000;
@@ -42,11 +39,13 @@ const EMPTY: ComfyQueueStatus = {
   queued: 0,
 };
 
-const SERVER_SNAPSHOT: ComfyQueueView = { ...EMPTY, elapsedMs: null };
+const SERVER_SNAPSHOT: ComfyQueueView = { ...EMPTY, elapsedMs: null, syncedAt: null };
 
 export type ComfyQueueView = {
   /** 当前任务已运行的毫秒数；没有在跑的任务时为 null。 */
   elapsedMs: number | null;
+  /** 最近一次成功读取 ComfyUI 真值的时刻；失败时保留上一次成功读数。 */
+  syncedAt: number | null;
 } & ComfyQueueStatus;
 
 let snapshot: ComfyQueueView = SERVER_SNAPSHOT;
@@ -66,6 +65,7 @@ let stopEvents: (() => void) | null = null;
 let observeOnline = createOfflineGate();
 /* 背压：只认最新一次的观测。 */
 let requestId = 0;
+let refreshInFlight: Promise<void> | null = null;
 
 /* 快照身份要稳定：字段没变就复用旧对象，避免 useSyncExternalStore 判等触发无限重渲染。 */
 function publish(next: ComfyQueueView): void {
@@ -75,7 +75,8 @@ function publish(next: ComfyQueueView): void {
     snapshot.comfy.running === next.comfy.running &&
     snapshot.comfy.pending === next.comfy.pending &&
     sameRunning(snapshot.running, next.running) &&
-    snapshot.elapsedMs === next.elapsedMs
+    snapshot.elapsedMs === next.elapsedMs &&
+    snapshot.syncedAt === next.syncedAt
   ) {
     return;
   }
@@ -156,7 +157,7 @@ function elapsedFor(running: ComfyRunningTask | null): number | null {
  * pollOnce 自身已用 try/catch 吞掉网络/解析错误、不动状态，所以这里实际上不会被触发。 */
 const ignorePollError = (): void => undefined;
 
-async function pollOnce(): Promise<void> {
+async function pollOnce(): Promise<"failed" | "published" | "stale"> {
   const myRequest = ++requestId;
   try {
     const res = await fetch("/api/comfy/queue", {
@@ -164,16 +165,17 @@ async function pollOnce(): Promise<void> {
       signal: AbortSignal.timeout(2500),
     });
     if (myRequest !== requestId) {
-      return;
+      return "stale";
     } // 已有更新的请求在跑，丢弃本次迟到回包
     if (!res.ok) {
-      return;
+      return "failed";
     }
     const data: unknown = await res.json();
     if (myRequest !== requestId) {
-      return;
+      return "stale";
     }
     const parsed = parseStatus(data);
+    const syncedAt = Date.now();
     if (parsed.online) {
       observeOnline(true);
       /* 把「忙不忙」喂给全页单点（ISSUE #1351）：系统指标的持有者据此把
@@ -185,18 +187,46 @@ async function pollOnce(): Promise<void> {
           parsed.comfy.running > 0 ||
           parsed.queued > 0,
       );
-      publish({ ...parsed, elapsedMs: elapsedFor(parsed.running) });
-      return;
+      publish({ ...parsed, elapsedMs: elapsedFor(parsed.running), syncedAt });
+      return "published";
     }
     // 离线观测：容忍期内保留上一次好状态（不闪），连续失败达阈值才提交离线。
     noteComfyBusy(false);
     if (!observeOnline(false)) {
-      publish({ ...parsed, elapsedMs: elapsedFor(parsed.running) });
+      publish({ ...parsed, elapsedMs: elapsedFor(parsed.running), syncedAt });
     }
+    return "published";
   } catch {
     /* 探测失败不动状态：瞬时断网不该让状态栏那一格忽明忽暗（与 dev server
      * 存活探测同口径）。 */
+    return "failed";
   }
+}
+
+/** 主动刷新共享快照；并发点击复用同一次请求，不重复打端点。 */
+export function refreshComfyQueue(): Promise<void> {
+  if (refreshInFlight !== null) {
+    return refreshInFlight;
+  }
+  const pending = pollOnce().then((outcome) => {
+    if (outcome !== "published") {
+      throw new Error("ComfyUI 队列刷新失败");
+    }
+  });
+  refreshInFlight = pending;
+  void pending.then(
+    () => {
+      if (refreshInFlight === pending) {
+        refreshInFlight = null;
+      }
+    },
+    () => {
+      if (refreshInFlight === pending) {
+        refreshInFlight = null;
+      }
+    },
+  );
+  return pending;
 }
 
 /* 本地秒表：只让「已运行」连续（不发请求），每秒刷一次 elapsedMs。 */
@@ -244,9 +274,9 @@ function ensurePolling(): void {
   if (stopEvents === null && typeof EventSource !== "undefined") {
     // 事件主通道：首个订阅者拉起一条共享 SSE（多组件共用，不各开一条）。
     stopEvents = subscribeComfyQueueEvents(() => {
-      // pollOnce 内部已吞掉网络/解析错误，这里只是「收到 SSE 就补拉一次真值」，
-      // 失败通道交给 pollOnce 自己的 try/catch，由此 fireAndForget 的 onError 实际不触发。
-      fireAndForget(pollOnce(), ignorePollError);
+      // 收到 SSE 就补拉一次真值；网络 / 非 2xx 失败会从 refreshComfyQueue 抛出，
+      // 由 fireAndForget 的 onError 接收，不污染后台快照。
+      fireAndForget(refreshComfyQueue(), ignorePollError);
     });
   }
 }
@@ -293,7 +323,8 @@ export function resetComfyQueueStoreForTest(): void {
   subscriptions.clear();
   subscriberCount = 0;
   stopAll();
-  requestId = 0;
+  requestId += 1;
+  refreshInFlight = null;
   observeOnline = createOfflineGate();
   snapshot = SERVER_SNAPSHOT;
 }

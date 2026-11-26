@@ -1,23 +1,40 @@
 "use client";
 
 import { memo, useState, type ReactNode } from "react";
-import { Activity, ArrowUp, ChevronDown, Copy, FileText, FolderOpen, X } from "lucide-react";
+import {
+  Activity,
+  AlertCircle,
+  ArrowUp,
+  CheckCircle2,
+  ChevronDown,
+  Copy,
+  FileText,
+  FolderOpen,
+  ListOrdered,
+  Search,
+  X,
+} from "lucide-react";
 
 import { RequestDetailSection } from "~/components/workshop/ModelTestRequestDetail";
 import { TaskLogTimeline } from "~/components/studio/logs/TaskLogTimeline";
 import { Button } from "~/components/ui/button";
 import { SectionLabel } from "~/components/ui/section-label";
+import { FieldLabel } from "~/components/ui/field";
+import { Input } from "~/components/ui/input";
+import { SelectChip } from "~/components/ui/select-chip";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { TimeAgo } from "~/components/ui/time-ago";
 import { displayValue } from "~/lib/display-value";
+import { formatDurationMs } from "~/lib/progress";
 import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import { isTerminalTaskStatus, taskStatusLabel } from "~/lib/task-state";
 import type { RouterOutputs } from "~/trpc/react";
 
-import type { QueueRow } from "./queue-monitor-config";
+import type { QueueRow, QueueStats, QueueStatusFilter } from "./queue-monitor-config";
+import { queueTaskDurationMs } from "./queue-monitor-config";
 import { runningRequestRow, type QueueTaskParamRow } from "./queue-task-params";
 
 /** 分区标题（h2）。图标是装饰，读屏靠文字本身。 */
@@ -30,6 +47,123 @@ export function SectionHeading({ id, children }: { children: ReactNode; id: stri
       <Activity aria-hidden className="size-3.5" />
       {children}
     </h2>
+  );
+}
+
+export function QueueOverview({
+  hasMore,
+  matchedCount,
+  onSearchChange,
+  onStatusChange,
+  search,
+  stats,
+  statusFilter,
+}: {
+  hasMore: boolean;
+  matchedCount: number;
+  onSearchChange: (value: string) => void;
+  onStatusChange: (value: QueueStatusFilter) => void;
+  search: string;
+  stats: QueueStats;
+  statusFilter: QueueStatusFilter;
+}) {
+  const metrics = [
+    {
+      chip: "bg-info/10 text-info-strong",
+      icon: Activity,
+      label: "运行中",
+      value: stats.running,
+    },
+    {
+      chip: "bg-warning/10 text-warning-strong",
+      icon: ListOrdered,
+      label: "排队中",
+      value: stats.queued,
+    },
+    {
+      chip: "bg-success/10 text-success-strong",
+      icon: CheckCircle2,
+      label: "今日完成",
+      value: stats.succeededToday,
+    },
+    {
+      chip: "bg-destructive/10 text-danger-strong",
+      icon: AlertCircle,
+      label: "失败",
+      value: stats.failedToday,
+    },
+  ] as const;
+  return (
+    <>
+      <div className="border-border bg-card flex flex-col gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1">
+          <FieldLabel className="sr-only" htmlFor="queue-search">
+            搜索已加载的任务
+          </FieldLabel>
+          <Search
+            aria-hidden
+            className="text-ink-faint pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+          />
+          <Input
+            className="bg-surface-1 pl-9"
+            id="queue-search"
+            onChange={(event) => {
+              onSearchChange(event.currentTarget.value);
+            }}
+            placeholder="搜索工作流、提示词、模型或任务 ID"
+            type="search"
+            value={search}
+          />
+        </div>
+        <div aria-label="按任务状态筛选" className="flex flex-wrap gap-1.5" role="radiogroup">
+          {(
+            [
+              ["all", "全部"],
+              ["active", "进行中"],
+              ["terminal", "已结束"],
+            ] as const
+          ).map(([value, label]) => (
+            <SelectChip
+              key={value}
+              onClick={() => {
+                onStatusChange(value);
+              }}
+              selected={statusFilter === value}
+              shape="segment"
+            >
+              {label}
+            </SelectChip>
+          ))}
+        </div>
+      </div>
+
+      {search.trim() === "" ? null : (
+        <p className="text-ink-faint text-xs" role="status">
+          已加载任务中匹配 {matchedCount} 条{hasMore ? "；更早的任务可继续加载后再搜索" : ""}
+        </p>
+      )}
+
+      <div aria-label="队列概览" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {metrics.map(({ chip, icon: Icon, label, value }) => (
+          <div
+            className="border-border bg-card flex items-center gap-3.5 rounded-2xl border p-4"
+            key={label}
+          >
+            <span
+              className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${chip}`}
+            >
+              <Icon aria-hidden className="size-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="text-ink-bright block text-[22px] leading-none font-bold tabular-nums">
+                {String(value)}
+              </span>
+              <span className="text-ink-faint mt-1 block text-xs">{label}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -134,8 +268,15 @@ export const QueueRowLine = memo(function QueueRowLine({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-ink-faint w-16 shrink-0 text-xs tabular-nums">
           {/* 水合安全口径（ISSUE #4852）：挂载前渲染稳定占位，挂载后再算相对时间。 */}
-          {leading ?? <TimeAgo fallback="时间未知" value={row.createdAt.getTime()} />}
+          {leading ?? (
+            <TimeAgo fallback="时间未知" value={(row.finishedAt ?? row.createdAt).getTime()} />
+          )}
         </span>
+        {queueTaskDurationMs(row) === null ? null : (
+          <span className="text-ink-faint text-2xs tabular-nums">
+            耗时 {formatDurationMs(queueTaskDurationMs(row) ?? 0)}
+          </span>
+        )}
         <TruncatedText className="text-ink min-w-0 flex-1 basis-40 truncate text-sm">
           {displayValue(row.workflowName)}
         </TruncatedText>

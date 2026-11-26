@@ -49,6 +49,7 @@ vi.mock("./hooks/use-comfy-queue", async (importOriginal) => {
       running: null,
       queued: 0,
       elapsedMs: null,
+      syncedAt: null,
     }),
   };
 });

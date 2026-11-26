@@ -2,11 +2,8 @@
 
 import { memo, useMemo } from "react";
 import {
-  Activity,
-  AlertCircle,
   Ban,
   Boxes,
-  CheckCircle2,
   ListChecks,
   ListOrdered,
   Pause,
@@ -28,6 +25,8 @@ import { PageHeader } from "~/components/ui/page-header";
 import { Skeleton } from "~/components/ui/skeleton";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { ProgressBar } from "~/components/ui/progress-bar";
+import { Spinner } from "~/components/ui/spinner";
+import { TimeAgo } from "~/components/ui/time-ago";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { SectionCard } from "~/components/workshop/ModelTestSectionCard";
 import { ModelTestTree } from "~/components/workshop/ModelTestTree";
@@ -37,7 +36,7 @@ import { taskStatusLabel } from "~/lib/task-state";
 import type { QueueModelTreeController } from "./hooks/use-queue-model-tree";
 import type { QueueMonitorController, RunningCardView } from "./hooks/use-queue-monitor";
 import type { QueueRow } from "./queue-monitor-config";
-import { Field, RunningDetails, SectionHeading } from "./QueueMonitorParts";
+import { Field, QueueOverview, RunningDetails, SectionHeading } from "./QueueMonitorParts";
 import { QueueRowVirtualList } from "./QueueRowVirtualList";
 import { RunningTiming } from "./RunningTiming";
 import {
@@ -58,18 +57,22 @@ const EMPTY_GENERATING_MODELS = new Set<string>();
 function QueueActionBar({
   cancelAllBusy,
   hasActive,
+  lastSyncedAt,
   pauseBusy,
   paused,
   refresh,
+  refreshing,
   requestCancelAll,
   togglePause,
   waitingCount,
 }: {
   cancelAllBusy: boolean;
   hasActive: boolean;
+  lastSyncedAt: number | null;
   pauseBusy: boolean;
   paused: boolean;
-  refresh: () => void;
+  refresh: (showFeedback?: boolean) => void;
+  refreshing: boolean;
   requestCancelAll: () => void;
   togglePause: () => void;
   waitingCount: number;
@@ -78,6 +81,15 @@ function QueueActionBar({
     <ViewActions>
       <span className="text-ink-faint text-xs tabular-nums">
         {`待执行 ${String(waitingCount)}`}
+      </span>
+      <span className="text-ink-faint text-xs">
+        {lastSyncedAt === null ? (
+          "等待同步"
+        ) : (
+          <>
+            最后同步 <TimeAgo value={lastSyncedAt} />
+          </>
+        )}
       </span>
       {/* 生图暂停态角标 + 播放 / 暂停按钮（ISSUE #5055）：暂停语义在执行器
           闸门——当前任务照常跑完，之后不再领取生图任务；图标随状态切换。 */}
@@ -117,11 +129,18 @@ function QueueActionBar({
       <Button
         aria-label="立即重新读取队列"
         className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
-        onClick={refresh}
+        disabled={refreshing}
+        onClick={() => {
+          refresh(true);
+        }}
         size="xs"
         variant="outline"
       >
-        <RefreshCcw aria-hidden className="size-3" data-icon="inline-start" />
+        {refreshing ? (
+          <Spinner aria-hidden className="size-3" />
+        ) : (
+          <RefreshCcw aria-hidden className="size-3" data-icon="inline-start" />
+        )}
         刷新
       </Button>
     </ViewActions>
@@ -325,13 +344,24 @@ export const QueueMonitorView = memo(function QueueMonitorView({
       <QueueActionBar
         cancelAllBusy={c.cancelAllBusy}
         hasActive={hasActive}
+        lastSyncedAt={c.lastSyncedAt}
         pauseBusy={c.pauseBusy}
         paused={c.paused}
         refresh={c.refresh}
+        refreshing={c.refreshing}
         requestCancelAll={c.requestCancelAll}
         togglePause={c.togglePause}
         waitingCount={c.waitingCount}
       />
+
+      {c.refreshError === null ? null : (
+        <div className="mb-6" role="alert">
+          <EmptyState
+            description={`${c.refreshError}。当前列表保留上一次成功读数，不代表实时队尾。`}
+            variant="hint"
+          />
+        </div>
+      )}
 
       {c.loadError !== null && c.loadError !== "" ? (
         <EmptyState
@@ -428,56 +458,16 @@ export const QueueMonitorView = memo(function QueueMonitorView({
               </p>
             ) : null}
 
-            {/* ── 顶部指标带（重设计稿）：先一眼回答「现在什么规模」，再看三段明细。
-                四格读数全部来自 controller 的纯派生（`queueStats`），视图不算数；
-                指标始终是**全局**数，不随左树筛选变化。 */}
-            <div aria-label="队列概览" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              {(
-                [
-                  {
-                    chip: "bg-info/10 text-info-strong",
-                    icon: Activity,
-                    label: "运行中",
-                    value: c.stats.running,
-                  },
-                  {
-                    chip: "bg-warning/10 text-warning-strong",
-                    icon: ListOrdered,
-                    label: "排队中",
-                    value: c.stats.queued,
-                  },
-                  {
-                    chip: "bg-success/10 text-success-strong",
-                    icon: CheckCircle2,
-                    label: "今日完成",
-                    value: c.stats.succeededToday,
-                  },
-                  {
-                    chip: "bg-destructive/10 text-danger-strong",
-                    icon: AlertCircle,
-                    label: "失败",
-                    value: c.stats.failedToday,
-                  },
-                ] as const
-              ).map(({ chip, icon: Icon, label, value }) => (
-                <div
-                  className="border-border bg-card flex items-center gap-3.5 rounded-2xl border p-4"
-                  key={label}
-                >
-                  <span
-                    className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${chip}`}
-                  >
-                    <Icon aria-hidden className="size-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="text-ink-bright block text-[22px] leading-none font-bold tabular-nums">
-                      {String(value)}
-                    </span>
-                    <span className="text-ink-faint mt-1 block text-xs">{label}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
+            {/* 搜索 / 状态筛选 / 全局指标：主视图只保留三段任务明细。 */}
+            <QueueOverview
+              hasMore={c.hasMore}
+              matchedCount={c.matchedCount}
+              onSearchChange={c.setSearch}
+              onStatusChange={c.setStatusFilter}
+              search={c.search}
+              stats={c.stats}
+              statusFilter={c.statusFilter}
+            />
 
             <section aria-labelledby="queue-running-heading">
               <SectionHeading id="queue-running-heading">跑动中</SectionHeading>
@@ -590,6 +580,25 @@ export const QueueMonitorView = memo(function QueueMonitorView({
                 </p>
               )}
             </section>
+
+            <div className="border-border-subtle flex flex-wrap items-center justify-center gap-3 border-t pt-5">
+              <span className="text-ink-muted text-xs tabular-nums">
+                已加载 {c.loadedCount} / {c.total ?? c.loadedCount} 个任务
+              </span>
+              {c.hasMore ? (
+                <Button
+                  className="border-border bg-subtle text-ink-strong hover:bg-surface-2 h-auto rounded-lg px-4 py-1.5"
+                  disabled={c.loadingMore}
+                  onClick={c.loadMore}
+                  size="xs"
+                  variant="outline"
+                >
+                  {c.loadingMore ? "加载中…" : "加载更多"}
+                </Button>
+              ) : (
+                <span className="text-ink-fainter text-2xs">已全部加载</span>
+              )}
+            </div>
           </div>
         </div>
       ) : null}
