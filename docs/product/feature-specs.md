@@ -942,12 +942,20 @@
 #### FR-OP-05 产物寻址与打开
 
 - 状态：已上线
-- 需求：产物落盘规则可预期；打开产物目录有闸门。
-- 行为与验收：路径规则唯一出处 `output-paths.ts` / `output-layout.ts`
-  （普通 `generated/<taskId>`、项目 `generated/projects/<projectId>/<taskId>`、
-  成片 `generated/films/<id>.mp4`）；打开目录优先 `setting.revealPath`
-  （闸门：存在 + 在检出目录内），`comfyapp://` 深链是老路（见 FR-MC-02）；
-  读产物经 `/api/generated/...`。
+- 需求：产物落盘规则可预期、可按语义维度整体迁移；打开产物目录有闸门。
+- 行为与验收：路径规则唯一出处 `output-paths.ts` / `output-layout.ts`：
+  - 任务产物一律 `generated/<mediaType>/<模型名>/<modeCode>/<taskId>/`，
+    三级分类由 `artifact-taxonomy.ts` 从库里已有事实派生（媒体类型取产物首项，
+    模型名取工作流模型标签、缺则回落工作流名，模式码取工作流默认模式 / 任务类型），
+    每段安全化；`TaskImage.localPath` 写对应的 `/api/generated/...` 完整层级地址。
+    项目归属只留在 `task.projectId`，不再单独占一层目录。
+  - 另有 `generated/materials/`、`assets/`、`character-library/`、
+    `films/<id>.mp4`、`films/bgm/` 五个固定子层，形状不变。
+  - 删除 / 打开产物目录从库里的 `localPath` 反推，不与写侧各拼一遍；
+    打开目录优先 `setting.revealPath`（闸门：存在 + 在检出目录内），
+    `comfyapp://` 深链是老路（见 FR-MC-02）；读产物经 `/api/generated/...`。
+  - 历史平铺目录用 `scripts/db/migrate-artifact-taxonomy.mts` 一次性迁移
+    （先备份 db.sqlite，再搬目录 + 同事务改库；留 `--rollback` 出口）。
 - 落点：`src/lib/media/output-paths.ts`、`output-layout.ts`、
   `src/lib/history-detail-actions.ts`
 

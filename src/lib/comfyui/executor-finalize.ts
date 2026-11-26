@@ -32,6 +32,7 @@ import { collectOutputs, extractRuntimeParams, type RuntimeParams } from "./exec
 import { describeZeroOutputFailure } from "./zero-output-reason";
 import { friendlyError } from "./executor-errors";
 import { taskOutputDir, taskOutputUrl } from "~/lib/media/output-paths";
+import { taxonomyFrom, type ArtifactTaxonomy } from "~/lib/media/artifact-taxonomy";
 import { isRecord } from "~/lib/is-record";
 import { getWorkflowType, parseModesJson } from "~/lib/workflow/workflow-types";
 import { fetchHistoryEntry, traceComfyQueue, type ComfyHistoryEntry } from "./executor-history";
@@ -183,6 +184,21 @@ function beijingIso(value: Date | string | null | undefined): string | null {
 /** 工坊元数据的**尽力而为**读取：工坊模型名称（工作流上挂的模型标签）与模式。
  *  manifest 是归档件——查不到（宿主未注入该仓储且 dynamic import 失败）就给
  *  null，绝不阻塞收口。 */
+/** 产物三级目录的取值：媒体类型取产物首项，模型 / 模式取工作流标签（缺则回落任务行）。 */
+async function resolveTaxonomy(
+  mediaType: string,
+  taskRow: { type?: string | null; userId: string; workflowName: string } | null,
+  taskParams: Record<string, unknown>,
+): Promise<ArtifactTaxonomy> {
+  const templateId = typeof taskParams.workflow === "string" ? taskParams.workflow : null;
+  const meta = await loadWorkshopMeta(taskRow?.userId ?? null, templateId);
+  return taxonomyFrom({
+    mediaType,
+    modelName: meta?.modelName ?? taskRow?.workflowName ?? null,
+    modeCode: meta?.modeCode ?? taskRow?.type ?? null,
+  });
+}
+
 async function loadWorkshopMeta(
   userId: string | null,
   templateId: string | null,
@@ -352,10 +368,6 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     reqW = Number(sizeMatch.groups?.width);
     reqH = Number(sizeMatch.groups?.height);
   }
-  /* 产物地址前缀与磁盘目录同一份布局（`~/lib/media/output-paths`）：这一句
-   * 写进 TaskImage.localPath，删除侧要按它把整个目录删掉 —— 两处各拼一遍就
-   * 会分叉（历史上删除侧只认 `<taskId>`，项目任务的产物目录于是永远留在盘上）。 */
-  const publicBase = taskOutputUrl(taskId, projectId);
   /* 显式打一行「拉取 history」：让「最后一个节点跑完」到「history 就绪」之间的
    * 空档可见 —— ComfyUI 在这段是异步的（成功信号先到，产物后落盘），所以在
    * 这个窗口里卡住，否则看起来就像「执行器冻住了」。 */
@@ -426,6 +438,21 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   }
 
   const { images, videos, audios, others, texts } = collectOutputs(entry.outputs ?? {});
+  /* 三级目录的取值要等产物收集完才知道媒体类型：首图优先，其次视频 / 音频 / 文本。
+   * 地址与磁盘目录同出一份布局，这一句写进 TaskImage.localPath；删除 / 打开侧
+   * 改为从 localPath 反推目录，不再各拼一遍。 */
+  const primaryMediaType =
+    images.length > 0
+      ? "image"
+      : videos.length > 0
+        ? "video"
+        : audios.length > 0
+          ? "audio"
+          : texts.length > 0
+            ? "text"
+            : "other";
+  const taxonomy = await resolveTaxonomy(primaryMediaType, taskRow ?? null, taskParams);
+  const publicBase = taskOutputUrl(taxonomy, taskId);
   const hasOutput =
     images.length || videos.length || audios.length || texts.length || others.length;
   if (!hasOutput) {
@@ -491,7 +518,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
    * 生成，一个 `../../x` 形状过去能把产物写到产物根之外，而
    * `/api/generated/[...path]` 的白名单只认根内，写出去等于文件永远读不到；
    * 现在它变成一次硬失败（由 complete() 收口成 finalizeFailure，用户看得见）。 */
-  const dir = taskOutputDir(taskId, projectId);
+  const dir = taskOutputDir(taxonomy, taskId);
   if (dir === null) {
     throw new Error(`产物目录越界，已拒绝落盘：taskId=${taskId} projectId=${projectId ?? "(无)"}`);
   }

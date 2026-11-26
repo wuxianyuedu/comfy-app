@@ -28,6 +28,7 @@ import {
   filmsRoot,
   generatedRoot,
   isWithinGeneratedRoot,
+  taskDirFromLocalPath,
 } from "~/lib/media/output-paths";
 import {
   filmProject,
@@ -44,6 +45,8 @@ import {
  *  （一行不动）。磁盘清理失败不抛——记 warn 后继续（与 task.delete 同口径）。 */
 export async function deleteProjectCascade(userId: string, projectId: string): Promise<boolean> {
   const filmIds: Array<string> = [];
+  /** 删行之前先把产物目录记下来——行删掉后就没有 localPath 可反推了。 */
+  const artifactDirs: Array<string> = [];
   const deleted = await db.transaction(async (tx) => {
     /* 归属闸：id + userId 双条件，命中 0 行 = 他人项目或不存在，什么都不动。 */
     const rows = await tx
@@ -60,6 +63,16 @@ export async function deleteProjectCascade(userId: string, projectId: string): P
     const taskIds = taskRows.map((row) => row.id);
     if (taskIds.length > 0) {
       /* 子表显式删：测试库 foreign_keys=OFF，且不依赖「生产 pragma 一定开着」。 */
+      const imageRows = await tx
+        .select({ localPath: taskImage.localPath })
+        .from(taskImage)
+        .where(inArray(taskImage.taskId, taskIds));
+      for (const row of imageRows) {
+        const dir = taskDirFromLocalPath(row.localPath);
+        if (dir !== null && !artifactDirs.includes(dir)) {
+          artifactDirs.push(dir);
+        }
+      }
       await tx.delete(taskImage).where(inArray(taskImage.taskId, taskIds));
       await tx.delete(taskLog).where(inArray(taskLog.taskId, taskIds));
       await tx.delete(task).where(inArray(task.id, taskIds));
@@ -83,8 +96,18 @@ export async function deleteProjectCascade(userId: string, projectId: string): P
     return false;
   }
 
-  /* 磁盘收口（尽力而为）：项目产物整目录 + 各成片文件。projectId 由客户端生成、
-   * 可能是坏形状 —— 解析结果不在产物根内就跳过（与 taskOutputDir 的越界口径一致）。 */
+  /* 磁盘收口（尽力而为）：新三级布局下每个任务的目录 + 旧平铺布局的项目整目录
+   * + 各成片文件。projectId 由客户端生成、可能是坏形状 —— 解析结果不在产物根内
+   * 就跳过（与 taskOutputDir 的越界口径一致）。 */
+  await Promise.all(
+    artifactDirs.map((dir) =>
+      fsRm(dir, { recursive: true, force: true }).catch((error: unknown) => {
+        logger.warn(
+          `[project.delete] 任务产物目录没删掉（库行已删）：${dir} — ${errorMessage(error, String(error))}`,
+        );
+      }),
+    ),
+  );
   const projectDir = path.resolve(generatedRoot(), PROJECTS_SUBDIR, projectId);
   if (isWithinGeneratedRoot(projectDir)) {
     await fsRm(projectDir, { recursive: true, force: true }).catch((error: unknown) => {

@@ -16,6 +16,7 @@ import { TimeAgo } from "~/components/ui/time-ago";
 import { copyFailureText } from "~/components/ui/use-copy-feedback";
 import { displayValue, EMPTY_PLACEHOLDER } from "~/lib/display-value";
 import { artifactDirDisplay } from "~/lib/media/output-layout";
+import { taxonomyFrom } from "~/lib/media/artifact-taxonomy";
 import { mediaPreviewUrl } from "~/lib/media/media-url";
 import type { ProjectOutputItem } from "./hooks/use-project-outputs";
 
@@ -36,13 +37,11 @@ export type ProjectOutputsMetadataSheetProps = {
   onClose: () => void;
   onCopy: () => void;
   onExport: () => void;
-  projectId: string | null;
   selected: ProjectOutputItem | null;
 };
 
 export function ProjectOutputsMetadataSheet({
   selected,
-  projectId,
   copyFailed,
   copySucceeded,
   onCopy,
@@ -199,7 +198,14 @@ export function ProjectOutputsMetadataSheet({
                   文件已保存至
                   {/* 形状取自布局那一处定义；组件里抄字面量会在搬根那天说错话。 */}
                   <span className="text-ink-muted font-mono">
-                    {artifactDirDisplay(selected.id, projectId)}
+                    {artifactDirDisplay(
+                      taxonomyFrom({
+                        mediaType: selected.images[0]?.mediaType,
+                        modelName: selected.workflowName,
+                        modeCode: selected.type,
+                      }),
+                      selected.id,
+                    )}
                   </span>
                 </p>
               </div>
