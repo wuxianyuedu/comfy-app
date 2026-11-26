@@ -214,18 +214,14 @@ export function refreshComfyQueue(): Promise<void> {
     }
   });
   refreshInFlight = pending;
-  /* settled 后清掉去重标记：成功与失败都清，且只清「还是自己」的那一次。
-   * 清理链本身的结果无人消费 —— 走 fireAndForget 显式收口，不用 void 悬空
-   * （void someFn() 会撞 src/lib 的 H-6 棘轮）。pending 原样返回给主动刷新方，
-   * 失败仍由调用方看到，这里不吞。 */
-  fireAndForget(
-    pending.finally(() => {
-      if (refreshInFlight === pending) {
-        refreshInFlight = null;
-      }
-    }),
-    ignorePollError,
-  );
+  const clearInFlight = (): void => {
+    if (refreshInFlight === pending) {
+      refreshInFlight = null;
+    }
+  };
+  /* 清标记的两个分支都已吞掉自身结果（请求本体仍由调用方 await ⇒ 错误不外泄），
+   * 这条悬空 Promise 走统一出口 fireAndForget，不用裸 void（§18 / void-floats）。 */
+  fireAndForget(pending.then(clearInFlight, clearInFlight), ignorePollError);
   return pending;
 }
 
