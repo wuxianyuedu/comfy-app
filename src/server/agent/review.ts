@@ -365,6 +365,10 @@ export async function autoselectShotImage(
     });
   }
 
+  /* 候选任务一趟批量取回（#5149）：只把「读任务」批量化，打分仍按候选顺序
+   * 串行（LLM / IO 的既有语义不变）。 */
+  const tasks = await taskRepository.findByIdsWithImages(taskIds);
+  const byId = new Map(tasks.map((row) => [row.id, row]));
   const seen = new Set<string>();
   const candidates: Array<AutoselectCandidate> = [];
   for (const taskId of taskIds) {
@@ -372,8 +376,7 @@ export async function autoselectShotImage(
       continue;
     }
     seen.add(taskId);
-    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-    const task = await taskRepository.findByIdWithImages(taskId);
+    const task = byId.get(taskId);
     /* 等价形态：`userId` 是必填 string，不存在「task 为 null 而 userId 也是
      * undefined」那一支（`prefer-optional-chain` 要的就是这一句）。 */
     if (task?.userId !== userId) {
