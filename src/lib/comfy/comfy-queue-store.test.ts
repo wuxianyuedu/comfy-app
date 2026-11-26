@@ -509,6 +509,30 @@ describe("comfy-queue-store", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it("失败后清理链仍清掉去重标记，下一次调用可立即重试且不产生未处理 rejection", async () => {
+      fetchMock
+        .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce(queueRes(onlinePayload(9)));
+      const unhandledRejection = vi.fn();
+      process.on("unhandledRejection", unhandledRejection);
+
+      try {
+        await expect(mod.refreshComfyQueue()).rejects.toThrow("ComfyUI 队列刷新失败");
+        // 等清理链 settled（失败分支也要清 refreshInFlight）。
+        await flush();
+
+        const retry = mod.refreshComfyQueue();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        await expect(retry).resolves.toBeUndefined();
+        await flush();
+
+        expect(mod.getComfyQueueSnapshot().queued).toBe(9);
+        expect(unhandledRejection).not.toHaveBeenCalled();
+      } finally {
+        process.off("unhandledRejection", unhandledRejection);
+      }
+    });
+
     it("请求完成后后续调用发起新 fetch，不会永久去重", async () => {
       fetchMock
         .mockResolvedValueOnce(queueRes(onlinePayload(4)))
