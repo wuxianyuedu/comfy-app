@@ -404,7 +404,7 @@ export function useQueueMonitor(): QueueMonitorController {
   const setPausedM = useMutation(
     trpc.generationControl.setPaused.mutationOptions({
       onSuccess: () => {
-        pauseQ.refetch();
+        void pauseQ.refetch();
       },
     }),
   );
