@@ -260,6 +260,14 @@ export const COVERAGE_THRESHOLDS = {
     statements: 91,
     branches: 86,
   },
+  /* DOM 布局量测域（ISSUE #5131）：共享 ResizeObserver 的实测
+   * 97.43/81.25/100/97.36（stmts/branches/funcs/lines），向下取整登记。 */
+  "src/lib/dom/**": {
+    lines: 97,
+    functions: 100,
+    statements: 97,
+    branches: 81,
+  },
   "src/lib/media/**": {
     lines: 98,
     functions: 97,
