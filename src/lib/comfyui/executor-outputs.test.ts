@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { collectOutputs, extractRuntimeParams, internalPreviewNodeIds } from "./executor-outputs";
+import { collectOutputs, extractRuntimeParams, selectedOutputNodeIds } from "./executor-outputs";
 
 /** 造一条 history entry：prompt[2] 是被执行图（class_type + inputs）。 */
 function entryWithGraph(
@@ -146,33 +146,43 @@ describe("collectOutputs 未知键兜底的 temp 过滤（ISSUE #4910）", () =>
   });
 });
 
-describe("内部预览节点的 text 不算产物（ISSUE #5109）", () => {
+describe("只认编辑 IO / App Mode 勾选的输出节点（ISSUE #5109）", () => {
   const outputs = {
     "9": { images: [{ filename: "final_00001_.png", subfolder: "", type: "output" }] },
     "23:18": { text: ['{"expanded_caption":"...","aspect_ratio":"1:1"}'] },
     "30": { text: ["这是用户要的文字交付"] },
   };
-  const graph = {
-    "9": { class_type: "SaveImage", inputs: {} },
-    "23:18": { class_type: "PreviewAny", inputs: { source: ["23:26", 0] } },
-    "23:26": { class_type: "JsonExtractString", inputs: {} },
-    "30": { class_type: "ShowText", inputs: {} },
+  const io = {
+    "9::output::images": { direction: "output", kind: "output", name: "图片", nodeId: "9" },
+    "30::output::text": { direction: "output", kind: "output", name: "文本", nodeId: "30" },
+    "23:18::output::text": { direction: "input", kind: "widget", name: "预览", nodeId: "23:18" },
   };
-  const entry = { prompt: ["id", "number", graph, {}, {}] };
 
-  it("internalPreviewNodeIds 从执行图认出 PreviewAny，不误伤 ShowText", () => {
-    expect([...internalPreviewNodeIds(entry)]).toEqual(["23:18"]);
+  it("勾选集只收 direction=output 的条目；子图条目拼成 host:inner", () => {
+    const ids = selectedOutputNodeIds(io);
+    expect(ids).not.toBeNull();
+    expect([...(ids ?? new Set<string>())].sort()).toEqual(["30", "9"]);
+    const subIds = selectedOutputNodeIds({
+      "in::output::x": {
+        direction: "output",
+        kind: "output",
+        name: "子图输出",
+        nodeId: "1670",
+        hostNodeId: "4",
+      },
+    });
+    expect([...(subIds ?? new Set<string>())].sort()).toEqual(["1670", "4:1670"]);
   });
 
-  it("过滤后只剩真交付：1 张图 + ShowText 的文本，扩写预览不落 txt_0.txt", () => {
-    const out = collectOutputs(outputs, { skipTextNodeIds: internalPreviewNodeIds(entry) });
+  it("没勾选的节点整格不算产物：图与扩写预览都不落库", () => {
+    const out = collectOutputs(outputs, { onlyNodeIds: selectedOutputNodeIds(io) });
     expect(out.images).toHaveLength(1);
     expect(out.texts).toEqual(["这是用户要的文字交付"]);
   });
 
-  it("不传过滤集时维持旧行为（图缺失时不凭空丢文本）", () => {
+  it("IO 缺失 / 没有勾选输出时返回 null，维持旧行为", () => {
+    expect(selectedOutputNodeIds(null)).toBeNull();
+    expect(selectedOutputNodeIds({})).toBeNull();
     expect(collectOutputs(outputs).texts).toHaveLength(2);
-    expect([...internalPreviewNodeIds({})]).toEqual([]);
-    expect([...internalPreviewNodeIds({ prompt: "not-an-array" })]).toEqual([]);
   });
 });
