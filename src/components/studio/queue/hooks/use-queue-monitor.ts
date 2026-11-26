@@ -26,6 +26,7 @@ import {
   estimateRemainingMs,
   queuedWithPosition,
   queueStats,
+  queueStatsFromCounts,
   recentWithin,
   remainingText,
   reprintText,
@@ -156,8 +157,17 @@ export function useQueueMonitor(): QueueMonitorController {
 
   const buckets = useMemo(() => bucketQueueRows(listQ.data?.tasks ?? []), [listQ.data?.tasks]);
   const queued = useMemo(() => queuedWithPosition(buckets.queued), [buckets.queued]);
-  /* 指标带四格：随每次轮询的新数据重算（ buckets 身份变化即重算，日期跨天自会跟上）。 */
-  const stats = useMemo(() => queueStats(buckets, new Date()), [buckets]);
+  /* 指标带四格：服务端全量计数优先（不受 take=200 截断），首帧缺计数时退回窗口版。
+   * 日期跨天时 todayCounts 由服务端按本机零点重算，无需前端记忆。 */
+  const stats = useMemo(
+    () =>
+      queueStatsFromCounts(
+        listQ.data?.statusCounts,
+        listQ.data?.todayCounts,
+        queueStats(buckets, new Date()),
+      ),
+    [buckets, listQ.data?.statusCounts, listQ.data?.todayCounts],
+  );
 
   /* 「同一条不能重复点」与忙标记的落 / 清走全库唯一出口（规范 16 §16.2.4.40）。
    * 传键集合是为了收敛生命周期：条目从列表里消失后忙标记随之丢掉，否则

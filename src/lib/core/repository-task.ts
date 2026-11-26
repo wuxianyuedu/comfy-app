@@ -9,7 +9,7 @@ import { isRecord } from "~/lib/is-record";
 import { task, taskImage, type Task, type TaskImage } from "~/server/db/schema";
 import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";
-import { eq, and, inArray, notInArray, desc, asc, sql, count } from "drizzle-orm";
+import { eq, and, gte, inArray, notInArray, desc, asc, sql, count } from "drizzle-orm";
 import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import { isTerminalTaskStatus, TERMINAL_TASK_STATUSES } from "~/lib/task-state";
@@ -181,11 +181,19 @@ export class TaskRepository extends DrizzleRepository<Task> {
   async countByStatusByUser(
     userId: string,
     opts?: { projectId?: string; statusList?: Array<string> },
+    /** 只数该时刻之后创建的任务（队列卡「今日完成 / 失败」用；ISO 字符串直比，
+     *  与 createdAt 的存储形态一致）。缺省 = 不限时间。 */
+    since?: Date,
   ): Promise<Record<string, number>> {
     const rows = await db
       .select({ status: task.status, count: sql<number>`count(*)` })
       .from(task)
-      .where(taskListWhere(userId, opts))
+      .where(
+        and(
+          taskListWhere(userId, opts),
+          since === undefined ? undefined : gte(task.createdAt, since),
+        ),
+      )
       .groupBy(task.status);
     return Object.fromEntries(rows.map((row) => [row.status, Number(row.count)]));
   }

@@ -65,13 +65,14 @@ export function QueueParamTable({
   if (paramRows.length === 0) {
     return <p className="text-ink-fainter px-0.5 text-xs">没有读到可展示的输入参数。</p>;
   }
-  /* 键值行走 `ui/key-value-rows` 基元（P17：视图不自写键值行）。 */
+  /* 键值行走 `ui/key-value-rows` 基元（P17：视图不自写键值行）。用 `table`
+   * 档：键列有语义表头且短标签不换行，值列自然折行不截断（#5074）。 */
   return (
     <KeyValueRows
-      bordered
-      className="border-border-subtle bg-canvas-deep p-2.5"
+      className="border-border-subtle bg-canvas-deep"
       items={paramRows.map((row) => ({ id: row.label, key: row.label, value: row.value }))}
-      layout="rows"
+      keyWrap
+      layout="table"
       mono={false}
     />
   );
@@ -126,9 +127,8 @@ export function QueueRowLine({
             {row.modelName}
           </span>
         ) : null}
-        <TruncatedText className="text-ink-fainter min-w-0 basis-40 truncate text-xs sm:flex-1">
-          {displayValue(row.prompt)}
-        </TruncatedText>
+        {/* 提示词只在展开的参数表里完整显示一遍（#5074）：行头再摆一份
+            截断摘要既重复又看不全。 */}
         {terminal ? <StatusBadge label={taskStatusLabel(row.status)} status={row.status} /> : null}
         {row.error !== null && row.error !== "" ? (
           <TruncatedText className="text-danger-strong min-w-0 basis-full truncate text-xs">
@@ -155,16 +155,19 @@ export function QueueRowLine({
               参数
             </Button>
           ) : null}
-          <Button
-            aria-label="查看这一条的执行日志"
-            className="text-ink-faint hover:text-primary-strong h-auto gap-1"
-            onClick={onOpenLog}
-            size="xs"
-            variant="ghost"
-          >
-            <FileText aria-hidden className="size-3" data-icon="inline-start" />
-            日志
-          </Button>
+          {/* 排队中还没有开始执行，没有日志可看（#5074）：只在跑动 / 终态给入口。 */}
+          {terminal || row.status === "RUNNING" ? (
+            <Button
+              aria-label="查看这一条的执行日志"
+              className="text-ink-faint hover:text-primary-strong h-auto gap-1"
+              onClick={onOpenLog}
+              size="xs"
+              variant="ghost"
+            >
+              <FileText aria-hidden className="size-3" data-icon="inline-start" />
+              日志
+            </Button>
+          ) : null}
           {terminal ? (
             <>
               <Button
@@ -206,7 +209,9 @@ export function QueueRowLine({
         </span>
       </div>
       {onToggleParams !== undefined && paramsExpanded ? (
-        <div className="pl-[4.5rem]">
+        /* 展开区铺满整行：此前 pl-[4.5rem] 留出一块空白只为对齐行头，
+         * 反而让参数表变窄、标签挤成竖排（#5074）。 */
+        <div className="min-w-0">
           <QueueParamTable detailLoading={paramsLoading} paramRows={paramRows} />
         </div>
       ) : null}
