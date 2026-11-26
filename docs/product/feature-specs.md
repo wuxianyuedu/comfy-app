@@ -783,7 +783,10 @@
   按任务模式切模式页签、契约口值预填进统一输入表单、等工作流清单 settle 后
   补选同款工作流；用户确认后点「生成」才真正重跑。预填是表单值的**兜底层**：
   换模型不丢（重试换模型再跑是常态），用户改任意输入 / 贴 JSON / 选文件即退场。
-  原直复投端点（`task.retry`）随唯一的消费方（历史页直调）一并退役。卡片相对时间、排序与日期分组一律按**最近活动时刻**（finishedAt → claimedAt → createdAt），不再停在提交时刻；页签活跃时按固定节奏重问，持续生图时新完成的任务会自己出现。状态筛选下推服务端（按该状态取行与 cursor），角标仍取终态全集计数；「计数有、当前页没有」时空态保留「继续加载」入口，不再卡死（ISSUE #5076）。
+  原直复投端点（`task.retry`）随唯一的消费方（历史页直调）一并退役。卡片相对时间、排序与日期分组一律按**最近活动时刻**（finishedAt → claimedAt → createdAt），不再停在提交时刻；页签活跃时按固定节奏重问，持续生图时新完成的任务会自己出现。状态筛选下推服务端（按该状态取行与 cursor），角标仍取终态全集计数；「计数有、当前页没有」时空态保留「继续加载」入口，不再卡死（ISSUE #5076）。终态卡片另显示**生成耗时**（ISSUE #5115）：
+  `claimedAt → finishedAt`，旧行无 `claimedAt` 时退 `createdAt`（含排队时间，角标
+  `title` 如实说明），未完 / 中断不显示空盒子；派生与格式与详情弹窗、队列页共用
+  同一出口，读数为 `42s` / `2m17s` / `1h02m`。
 - 落点：`src/components/studio/history/HistoryList.tsx`、
   `src/components/studio/history/hooks/use-history-list.ts`、
   `src/components/studio/history/history-detail-derive.ts`（`buildReprintPayload` /
@@ -804,7 +807,12 @@
   不再显示，值从本次提交的 params / workflowInputs 解析）；**工作流参数**以
   当前工作流 IO 的**全量输入端口**为行（与 IO 预览同一份拆分），本次有提交
   值就覆盖、没有就显示 IO 默认值并标注「默认值」，展示名取 IO 作者标签
-  （如 `replace` 口显示为 `prompt`，原始 pin 名留在悬停提示里）。提示词这类
+  （如 `replace` 口显示为 `prompt`，原始 pin 名留在悬停提示里）。IO 源必须是
+   `workflow.detailFull` 的富化结果（ISSUE #5118）：轻量 `workflow.detail` 只给
+   落库的原始勾选列、label 为空，历史会退回 `replace` / `aspect_ratio` 这类 pin 名，
+   且没提交值的端口整行缺失；切到富化 IO 后名称与 IO 预览逐字一致、全量端口都在。
+   工作流已删 / 详情未回时如实回落 pin 名，不编。头部另显示与卡片同口径的
+   **生成耗时**（ISSUE #5115）。提示词这类
   长文案行定高 + 纵向滚动，完整文案始终在 DOM 里。
   弹窗内**没有编辑性入口**（#4841）：评分 / 收藏行与「放大 / 局部重绘」面板
   已撤走（分别见 FR-QA-08 / FR-QA-09），重试走任务卡（FR-GN-05 的带参预填）。
