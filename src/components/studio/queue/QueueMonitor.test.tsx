@@ -68,6 +68,7 @@ function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorCon
     loadError: null,
     logRow: null,
     expandedId: null,
+    runningDetail: null,
     toggleExpanded: vi.fn(),
     detailLoading: false,
     paramRows: [],
@@ -207,6 +208,45 @@ describe("QueueMonitor", () => {
     expect(openLog).not.toHaveBeenCalledWith(
       expect.objectContaining({ id: "q1", status: "QUEUED" }),
     );
+  });
+
+  it("运行中可展开统一输入与请求信息（#5075）", () => {
+    const toggleExpanded = vi.fn();
+    treeMock.mockReturnValue(treeController({ filterIds: () => new Set(["run-1"]) }));
+    monitorMock.mockReturnValue(
+      controller({
+        running: {
+          elapsedText: "1s",
+          id: "run-1",
+          modelText: "MiniMax H3",
+          nodeText: "—",
+          progressPct: 0.2,
+          rateText: "—",
+          remainingText: "—",
+          stepsText: "—",
+          workflowName: "image_minimax_h3_image_t2i",
+        },
+        expandedId: "run-1",
+        toggleExpanded,
+        runningDetail: {
+          id: "run-1",
+          workflowName: "image_minimax_h3_image_t2i",
+          modelName: "MiniMax H3",
+          status: "RUNNING",
+          prompt: "一只猫",
+          params: { workflow: "wf-1", prompt: "一只猫", seed: 42 },
+        },
+        paramRows: [{ label: "提示词", value: "一只猫" }],
+      }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    const detail = screen.getByRole("button", { name: "查看正在跑这条的统一输入与请求信息" });
+    expect(detail).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("统一输入（提交时的参数）")).toBeInTheDocument();
+    expect(screen.getByText("请求信息")).toBeInTheDocument();
+    expect(screen.getByText("本地任务")).toBeInTheDocument();
+    detail.click();
+    expect(toggleExpanded).toHaveBeenCalledWith("run-1");
   });
 
   it("logRow 非空时挂载执行日志弹窗，关闭回调交还 controller", () => {

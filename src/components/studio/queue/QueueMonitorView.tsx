@@ -37,7 +37,7 @@ import { taskStatusLabel } from "~/lib/task-state";
 import type { QueueModelTreeController } from "./hooks/use-queue-model-tree";
 import type { QueueMonitorController } from "./hooks/use-queue-monitor";
 import type { QueueRow } from "./queue-monitor-config";
-import { Field, QueueRowLine, SectionHeading } from "./QueueMonitorParts";
+import { Field, QueueRowLine, RunningDetails, SectionHeading } from "./QueueMonitorParts";
 import {
   offlineBannerText,
   offlineEmptyText,
@@ -414,6 +414,19 @@ export function QueueMonitorView({
                     <Field label="主模型">{running.modelText}</Field>
                   </dl>
                   <div className="mt-3 flex justify-end gap-1">
+                    {/* #5075：展开统一输入 / 请求读数，与测试模型页同口径。 */}
+                    <Button
+                      aria-expanded={c.expandedId === running.id}
+                      aria-label="查看正在跑这条的统一输入与请求信息"
+                      className="h-auto gap-1"
+                      onClick={() => {
+                        c.toggleExpanded(running.id);
+                      }}
+                      size="xs"
+                      variant="ghost"
+                    >
+                      详情
+                    </Button>
                     <Button
                       aria-label="查看正在跑这条的执行日志"
                       className="h-auto gap-1"
@@ -442,6 +455,13 @@ export function QueueMonitorView({
                       {c.isBusy(running.id) ? "处理中" : "取消这条"}
                     </Button>
                   </div>
+                  {c.expandedId === running.id ? (
+                    <RunningDetails
+                      detail={c.runningDetail}
+                      detailLoading={c.detailLoading}
+                      paramRows={c.paramRows}
+                    />
+                  ) : null}
                 </article>
               ) : running === null && runningRows.length > 0 ? (
                 <ol className="flex flex-col gap-3">

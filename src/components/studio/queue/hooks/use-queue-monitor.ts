@@ -17,7 +17,7 @@ import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { revealTaskFolder } from "~/lib/history-detail-actions";
 import { formatSampleRateText, formatStepsText } from "~/lib/progress";
 import { cancelAllTasks, cancelTask } from "~/lib/task-cancel-client";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC, type RouterOutputs } from "~/trpc/react";
 
 import { useToast } from "../../ToastProvider";
 import type { QueueTaskLogTarget } from "../QueueTaskLogModal";
@@ -94,6 +94,11 @@ export type QueueMonitorController = {
   requestCancelAll: () => void;
   /** 正在跑的那条（富卡片：来自 `/api/comfy/queue`）；没有在跑时为 null。 */
   running: RunningCardView | null;
+  /** 运行中任务的详情（仅在展开运行时那条时取到；统一输入 / 请求读数用它）。 */
+  runningDetail: Pick<
+    NonNullable<RouterOutputs["task"]["detail"]>,
+    "id" | "modelName" | "params" | "prompt" | "status" | "workflowName"
+  > | null;
   /** 库里 status=RUNNING 的行。`running` 为 null 而这里非空 = ComfyUI 没连上
    * （富卡片的数据源不可达），离线兜底卡用它渲染。 */
   runningRows: Array<QueueRow>;
@@ -205,6 +210,12 @@ export function useQueueMonitor(): QueueMonitorController {
       rateText: formatSampleRateText(task.progressValue, queue.elapsedMs) ?? "—",
     };
   }, [queue.elapsedMs, queue.running]);
+
+  /* 运行中那条的详情只在展开它时才取（#5075）：与排队行共用同一个 detail 门控，
+   * 同一时刻只展开一条，避免多开查询。 */
+  const runningId = running?.id ?? buckets.running[0]?.id ?? null;
+  const runningDetail =
+    expandedId !== null && expandedId === runningId ? (detailQ.data ?? null) : null;
 
   const cancel = useCallback(
     async (id: string, label: string) => {
@@ -331,6 +342,7 @@ export function useQueueMonitor(): QueueMonitorController {
     loadError: listQ.isError ? "读不到任务记录，后端可能刚重启" : null,
     logRow,
     expandedId,
+    runningDetail,
     toggleExpanded,
     detailLoading: detailQ.isFetching,
     paramRows,
