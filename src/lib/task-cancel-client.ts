@@ -14,6 +14,24 @@ export async function cancelTask(taskId: string): Promise<void> {
   await vanillaApi.task.cancel.mutate({ id: taskId });
 }
 
+/** 一次「取消全部」的结果（ISSUE #5064）。`failed` 非 0 时 UI 必须如实报出来。 */
+export type CancelAllResult = {
+  /** 实际取消掉的行数。 */
+  cancelled: number;
+  /** 尝试了但没取消掉的行数（服务端已逐条记 warn 日志）。 */
+  failed: number;
+  /** 本轮候选总数 = cancelled + failed。 */
+  total: number;
+};
+
+/**
+ * 取消当前用户全部非终态任务。候选与归属过滤在服务端，本函数只发一次请求；
+ * 单条失败不中断其余，计数由 `failed` 带回。失败抛错由调用走统一反馈出口。
+ */
+export async function cancelAllTasks(): Promise<CancelAllResult> {
+  return vanillaApi.task.cancelAll.mutate();
+}
+
 /** 任务的权威状态快照（只取终态判定要用的两个字段）。 */
 export type TaskStatusSnapshot = {
   /** 失败原因（仅失败态有意义）。 */

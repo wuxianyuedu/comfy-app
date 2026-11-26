@@ -56,7 +56,8 @@ export function bucketQueueRows(rows: ReadonlyArray<QueueRow>): QueueBuckets {
 }
 
 /** 顶部指标带的四格读数（纯派生，视图只渲染）。今日终态按真实结束时刻统计，
- * 历史任务在今天重跑完成也能计入；缺少结束时刻的旧数据才退回创建时刻。 */
+ * 历史任务在今天重跑完成也能计入；缺少结束时刻的旧数据才退回创建时刻。
+ * 窗口版只作首帧兜底：正式口径走 {@link queueStatsFromCounts} 的服务端全量计数。 */
 export type QueueStats = {
   failedToday: number;
   queued: number;
@@ -87,9 +88,27 @@ export function queueStats(buckets: QueueBuckets, now: Date): QueueStats {
 }
 
 /**
- * 排队位次（第 1 位 = 下一个开跑）。必须显式反一次：task.list 一律按 createdAt 倒序返回
- *（仓储四条分支同一句倒序、不暴露排序参数），而执行器先入先出 —— 直接拿倒序下标当位次，
- * 会把最后提交的显示成「第 1 位」。
+ * 指标带的**全量口径**（#5073）：优先读服务端 `task.list` 已带的按状态分组计数
+ * （SQL GROUP BY，与 take 无关），今日完成 / 失败读同一口径的时间过滤版。
+ * 首帧拿不到计数时才退回窗口版 —— 宁可短暂偏小，也不拿 200 行切片冒充全量。
+ */
+export function queueStatsFromCounts(
+  statusCounts: Record<string, number> | null | undefined,
+  todayCounts: Record<string, number> | null | undefined,
+  fallback: QueueStats,
+): QueueStats {
+  return {
+    failedToday: todayCounts?.FAILED ?? fallback.failedToday,
+    queued: statusCounts?.QUEUED ?? fallback.queued,
+    running: statusCounts?.RUNNING ?? fallback.running,
+    succeededToday: todayCounts?.SUCCEEDED ?? fallback.succeededToday,
+  };
+}
+
+/**
+ * 排队位次（第 1 位 = 下一个开跑）。位次由服务端按完整 QUEUED 队列给出
+ *（task.list 的 `queuePosition`），不按当前页子集重编号 —— 分页只加载到第 61 位时
+ * 仍显示真实的 61/62，队列快照里已没有这一行时给 null，绝不编造。
  */
 export function queuedWithPosition(
   queued: ReadonlyArray<QueueRow>,

@@ -70,6 +70,16 @@ vi.mock("~/trpc/react", () => ({
           queryKey: ["task", "detail", input],
         }),
       },
+      reorder: { mutationOptions: () => ({ mutationKey: ["task", "reorder"] }) },
+    },
+    generationControl: {
+      pauseState: {
+        queryOptions: () => ({
+          queryKey: ["generationControl", "pauseState"],
+          queryFn: () => Promise.resolve({ paused: false }),
+        }),
+      },
+      setPaused: { mutationOptions: () => ({ mutationKey: ["generationControl", "setPaused"] }) },
     },
   }),
 }));

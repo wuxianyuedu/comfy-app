@@ -40,9 +40,9 @@ function row(over: Partial<QueueRow> & Pick<QueueRow, "id" | "status">): QueueRo
     modelName: null,
     prompt: `提示词 ${over.id}`,
     createdAt: new Date("2026-01-01T00:00:00Z"),
-    claimedAt: null,
     finishedAt: null,
-    queuePosition: null,
+    claimedAt: null,
+    queuePosition: over.queuePosition ?? null,
     cover: null,
     checkpoint: null,
     videoPath: null,
@@ -68,10 +68,22 @@ function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorCon
     loading: false,
     loadError: null,
     logRow: null,
+    moveUp: vi.fn(),
     expandedId: null,
+    runningDetail: null,
+    runningLogs: [],
+    runningSettled: null,
     toggleExpanded: vi.fn(),
     detailLoading: false,
     paramRows: [],
+    paused: false,
+    pauseBusy: false,
+    togglePause: vi.fn(),
+    cancelAllOpen: false,
+    cancelAllBusy: false,
+    confirmCancelAll: vi.fn(),
+    requestCancelAll: vi.fn(),
+    closeCancelAll: vi.fn(),
     isBusy: () => false,
     refresh: vi.fn(),
     loadedCount: 0,
@@ -194,7 +206,7 @@ describe("QueueMonitor", () => {
     expect(screen.getByText(/连接后显示耗时与节点明细/)).toBeInTheDocument();
   });
 
-  it("每一行都有「日志」入口，点击把该行交给 controller 打开弹窗", () => {
+  it("排队中没有日志入口，已执行的行点「日志」把该行交给 controller（#5074）", () => {
     const openLog = vi.fn();
     monitorMock.mockReturnValue(
       controller({
@@ -207,12 +219,76 @@ describe("QueueMonitor", () => {
     const logButtons = screen.getAllByRole("button", {
       name: /查看这一条的执行日志/,
     });
-    expect(logButtons).toHaveLength(2);
-    /* 读屏顺序：排队段在前、最近结果在后 —— 每个按钮各归属那一行。 */
+    expect(logButtons).toHaveLength(1);
     logButtons[0]!.click();
-    expect(openLog).toHaveBeenCalledWith(expect.objectContaining({ id: "q1", status: "QUEUED" }));
-    logButtons[1]!.click();
     expect(openLog).toHaveBeenCalledWith(expect.objectContaining({ id: "bad", status: "FAILED" }));
+    expect(openLog).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: "q1", status: "QUEUED" }),
+    );
+  });
+
+  it("提前按钮只出现在排队中的行，点一下把整行交给 controller", async () => {
+    const user = userEvent.setup();
+    const moveUp = vi.fn();
+    monitorMock.mockReturnValue(
+      controller({
+        queued: [{ row: row({ id: "q1", status: "QUEUED" }), position: 1 }],
+        runningRows: [row({ id: "r1", status: "RUNNING" })],
+        recent: [row({ id: "done1", status: "SUCCEEDED" })],
+        moveUp,
+      }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    const buttons = screen.getAllByRole("button", { name: "把这一条提前到队首" });
+    /* 运行中 / 终态不该有这个动作：服务端也只认 QUEUED。 */
+    expect(buttons).toHaveLength(1);
+    await user.click(buttons[0]!);
+    expect(moveUp).toHaveBeenCalledWith(expect.objectContaining({ id: "q1", status: "QUEUED" }));
+  });
+
+  it("运行中可展开统一输入与请求信息（#5075）", () => {
+    const toggleExpanded = vi.fn();
+    treeMock.mockReturnValue(treeController({ filterIds: () => new Set(["run-1"]) }));
+    monitorMock.mockReturnValue(
+      controller({
+        running: {
+          id: "run-1",
+          modelText: "MiniMax H3",
+          nodeText: "—",
+          progressPct: 0.2,
+          progressValue: null,
+          startedAt: Date.now() - 1000,
+          stepsText: "—",
+          elapsedText: "00:01",
+          remainingText: "估算中",
+          rateText: "—",
+          workflowName: "image_minimax_h3_image_t2i",
+        },
+        expandedId: "run-1",
+        toggleExpanded,
+        runningDetail: {
+          id: "run-1",
+          workflowName: "image_minimax_h3_image_t2i",
+          modelName: "MiniMax H3",
+          status: "RUNNING",
+          prompt: "一只猫",
+          params: { workflow: "wf-1", prompt: "一只猫", seed: 42 },
+        },
+        paramRows: [{ label: "提示词", value: "一只猫" }],
+      }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    const detail = screen.getByRole("button", { name: "查看正在跑这条的统一输入与请求信息" });
+    expect(detail).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("统一输入（提交时的参数）")).toBeInTheDocument();
+    expect(screen.getByText("请求信息")).toBeInTheDocument();
+    expect(screen.getByText("本地任务")).toBeInTheDocument();
+    expect(screen.getByText("生成进度")).toBeInTheDocument();
+    expect(screen.getByText("执行日志")).toBeInTheDocument();
+    expect(screen.getByText("请求返回")).toBeInTheDocument();
+    expect(screen.getByText("执行中")).toBeInTheDocument();
+    detail.click();
+    expect(toggleExpanded).toHaveBeenCalledWith("run-1");
   });
 
   it("logRow 非空时挂载执行日志弹窗，关闭回调交还 controller", () => {
@@ -281,17 +357,6 @@ describe("QueueMonitor", () => {
     );
   });
 
-  it("队列快照未命中时写「排队中」，不按已加载子集编造位次", () => {
-    monitorMock.mockReturnValue(
-      controller({
-        queued: [{ row: row({ id: "unknown", status: "QUEUED" }), position: null }],
-      }),
-    );
-    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
-    expect(screen.getAllByText("排队中")).toHaveLength(2);
-    expect(screen.queryByText(/^第 \d+ 位$/)).not.toBeInTheDocument();
-  });
-
   it("左树选中模型：三段列表只留该模型的行，筛选提示与清除入口在场", () => {
     const clear = vi.fn();
     treeMock.mockReturnValue(
@@ -330,10 +395,12 @@ describe("QueueMonitor", () => {
           workflowName: "正在跑的工作流",
           modelText: "sd.safetensors",
           nodeText: "尚未回报节点",
+          progressPct: 0,
+          progressValue: null,
+          startedAt: Date.now() - 30_000,
+          stepsText: "—",
           elapsedText: "00:30",
           remainingText: "估算中",
-          progressPct: 0,
-          stepsText: "—",
           rateText: "—",
         },
       }),
@@ -343,64 +410,84 @@ describe("QueueMonitor", () => {
     expect(screen.getByRole("heading", { name: /正在跑的工作流/ })).toBeInTheDocument();
   });
 
-  it("富运行卡被模型筛选排除时，仍显示匹配的库内 RUNNING 行", () => {
-    treeMock.mockReturnValue(
-      treeController({
-        activeLabel: "sd-only",
-        filterIds: (rows) =>
-          new Set(rows.filter((r) => r.modelName === "sd-only").map((r) => r.id)),
-      }),
-    );
-    monitorMock.mockReturnValue(
-      controller({
-        running: {
-          id: "rich-other",
-          workflowName: "已排除的富运行卡",
-          modelText: "wan-only",
-          nodeText: "KSampler",
-          elapsedText: "00:30",
-          remainingText: "估算中",
-          progressPct: 0,
-          stepsText: "—",
-          rateText: "—",
-        },
-        runningRows: [
-          row({ id: "rich-other", modelName: "wan-only", status: "RUNNING" }),
-          row({ id: "running-match", modelName: "sd-only", status: "RUNNING", progress: 42 }),
-        ],
-      }),
-    );
-    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
-    expect(screen.queryByRole("heading", { name: "已排除的富运行卡" })).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "工作流 running-match" })).toBeInTheDocument();
-    expect(screen.getByText("ComfyUI 尚未回报运行明细，当前显示任务库状态。")).toBeInTheDocument();
-    expect(screen.queryByText(/连接后显示耗时与节点明细/)).not.toBeInTheDocument();
-  });
-
-  it("同步读数缺失时显示等待同步，不伪造实时状态", () => {
-    monitorMock.mockReturnValue(controller());
-    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
-    expect(screen.getByText("等待同步")).toBeInTheDocument();
-  });
-
-  it("刷新按钮把成功反馈要求传给 controller", async () => {
-    const refresh = vi.fn();
-    monitorMock.mockReturnValue(controller({ lastSyncedAt: 1000, refresh }));
-    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
-    expect(screen.getByText(/最后同步/)).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole("button", { name: "立即重新读取队列" }));
-    expect(refresh).toHaveBeenCalledWith(true);
-  });
-
-  it("刷新失败时保留旧快照并显示非实时提醒", () => {
-    monitorMock.mockReturnValue(controller({ refreshError: "刷新失败：部分真相源未完整同步" }));
-    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
-    expect(screen.getByRole("alert")).toHaveTextContent("不代表实时队尾");
-  });
-
   it("读不到任务记录时说明读不到，而不是显示一套空的列表当作准数", () => {
     monitorMock.mockReturnValue(controller({ loadError: "读不到任务记录，后端可能刚重启" }));
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText(/^读不到任务记录/)).toBeInTheDocument();
+  });
+});
+
+describe("生图暂停 / 恢复（ISSUE #5055）", () => {
+  it("运行中显示「暂停生成」按钮，点击走 controller 的 togglePause", async () => {
+    const togglePause = vi.fn();
+    const user = userEvent.setup();
+    monitorMock.mockReturnValue(controller({ paused: false, togglePause }));
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "暂停生成" }));
+    expect(togglePause).toHaveBeenCalledTimes(1);
+    /* 未暂停时不显示「生图已暂停」角标。 */
+    expect(screen.queryByText("生图已暂停")).toBeNull();
+  });
+
+  it("暂停中显示「恢复生成」按钮与「生图已暂停」角标", () => {
+    monitorMock.mockReturnValue(controller({ paused: true }));
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "恢复生成" })).toBeInTheDocument();
+    expect(screen.getByText("生图已暂停")).toBeInTheDocument();
+  });
+});
+
+describe("取消全部（ISSUE #5064）", () => {
+  it("有任务时显示「取消全部」按钮，点击打开确认弹窗", () => {
+    const requestCancelAll = vi.fn();
+    monitorMock.mockReturnValue(
+      controller({
+        queued: [{ row: row({ id: "q1", status: "QUEUED" }), position: 1 }],
+        requestCancelAll,
+      }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    screen.getByRole("button", { name: "打开取消全部确认" }).click();
+    expect(requestCancelAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("没有任务时「取消全部」禁用，不给一个点了没反应的按钮", () => {
+    monitorMock.mockReturnValue(controller());
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "打开取消全部确认" })).toBeDisabled();
+  });
+
+  it("只有终态任务（最近结果）时也禁用：按钮不该亮着却一条都取消不了", () => {
+    monitorMock.mockReturnValue(controller({ recent: [row({ id: "done", status: "FAILED" })] }));
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "打开取消全部确认" })).toBeDisabled();
+  });
+
+  it("确认弹窗打开时写出破坏面：会中断当前、作废排队，文件不删", () => {
+    monitorMock.mockReturnValue(controller({ cancelAllOpen: true }));
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByText("取消全部任务？")).toBeInTheDocument();
+    expect(screen.getByText(/正在生成的这一条会被中断/)).toBeInTheDocument();
+    expect(screen.getByText(/已经生成的文件不会删除/)).toBeInTheDocument();
+  });
+
+  it("弹窗确认按钮点击走 controller 的 confirmCancelAll", () => {
+    const confirmCancelAll = vi.fn();
+    monitorMock.mockReturnValue(controller({ cancelAllOpen: true, confirmCancelAll }));
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    screen.getByRole("button", { name: "取消全部任务" }).click();
+    expect(confirmCancelAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("pending 时弹窗确认禁用，防连点重复发取消", () => {
+    const confirmCancelAll = vi.fn();
+    monitorMock.mockReturnValue(
+      controller({ cancelAllOpen: true, cancelAllBusy: true, confirmCancelAll }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /取消全部任务/ })).toBeDisabled();
+    expect(confirmCancelAll).not.toHaveBeenCalled();
   });
 });

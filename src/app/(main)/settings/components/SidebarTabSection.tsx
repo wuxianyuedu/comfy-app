@@ -9,10 +9,9 @@
  * 事 —— 否则那两屏永远由代码写死，「设置里配了、界面却不认」就是两处各说各话。
  * 占位项打不开，给它一行开关没有意义，故不进这份清单。
  *
- * 两种保存方式与「模式契约」同一套口径：
- *   · 本机覆盖 —— **改一格即存**（落 `data/`，开发版与正式包都能用；ISSUE #3948
- *     去掉了「保存」那一步：配好就落盘，改完没点就切走不该等于白改）；
- *   · 「保存为项目默认（跟代码走）」 —— 落项目默认那份入库 JSON，只有开发检出可用。
+ * 保存口径与「模式契约」同一套：本机覆盖**改一格即存**（落 `data/`，开发版与
+ * 正式包都能用；ISSUE #3948 去掉了「保存」那一步：配好就落盘，改完没点就切走
+ * 不该等于白改）。项目默认那份入库 JSON 运行期只读不写（ISSUE #5001）。
  *
  * 纯展示：只消费 `useSidebarTabSection` 那个控制器（逻辑层），自身不碰 tRPC。
  */
@@ -88,10 +87,9 @@ export function SidebarTabSection() {
       )}
 
       {/* 本机覆盖是「改一格即存」（ISSUE #3948）：配好就落 `data/`，不再有
-          「保存」那一步（改完没点就切走 = 白改，与「尺寸配置表」那一族口径不一）。
-          只有「写项目默认」是显式动作 —— 那一份进代码库，不能顺手就改。 */}
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {c.customized && (
+          「保存」那一步（改完没点就切走 = 白改，与「尺寸配置表」那一族口径不一）。 */}
+      {c.customized && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button
             disabled={c.resetBusy}
             onClick={() => {
@@ -101,20 +99,8 @@ export function SidebarTabSection() {
           >
             {c.resetBusy ? "还原中…" : "还原默认"}
           </Button>
-        )}
-        {/* 只在开发检出出现：正式包没有源码可写，「项目默认」无从谈起。 */}
-        {c.projectDefaultEditable && (
-          <Button
-            disabled={c.savingProjectDefaults || c.draft === null}
-            onClick={() => {
-              void c.saveAsProjectDefaults();
-            }}
-            variant="outline"
-          >
-            {c.savingProjectDefaults ? "写入中…" : "保存为项目默认（跟代码走）"}
-          </Button>
-        )}
-      </div>
+        </div>
+      )}
     </SettingsCard>
   );
 }

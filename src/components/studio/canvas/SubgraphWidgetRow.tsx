@@ -93,55 +93,61 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
           </span>
         </Hint>
       </div>
-      {isImageType ? (
-        /* 图片类 widget 在画布上直接渲染缩略图（否则只显示成文本值，
-         *  且 ComfyUI 把 IMAGE 输入存成 `{filename,subfolder,type}`
-         *  对象 / 数组时还会显示成 `[object Object]`）—— 封装节点选完图
-         *  「在界面上完全看不到」（实测反馈）。`src` 为 null 时
-         *  MediaThumbnail 按 fallback 不渲染任何东西，与「未选图」一致。 */
-        <MediaThumbnail
-          alt={label}
-          className="border-border-strong bg-canvas-deep mt-0.5 max-h-24 w-full rounded-[5px] border object-contain"
-          fallback="none"
-          src={previewUrl}
-        />
-      ) : inp.type === "COMBO" && hasComboOptions ? (
-        /* 工作流画布上的 COMBO widget 渲染成只读的
-         *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
-         *  在这里保持禁用（编辑发生在会落盘取值的项目
-         *  画布表单里）。这个节点是忠实的只读预览，不是编辑器。
-         *  触发器铺满第 2 列（`fullWidth`），与值框同一坐标。 */
-        <SelectMenu
-          className="text-2xs! h-5.5! min-w-0 py-0!"
-          disabled
-          fullWidth
-          onChange={() => undefined}
-          options={comboOptionStrings}
-          popoverMinWidth={220}
-          value={typeof v === "string" ? v : ""}
-        />
-      ) : (
-        <Hint label={String(v)}>
-          <span
-            className="nodrag nopan text-2xs min-w-0 truncate rounded-[5px] px-1.5 text-left tabular-nums select-text"
-            style={{
-              /* 值框：ComfyUI widget 槽同款「凹陷井」—— 深底 +
-               *  细描边。宽度 = 第 2 列整格（最小 64px，随节点
-               *  余宽伸展），文本左对齐，超长省略（只缩略文字，
-               *  节点宽度仍由用户控制）。颜色按「有没有连线」
-               *  取两档（见 `valueCellColor`）。 */
-              display: "flex",
-              alignItems: "center",
-              minHeight: 18,
-              background: "var(--color-canvas-deep)",
-              border: "1px solid var(--color-border-subtle)",
-              color: valueCellColor(v, isConn),
-            }}
-          >
-            {renderSubgraphWidgetValue(v)}
-          </span>
-        </Hint>
-      )}
+      {/* 已连线的槽位不渲染值格：连线传入的值在运行期会覆盖封装内部默认值，
+       *  再把默认值摆出来就是展示一个**不会生效**的数值（ISSUE #5051，
+       *  与新版 ComfyUI「widget 转输入后隐藏控件」的观感一致）。
+       *  未连线槽位照旧显示数值。三种值形态（缩略图 / COMBO 下拉 / 文本井）
+       *  一并隐藏。 */}
+      {!isConn &&
+        (isImageType ? (
+          /* 图片类 widget 在画布上直接渲染缩略图（否则只显示成文本值，
+           *  且 ComfyUI 把 IMAGE 输入存成 `{filename,subfolder,type}`
+           *  对象 / 数组时还会显示成 `[object Object]`）—— 封装节点选完图
+           *  「在界面上完全看不到」（实测反馈）。`src` 为 null 时
+           *  MediaThumbnail 按 fallback 不渲染任何东西，与「未选图」一致。 */
+          <MediaThumbnail
+            alt={label}
+            className="border-border-strong bg-canvas-deep mt-0.5 max-h-24 w-full rounded-[5px] border object-contain"
+            fallback="none"
+            src={previewUrl}
+          />
+        ) : inp.type === "COMBO" && hasComboOptions ? (
+          /* 工作流画布上的 COMBO widget 渲染成只读的
+           *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
+           *  在这里保持禁用（编辑发生在会落盘取值的项目
+           *  画布表单里）。这个节点是忠实的只读预览，不是编辑器。
+           *  触发器铺满第 2 列（`fullWidth`），与值框同一坐标。 */
+          <SelectMenu
+            className="text-2xs! h-5.5! min-w-0 py-0!"
+            disabled
+            fullWidth
+            onChange={() => undefined}
+            options={comboOptionStrings}
+            popoverMinWidth={220}
+            value={typeof v === "string" ? v : ""}
+          />
+        ) : (
+          <Hint label={String(v)}>
+            <span
+              className="nodrag nopan text-2xs min-w-0 truncate rounded-[5px] px-1.5 text-left tabular-nums select-text"
+              style={{
+                /* 值框：ComfyUI widget 槽同款「凹陷井」—— 深底 +
+                 *  细描边。宽度 = 第 2 列整格（最小 64px，随节点
+                 *  余宽伸展），文本左对齐，超长省略（只缩略文字，
+                 *  节点宽度仍由用户控制）。颜色按「有没有连线」
+                 *  取两档（见 `valueCellColor`）。 */
+                display: "flex",
+                alignItems: "center",
+                minHeight: 18,
+                background: "var(--color-canvas-deep)",
+                border: "1px solid var(--color-border-subtle)",
+                color: valueCellColor(v, isConn),
+              }}
+            >
+              {renderSubgraphWidgetValue(v)}
+            </span>
+          </Hint>
+        ))}
     </div>
   );
 }

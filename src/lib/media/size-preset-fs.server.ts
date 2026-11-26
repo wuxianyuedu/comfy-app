@@ -26,8 +26,8 @@ export const SIZE_PRESETS_REL_PATH = path.join("data", "size-presets.json");
 /** 项目默认那份（入库、跟代码走）的落点（仓库根相对路径）。
  *
  *  与 {@link SIZE_PRESETS_REL_PATH} 的分工：那份是「这台机器上的额外改动」（不入库），
- *  这份是「界面里点『保存到项目代码库』写出来的默认」（提交后每个检出与每个桌包
- *  都是它）。只有开发检出有写它的入口（正式包载荷里没有源码）。
+ *  这份是**编译期基线**（提交后每个检出与每个桌包都是它）。运行期只读不写
+ *  （ISSUE #5001）—— 改它走改代码 / 提 PR 那条路。
  */
 export const SIZE_PRESET_DEFAULTS_REL_PATH = "src/lib/media/size-preset-defaults.json";
 
@@ -50,8 +50,8 @@ export async function readRawSizePresetOverrideFile(file: string): Promise<unkno
 
 /** 项目默认那份：现读磁盘上那份，读不出来 / 坏掉才回落编译进包的那份快照。
  *
- *  为什么现读（与「模式契约」#3634 同一口径）：「保存到项目代码库」写的就是它，
- *  写完必须**立刻**读到 —— 否则用户写完还得重启进程才生效。
+ *  为什么现读（与「模式契约」#3634 同一口径）：基线随代码改动（改 JSON / 提 PR）
+ *  后必须**立刻**读到 —— 否则改完还得重启进程才生效。
  */
 export async function loadSizePresetProjectDefaults(
   root: string = process.cwd(),
@@ -93,7 +93,7 @@ export async function loadSizePresetLayers(root: string = process.cwd()): Promis
 /** 生效的尺寸配置表（项目默认 + 本机覆盖，逐格合并）。
  *
  *  服务端出图链路在**换算宽高前**取这一份（ISSUE #3972）：设置里改过的表、
- *  「保存到项目代码库」改过的项目默认，都在这份里。 */
+ *  随代码更新过的项目默认，都在这份里。 */
 export async function loadSizePresetTable(root: string = process.cwd()): Promise<SizePresetTable> {
   const { table } = await loadSizePresetLayers(root);
   return table;

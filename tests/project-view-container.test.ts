@@ -24,6 +24,10 @@ const DOCUMENT_VIEWS = [
   path.join(STUDIO, "library", "ResourceLibrary.tsx"),
   /* #5002：资产库从 wide 收到 full 后纳入收口，防止有人把居中窄栏加回来。 */
   path.join(STUDIO, "assets", "AssetLibrary.tsx"),
+  /* #5069：风格库同走文档容器 + full 档（左侧画风栏要贴齐内容区左边距）。 */
+  path.join(STUDIO, "styles", "StyleLibrary.tsx"),
+  /* #5087：脸库同族，左侧脸部列表贴齐内容区左边距。 */
+  path.join(STUDIO, "faces", "FaceLibrary.tsx"),
   path.join(STUDIO, "ProjectOutputs.tsx"),
   // 这三屏是「浮层入口 → 视图」那一批改出来的，收口时漏登记，所以它们各自漏掉的
   // 约定（左右内边距）在这里第一次有了执行者。

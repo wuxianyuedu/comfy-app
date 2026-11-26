@@ -4,8 +4,8 @@
 // 「用途 / 模式 / 模型」三大项在左栏合并成一棵就地展开的树，不再藏在模型下拉
 // 浮层里（#4916 只把下拉做成了树，页面结构没变）。三种布局共用同一份条目：
 // - 按用途：用途 → 模式 → 模型（对话没有模式层，叶直接挂）
-// - 按来源：本地模型 / 远端模型 → 模型（多模式候选只列一次，选中时按当前
-//   页的用途 / 模式解析落格，见 resolveSourceSelection）
+// - 按来源：本地模型 / 远端模型 → 用途 → 模式 → 模型（与按用途同构，只是先按
+//   来源分开；对话没有模式层；叶子自带三态，选中不再按当前页解析模式）
 // - 按模型：模型名 → 模式 → 可测条目（同一模型挂多个工作流时在此分开）
 // 折叠交互与 a11y 交给 Disclosure（§16.2.4.13），缩进与引导线走 TreeChildren
 // （§16.2.4.39）；树构建在 model-test-tree.ts、取数在 hooks/use-model-test-tree.ts，
@@ -30,7 +30,6 @@ import type { ModelTestKind } from "./model-test-config";
 import {
   buildModelTree,
   MODEL_TREE_LAYOUTS,
-  resolveSourceSelection,
   type ModelTreeEntry,
   type ModelTreeLayoutId,
   type ModelTreeNode,
@@ -93,7 +92,7 @@ export function ModelTestTree({
   selectedValue,
 }: {
   className?: string;
-  /** 页面当前的用途 / 模式：叶子选中态与「按来源」布局的模式解析都用它。 */
+  /** 页面当前的用途 / 模式：叶子的选中态用它。 */
   currentKind: ModelTestKind;
   currentMode: string;
   entries: ReadonlyArray<ModelTreeEntry>;
@@ -119,20 +118,9 @@ export function ModelTestTree({
     writeStorageItem(LAYOUT_STORAGE_KEY, next);
   };
 
+  /* 三种布局的叶子都自带用途 / 模式 / 取值：点一次就把三态一起回填。 */
   const handleLeafClick = (entry: ModelTreeEntry) => {
-    if (layout === "source") {
-      const resolved = resolveSourceSelection({
-        currentKind,
-        currentMode,
-        entries,
-        value: entry.value,
-      });
-      if (resolved !== null) {
-        onSelect(resolved.kind, resolved.mode, resolved.value);
-      }
-    } else {
-      onSelect(entry.kind, entry.mode, entry.value);
-    }
+    onSelect(entry.kind, entry.mode, entry.value);
   };
 
   /* 递归渲染：分组节点 = Disclosure（chevron + 计数），叶子 = 可选按钮。
@@ -144,6 +132,8 @@ export function ModelTestTree({
          那一片，与页面的会话格对得上。 */
       const selected =
         entry.value === selectedValue && entry.kind === currentKind && entry.mode === currentMode;
+      /* 叶子是密集列表行：用 11px 具名档（text-2xs），否则长模型名（如
+       * MiniMax H3 Image）在侧栏里会被截成省略号（#5082）。 */
       return (
         <Button
           aria-checked={selected}
@@ -154,6 +144,7 @@ export function ModelTestTree({
               : "text-ink-muted hover:bg-subtle hover:text-ink",
           )}
           data-model-value={entry.value}
+          data-tree-key={node.key}
           key={node.key}
           onClick={() => {
             handleLeafClick(entry);
@@ -161,7 +152,9 @@ export function ModelTestTree({
           role="radio"
           variant="ghost"
         >
-          <TruncatedText className="min-w-0 flex-1 truncate text-left">{entry.label}</TruncatedText>
+          <TruncatedText className="text-2xs min-w-0 flex-1 truncate text-left">
+            {node.label}
+          </TruncatedText>
           {generatingModels.has(entry.value) && <GeneratingBadge />}
           {/* 「按来源」布局整组同源，行上不再重复标。 */}
           {layout !== "source" && (

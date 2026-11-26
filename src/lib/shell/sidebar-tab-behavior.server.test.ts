@@ -2,7 +2,7 @@
  * 侧栏页签行为的服务端存储（ISSUE #3623）。
  *
  * 这一层的题目是**两份来源怎么合**：项目默认（入库那份 JSON，跟代码走）给基线，
- * 本机覆盖（`data/sidebar-tab-behavior.json`）在这台机器上逐项压过它。五条用例各钉
+ * 本机覆盖（`data/sidebar-tab-behavior.json`）在这台机器上逐项压过它。几条用例各钉
  * 一件事——
  *
  *   ① 没有覆盖文件时读到的是项目默认（不是空配置 —— 「没配过」与「配置是空的」
@@ -10,7 +10,7 @@
  *   ② 覆盖存在时**逐项**压过默认（没配过的那几项原样留着）；
  *   ③ 坏 JSON / 读不出来按「没有覆盖」处理，不把工作区打成 500；
  *   ④ 保存走差集：与项目默认相同的项不落盘，「改回默认」免费成立；
- *   ⑤ 「保存为项目默认」只在开发检出可用，且全量写进入库那份 JSON。
+ *   ⑤ 项目默认那份运行期只读（ISSUE #5001），读不出来回落编译进包的快照。
  *
  * 这里**真读写临时目录**（不 mock fs）：这一层的全部价值就是「读到了哪一份、
  * 内容有没有被归一化」——桩掉 fs 之后这两件都判不出来。`root` 参数就是为它留的。
@@ -26,7 +26,6 @@ import {
   loadSidebarTabProjectDefaults,
   resetSidebarTabConfig,
   saveSidebarTabConfig,
-  saveSidebarTabConfigAsProjectDefaults,
   SIDEBAR_TAB_DEFAULTS_REL_PATH,
   SIDEBAR_TAB_LOCAL_REL_PATH,
 } from "./sidebar-tab-behavior.server";
@@ -49,13 +48,6 @@ async function readRaw(): Promise<string | null> {
   } catch {
     return null;
   }
-}
-
-/** 把临时 root 布置成一份「开发检出」：编排器在位。 */
-async function asDevCheckout(): Promise<void> {
-  const launcher = path.join(root, "scripts", "dev-launcher.mjs");
-  await fs.mkdir(path.dirname(launcher), { recursive: true });
-  await fs.writeFile(launcher, "// 桩：形态判据只看它在不在", "utf8");
 }
 
 describe("侧栏页签行为：项目默认 + 本机覆盖", () => {
@@ -118,30 +110,6 @@ describe("侧栏页签行为：项目默认 + 本机覆盖", () => {
     const restored = await resetSidebarTabConfig(root);
     expect(restored).toEqual(projectSidebarTabConfig());
     await expect(readRaw()).resolves.toBeNull();
-  });
-});
-
-describe("保存为项目默认：开发检出的写回入口（ISSUE #3623）", () => {
-  it("非开发检出大声拒绝（正式包没有源码可写，这条调用就是错用）", async () => {
-    await expect(
-      saveSidebarTabConfigAsProjectDefaults({ console: "shared" }, root),
-    ).rejects.toThrow(/只在开发检出可用/);
-    // 拒绝的同时什么都没写
-    await expect(
-      fs.readFile(path.join(root, SIDEBAR_TAB_DEFAULTS_REL_PATH), "utf8"),
-    ).rejects.toThrow();
-  });
-
-  it("开发检出：全量写进入库那份 JSON（跟代码走）", async () => {
-    await asDevCheckout();
-    const res = await saveSidebarTabConfigAsProjectDefaults(
-      { console: "shared", models: "shared" },
-      root,
-    );
-    expect(res.config).toEqual({ console: "shared", models: "shared" });
-    const raw = await fs.readFile(path.join(root, SIDEBAR_TAB_DEFAULTS_REL_PATH), "utf8");
-    expect(JSON.parse(raw)).toEqual(res.config);
-    expect(res.file).toBe(path.join(root, SIDEBAR_TAB_DEFAULTS_REL_PATH));
   });
 
   it("项目默认读不出来时回落编译进来的那份快照（正式包里没有源码）", async () => {

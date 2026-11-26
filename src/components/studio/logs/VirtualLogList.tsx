@@ -165,32 +165,45 @@ export function VirtualLogList<T>({
     setFollowing(el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX);
   }, [setFollowing]);
 
-  /* 实测校正：行盒只有 minHeight，多行内容会把它撑高 —— 行盒挂载 / 重渲染时
-   * 量一次实际高度，比估算高的按「宽度:消息」记入校正表（只增不减），位置表
-   * 下一轮用实测值。在 ref 回调里做（提交阶段元素已在树上），不走 effect
-   * setState；实测 == 估算后不再写入，循环自然收敛。jsdom 里 offsetHeight
-   * 恒 0，不触发。 */
+  /* 实测校正：行盒只有 minHeight（内容撑开用），所以要量**内容**而不是行盒 ——
+   * 量行盒 offsetHeight 永远 >= minHeight，内容比估算矮时量不到，位置表就一直
+   * 偏大、多出的那一行显示成空白（ISSUE #5035，#4715 在 LogPanel 已修、这里漏了）。
+   * 双向采纳：比估算高撑开、比估算矮收窄，下限钳在单行档（layoutRows 的 heightOf
+   * 出口负责）。在 ref 回调里做，不走 effect setState；实测 == 记录值后不再写入，
+   * 循环自然收敛。jsdom 里 offsetHeight 恒 0，不触发。
+   *
+   * 卡顿侧（#5035）：回调身份必须稳定 —— 日志每来一帧 entries / rows 都换引用，
+   * 若它们是回调依赖，measureRow 会重建、所有可见行的 ref 随之重挂去读
+   * offsetHeight（强制同步布局）。这里把消息与估算高度随行盒一起写进 data-* 属性，
+   * 回调从 el.dataset 读，不闭包捕获任何每帧变化的数据，依赖只剩 viewport.width
+   * （校正表的 key 带宽度）。既无 ref 时序问题，也不在渲染期读 ref。 */
   const measureRow = useCallback(
     (el: HTMLElement | null) => {
       if (el === null) {
         return;
       }
-      const index = Number(el.dataset.logIndex);
-      const entry = entries[index];
-      if (entry === undefined) {
+      const message = el.dataset.logMessage ?? "";
+      const estimated = Number(el.dataset.logEstimated ?? 0);
+      const content = el.firstElementChild;
+      const actual = content instanceof HTMLElement ? content.offsetHeight : 0;
+      if (actual <= 0 || message === "") {
         return;
       }
-      const message = getMessage(entry);
-      const estimated = rows[index]?.size ?? 0;
-      const actual = el.offsetHeight;
       const key = `${viewport.width}:${message}`;
-      if (actual > estimated + 1 && heightOverrides.get(key) !== actual) {
-        const next = new Map(heightOverrides);
-        next.set(key, actual);
-        setHeightOverrides(next);
+      if (Math.abs(actual - estimated) <= 1) {
+        return;
       }
+      /* 与 LogPanel 同款：在 updater 之外构造新 Map（updater-purity 判据禁止在
+       * 函数式 updater 内调用 Map.set 这类副作用）。heightOverrides 从闭包读，
+       * 这里只在挂载/重测时调用，多个 ref 同帧先后触发也不会互相覆盖。 */
+      if (heightOverrides.get(key) === actual) {
+        return;
+      }
+      const next = new Map(heightOverrides);
+      next.set(key, actual);
+      setHeightOverrides(next);
     },
-    [entries, getMessage, rows, heightOverrides, viewport.width],
+    [viewport.width, heightOverrides],
   );
 
   return (
@@ -222,7 +235,9 @@ export function VirtualLogList<T>({
               const index = rowWindow.start + offset;
               return (
                 <div
+                  data-log-estimated={rows[index]?.size ?? LOG_ROW_SINGLE}
                   data-log-index={index}
+                  data-log-message={getMessage(entry)}
                   key={`log-${index}`}
                   ref={measureRow}
                   /* minHeight 而非 height：多行内容撑开行盒（实测校正见上），

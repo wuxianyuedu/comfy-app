@@ -127,8 +127,10 @@
   MediaThumbnail / StatusButton / PageHeader），全库可视化基元基本覆盖。
   右上角开关切换的是应用全局主题
   （与设置页同源）；命令面板（⌘/Ctrl+K）「其他」组有「UI 控件总览」
-  入口；工作区里以 `uiKit` 视图页签打开（ISSUE #3726），默认独立标签页、
-  切走不关（ISSUE #3798）。根节点自带**独立滚动容器**：工作区页签形态撑满父级
+  入口；工作区里以 `uiKit` 视图页签打开（ISSUE #3726）；页签档位按项配置
+  （ISSUE #3798），出厂默认自 #5003 起为「共享标签页」（切走即关）—— 反转了
+  #3798 当时「独立标签页、切走不关」的验收，结论记录见 ISSUE #5024。
+  根节点自带**独立滚动容器**：工作区页签形态撑满父级
   高度（`fillHeight`），独立路由形态用视口档，两处都能用滚轮看到全部基元
   （ISSUE #3798 —— 此前内容被外层 `overflow-hidden` 裁掉、看不全）。
   逐 prop 的形态矩阵归 Storybook。
@@ -145,13 +147,15 @@
   同样受这一份配置管 —— 入口在顶栏菜单 / 命令面板，不改变「行为该能配」这件事。
 - 行为与验收：配置面 = `configurableTabViews()`，即首页以外的**全部 11 个全局视图**
   （首页是固定页签，不在配置面内）；判据 `isTransientView()` 只认配置面，项目默认
-  为每一屏都显式写了档位：`uiKit` 出厂 `independent`（切走不关）、`settings` 出厂
+  为每一屏都显式写了档位：`uiKit` 出厂 `shared`（切走即关；#5003 起反转 #3798
+  的 `independent` 档，结论记录见 ISSUE #5024）、`settings` 出厂
   `shared`（读过即走）。注册表不再保留 `transient` 标记，避免「设置里配了、界面
   却不认」。两档行为对每一项都可选，当前生效值在界面上看得出来；改动即时生效 ——
-  已经开着的页签按新规则在下次切换时生效。设置页只给**两个**出口：本机覆盖是
+  已经开着的页签按新规则在下次切换时生效。设置页的出口：本机覆盖是
   **改一档即存**（落 `data/`，开发版与正式包都能用；ISSUE #3948 去掉了「保存」那个
-  按钮 —— 配好就落盘，改完没点就切走不该等于白改），「保存为项目默认（跟代码走）」
-  写进入库那份 JSON、只在开发检出出现；「还原默认」只在真有本机覆盖时出现。
+  按钮 —— 配好就落盘，改完没点就切走不该等于白改）；「还原默认」只在真有本机覆盖
+  时出现。项目默认那份入库 JSON 运行期只读不写（ISSUE #5001）—— 改它走改代码 /
+  提 PR 那条路。
   项目默认那份 JSON 恰好覆盖配置面内的每一项（漏登记由用例拦下）。
 - 落点：`src/components/studio/NavItems.tsx`（配置面清单 + 判据）、
   `src/components/studio/workspace-tabs.ts`（状态规则）、
@@ -696,6 +700,28 @@
   `src/lib/llm/prompts.ts`（翻译 system prompt）、
   `src/components/studio/workflow-library/workflow-library-detail-config.ts`（`DETAIL_TABS`）
 
+#### FR-WF-16 详情「App Mode 选引脚」页签（原生 builder 选暴露面）
+
+- 状态：已上线
+- 需求：在工作流库详情用 ComfyUI 原生前端的 App Mode builder 勾选要暴露的输入 / 输出引脚
+  （ISSUE #5053）；显示名 / 必填 / seed 行为 / 按模式覆盖等元数据仍全部留在应用内编辑器
+  （IO 预览与编辑器），编辑器内既有勾选方式保留，两通道并存。
+- 行为与验收：详情在「IO 预览」后新增「App Mode 选引脚」页签，显示源文件是否在、文件里
+  有无 `extra.linearData` 选择、输入输出计数与原生前端地址。无源文件时可将当前 rawJson
+  导出为 ComfyUI 用户工作流目录里的新文件（`ComfyAPP-` 前缀，缺根 `id` 时补 UUID，已存在
+  则报冲突、**绝不覆盖**），并按导入链登记 `sourcePath` / 校验和 / mtime；有源文件时可按
+  工作流根 `id` 深链在复用页签中打开原生前端。用户在原生界面进 App Mode 勾选并 Ctrl+S 后，
+  点「读回引脚选择」从源文件取 `extra.linearData`，按节点图把输入判为 widget / param、
+  输出取首槽位名，映射成 `workflowIO` 暴露面并落库；幸存引脚保留显示名 / 必填 / seed /
+  模式覆盖 / 排序等元数据，图里找不到的引用逐条计入跳过并提示，不静默丢。图编辑仍以应用
+  DB 的 rawJson 为准，不做原生图回灌。
+- 落点：`src/lib/workflow/workflow-app-mode.ts`（纯映射）、
+  `src/server/api/routers/workflow-app-mode.ts`（`appModeInfo` / `exportForAppMode` /
+  `applyAppModeSelection`，与既有并发写共用同一把锁）、
+  `src/components/studio/workflow-library/sections/WorkflowLibraryAppModePanel.tsx`、
+  `src/components/studio/workflow-library/hooks/use-app-mode-actions.ts`、
+  `src/components/studio/workflow-library/workflow-library-detail-config.ts`（`DETAIL_TABS`）
+
 ---
 
 ## 6. 生成与任务（FR-GN）
@@ -757,7 +783,7 @@
   按任务模式切模式页签、契约口值预填进统一输入表单、等工作流清单 settle 后
   补选同款工作流；用户确认后点「生成」才真正重跑。预填是表单值的**兜底层**：
   换模型不丢（重试换模型再跑是常态），用户改任意输入 / 贴 JSON / 选文件即退场。
-  原直复投端点（`task.retry`）随唯一的消费方（历史页直调）一并退役。
+  原直复投端点（`task.retry`）随唯一的消费方（历史页直调）一并退役。卡片相对时间、排序与日期分组一律按**最近活动时刻**（finishedAt → claimedAt → createdAt），不再停在提交时刻；页签活跃时按固定节奏重问，持续生图时新完成的任务会自己出现。状态筛选下推服务端（按该状态取行与 cursor），角标仍取终态全集计数；「计数有、当前页没有」时空态保留「继续加载」入口，不再卡死（ISSUE #5076）。
 - 落点：`src/components/studio/history/HistoryList.tsx`、
   `src/components/studio/history/hooks/use-history-list.ts`、
   `src/components/studio/history/history-detail-derive.ts`（`buildReprintPayload` /
@@ -824,6 +850,10 @@
   验收：`queue-monitor-config.test.ts`、`use-queue-monitor.test.ts`、
   `QueueMonitor.test.tsx` 与 `task.test.ts` 覆盖分页合并、状态参数、完成时间、
   完整队列位次、空位次降级和三源刷新。
+  顶部操作区还有生图**暂停 / 恢复**（播放 / 暂停图标随状态切换，暂停后当前任务
+  跑完即不再领生图任务，状态落库重启不丢）与**取消全部**（危险色按钮 + 二次
+  确认，一键取消当前用户所有非终态任务，含正在生成的那一条；他人任务与终态
+  任务不动，部分失败如实报数）。顶部四张统计卡（运行中 / 排队中 / 今日完成 / 失败）一律取**服务端按状态分组的全量计数**，不受列表 `take` 上限截断，与「还有 N 个在排队」的操作条 / 横幅同一口径；列表仍限量展示，挤满排队行时统计卡不得偏小（ISSUE #5073）。跑动中卡片可展开「统一输入 / 请求信息」：统一输入与测试模型页同源（完整可读），请求面板复用同款读数组件显示提交时落库的本地任务输入；模型适配器翻译后的上游请求是实时预览、未随任务落库，面板如实标注不编造（ISSUE #5075）。展开区同时给出生成进度条、就地执行日志与请求返回读数，不另跳弹窗才能看（ISSUE #5093）。排队行可**提前执行**：行上「提前」按钮把该条挪到队首，只改排序值、不改提交时刻；运行中 / 终态没有该动作，行在这期间被领走时如实回报「已开跑无法调整」，不假装成功。
 - 落点：`src/components/studio/queue/QueueMonitor.tsx`、
   `src/components/studio/queue/QueueMonitorView.tsx`、
   `src/components/studio/queue/hooks/use-queue-monitor.ts`（查询与动作编排）、
@@ -831,6 +861,9 @@
   `src/components/studio/queue/queue-monitor-config.ts`（纯派生）、
   `src/components/studio/queue/queue-task-params.ts`（参数派生）、
   `src/server/api/routers/task.ts`（全局统计与队列位次）
+  `src/components/studio/queue/queue-task-params.ts`（参数派生）、
+  `src/server/api/routers/task.ts`（`reorder`）、
+  `src/lib/core/repository-task-impl.ts`（领取顺序）
 
 #### FR-QE-02 执行器 inline / host 两档
 
@@ -1189,9 +1222,9 @@
   且会与模式本身矛盾（把文生图挑成「视频」）。产物类别由**模式码**唯一决定，
   不进可配置契约：契约类型、入参 schema 与基线文件里都没有这一格；存量文件
   / 存量客户端仍带着 `output` 时，读侧与 zod 各自把它剥掉，不打回、不落盘。
-- 写入即生效（#3634）：项目默认由服务端**现读**磁盘上那份文件（开发检出），
-  「保存为项目默认」之后**不必重启进程**即读得到新口径；写出的文件**始终是
-  完整基线**（全部生成类模式都在，其余模式的内容不会被抹掉）。正式包载荷里
+- 改基线即生效（#3634）：项目默认由服务端**现读**磁盘上那份文件（开发检出），
+  基线随代码更新后**不必重启进程**即读得到新口径；基线文件**始终是完整基线**
+  （全部生成类模式都在）。项目默认运行期只读不写（ISSUE #5001）。正式包载荷里
   没有这份源码 ⇒ 回落编译进产物的那份基线。
 - 输入口**至少保留一个**（#3637）：服务端入参对 `inputs` 有 `min(1)`、归一化
   侧也丢弃空条目 —— 空清单的契约存不下来。编辑器在源头拦住：删到最后一口时
@@ -1223,10 +1256,9 @@
   已配置的标「已配」）；同一时刻只显示一个模式的编辑卡（模式 chip 即切换
   页签）；删除模式要过二次确认；输入映射含「分辨率」统一输入（1k/2k/4k
   档位随请求下发，#3622）；保存成功后失效存档与概览查询（页签往返不丢
-  刚配的模式）。「模型适配」是全局瞬态视图。适配器可**保存为项目默认
-  （跟代码走）**（#3951）：页面按钮把当前草稿写进入库的
-  `src/lib/workshop/model-adapter-defaults.json`（只有开发检出可写，正式包
-  里大声失败）；生效档 = 项目默认与 DB 存档**逐模式合并**（DB 同名模式压过、
+  刚配的模式）。「模型适配」是全局瞬态视图。适配器另有**项目默认基线**（#3951）：
+  入库在 `src/lib/workshop/model-adapter-defaults.json`、跟代码走，运行期只读
+  不写（ISSUE #5001）；生效档 = 项目默认与 DB 存档**逐模式合并**（DB 同名模式压过、
   端点路径 DB 非空优先）——编辑器播种、概览「已配」与工坊生成链路读的都是
   生效档。
 - 存放位置提示（#3625）：本页配置的适配器落在 `remoteModel` 表的
@@ -1313,7 +1345,10 @@
   「JSON 输入」互切 —— JSON 模式粘贴历史「复制去重投」复制的载荷
   （`{ mode, inputs }`），点「生成」解析并写回当前格表单值、随同一次点击
   按这些值重跑（解析失败 / 缺 `inputs` / 没有认得的键都会在反馈位给错并
-  拦下，不发起生成；解析成功自动切回统一输入，填进去的参数可见）。
+  拦下，不发起生成；解析成功自动切回统一输入，填进去的参数可见）。提示词框
+  高度有上限、超长内容在框内滚动，不再把整页撑出滚动条；左栏候选树内容
+  未溢出时可滚动也不应发生（ISSUE #5091）。「按来源」布局与「按用途」同款
+  层级镜像：本地 / 远端 → 图片 / 视频 → 用途 → 模式 → 模型，各来源带数量角标（ISSUE #5092）。
   **生成中的模型在左栏可见**（ISSUE #4838）：运行态按格隔离、多模型可同时
   测试，全部格的生成中状态聚合成一份索引（`summarizeGeneratingSessions`）——
   用途页签对该用途下生成中的模型**去重**计数（「N 生成中」徽标）、模式列表
@@ -1459,15 +1494,16 @@
 
 #### FR-ST-06 尺寸配置表（比例 × 分辨率）
 
-- 状态：已上线（ISSUE #3948 补「保存为项目默认（跟代码走）」）
+- 状态：已上线（ISSUE #3948 补差集落盘；ISSUE #5001 起项目默认运行期只读）
 - 需求：设置页「尺寸配置表」分区列出图片 / 视频两场景的「比例 × 分辨率」宽高表，
-  改一格即用；两条保存口径：**本机覆盖**（改一格即存，落应用数据）与
-  **项目代码库**（写进入库那份 JSON，提交后每个检出与每个桌包都是这一份）。
+  改一格即用；本机覆盖**改一格即存**（落应用数据）；项目默认那份入库 JSON 跟代码
+  走，运行期只读（ISSUE #5001）。
 - 行为与验收：① 项目默认那份是**入库 JSON**
   （`src/lib/media/size-preset-defaults.json`），读侧现读磁盘、读不出来才回落
   编译进包的快照（写完即生效，不必重启进程）；② 本机覆盖落
   `data/size-presets.json`，读取侧逐格合并（缺行 / 缺档 / 坏值一律回退基准）；
-  ③ 「保存为项目默认（跟代码走）」只在开发检出出现（正式包没有源码可写，服务端大声失败）；
+  ③ 项目默认那份入库 JSON 运行期只读不写（ISSUE #5001：入库的 defaults 文件不是
+  运行期写回目标），改它走改代码 / 提 PR 那条路；
   ④ 还原默认的基准是**当前项目默认**那份，不是编译进包的旧快照；
   ⑤ 本机覆盖**差集落盘**（ISSUE #3973）：覆盖文件只留与项目默认不同的格子
   （写侧对现读项目默认取差集）—— 项目默认后续改动能穿透到存过覆盖的机器，
@@ -1911,8 +1947,8 @@
   关键词过滤生效，树角标计数随过滤口径变化；
   ③ 滑块拖到不同档位，网格列宽随之变化且刷新后保持（localStorage）；
   ④ 空库给出「先去历史加入资产」的引导，不是白屏。
-   ⑤ 内容区用**不封顶**档（`width="full"`，#5002）：左侧目录树贴齐页面内容区左边距
-   （只留统一容器的 `px-*`），不得被 1200px 居中窄栏推到中间、在宽屏留大片空白。
+  ⑤ 内容区用**不封顶**档（`width="full"`，#5002）：左侧目录树贴齐页面内容区左边距
+  （只留统一容器的 `px-*`），不得被 1200px 居中窄栏推到中间、在宽屏留大片空白。
 - 落点：`src/components/studio/assets/AssetLibrary.tsx`（视图）、
   `src/components/studio/assets/hooks/use-asset-library.ts`（逻辑层）、
   `src/components/studio/assets/AssetFolderTree.tsx` + `hooks/use-asset-folders.ts`（目录树，见 FR-AL-04）、
@@ -1974,7 +2010,9 @@
   （名字 / 原型 / 描述）+ 按特征标签筛选（多选取交集，标签带命中数角标）。
 - 行为与验收：① 侧栏「角色库」可点开，页头显示「角色库」，出厂为独立标签页
   （切走不关）；② 关键词 / 标签 / 状态三维过滤可组合，结果实时收窄；
-  ③ 空库给出「先预置角色」的引导与动作按钮，不是白屏。
+  ③ 空库给出「先预置角色」的引导与动作按钮，不是白屏；④ 卡片上**所有特征标签尽量完整展示**
+  （自动换行，不再只露前几枚加 `+N`），原型 / 职业与名字同行，长名字不把职业挤掉；
+  ⑤ 卡片可勾选，勾选后的集合作为批量生图目标。
 - 落点：`src/components/studio/characters/CharacterLibrary.tsx`（视图）、
   `src/components/studio/characters/hooks/use-character-library.ts`（逻辑层）、
   `src/components/studio/NavItems.tsx` + `WorkspaceViewStack.tsx` + `LazyViews.tsx`（导航 / 渲染）
@@ -2007,17 +2045,129 @@
 
 #### FR-CL-04 批量生图（工作流库工作流）与生成对账
 
-- 状态：已上线（#5009）
+- 状态：已上线（#5009 / #5098）
 - 需求：接工作流库（如 minimax_h3_image），对全部待生成（或点名的）角色逐个
-  入队生图任务；产物复制进角色库自有目录；生成状态可追踪，失败不阻断其余角色。
+  入队生图任务；产物复制进角色库自有目录；生成状态可追踪，失败不阻断其余角色；
+  生成中的角色可在卡片或详情里单条取消。
 - 行为与验收：① 入参封装与工坊批量同一条链（`prepareWorkflowRun` +
-  `buildWorkflowRunParams`），提示词由角色描述折算（`buildPortraitPrompt`）；
+  `buildWorkflowRunParams`），提示词由角色描述折算（`buildPortraitPrompts`）；
   ② 自动模式只取 draft / failed，已就绪角色仅显式点名时重跑（新候选不覆盖旧图）；
-  ③ 对账（`syncGeneration`）按任务终态回写：SUCCEEDED → 产物复制进
-  `generated/character-library/<id>/`、立绘入候选（最新在前）、状态 ready；
-  FAILED / CANCELED / 任务丢失 → 状态 failed（保留原立绘）；④ 界面在存在
-  生成中角色时每 5 秒自动对账，也可手动触发。
-- 落点：`src/server/api/routers/character-library.ts`（`enqueueGeneration` / `syncGeneration`）、
-  `src/lib/character/portrait-prompt.ts`（提示词）、`src/lib/character/character-store.ts`（落盘）、
+  同一角色可用**同一模型或不同模型重复生成**多次：每次在弹窗重新选工作流并对
+  指定 / 勾选的 ids 入队，新候选不覆盖旧图；③ 对账（`syncGeneration`）按任务终态
+  回写：SUCCEEDED → 产物复制进 `generated/character-library/<id>/`、立绘入候选
+  （最新在前）、状态 ready；FAILED / CANCELLED / 任务丢失 → 状态 failed（保留原立绘）；
+  ④ 界面在存在生成中角色时每 5 秒自动对账，也可手动触发；⑤ **负面提示词两套**：
+  工作流接负向口时走负向词表；不接负向口（如 minimax_h3_image）时不传负向，改把
+  「除角色服饰上的装饰文字以外，其他地方不要出现文字 / 字幕 / 标题 / 人名 / 水印 /
+  签名」以正向表述拼在正向提示词末尾，避免机械折成「无文字」误禁服饰装饰字。
+  能力判据是作者是否把 `negative` 契约口连到工作流端口，不新增模型元数据；
+  ⑥ 单条取消只对「生成中且带 taskId」的角色开放：点一次打 `cancelTask` 并立刻
+  `syncGeneration` 对账（不等下一轮轮询），连点只发一次；列表带出当前 taskId 供入口判可用，
+  失败给可见提示。
+- 落点：`src/server/api/routers/character-library.ts`（`enqueueGeneration` / `syncGeneration` /
+  `list` 带出 taskId）、`src/lib/character/portrait-prompt.ts`（提示词）、
+  `src/lib/character/character-store.ts`（落盘）、
   `src/lib/core/repository-character-profile.ts`（状态机回写）、
-  `src/components/studio/characters/CharacterGenerateDialog.tsx`（弹窗）
+  `src/components/studio/characters/CharacterGenerateDialog.tsx`（弹窗）、
+  `src/components/studio/characters/hooks/use-character-cancel.ts`（单条取消）、
+  `src/components/studio/characters/CharacterCard.tsx` + `CharacterDetailModal.tsx`（入口）
+
+#### FR-CL-05 角色详情：候选历史与勾选删除（#5068）
+
+- 状态：已上线
+- 需求：每个角色图片的详情能看到该角色对应的**所有历史**生成记录，且生成内容可勾选删除。
+- 行为与验收：① 详情列出全部候选立绘（最多 12 张，与落库上限一致），点选一张即显示其对应任务的
+  模型名 / 工作流 / 状态 / 时刻 / 提示词摘要 / 错误，并可在历史列表里切换查看；查不到任务的历史项跳过，不报错；
+  ② 候选可多选并「删除选中」，服务端只删命中的候选，若删掉当前展示图则把剩余第一张提升为新的主立绘，
+  磁盘文件只删该角色目录内的对应文件（防路径穿越），不影响来源任务；③ 删除有非阻塞确认，成功后刷新详情与列表。
+- 落点：`src/server/api/routers/character-library.ts`（`history` / `deletePortraits`）、
+  `src/lib/character/character-store.ts`（单张安全删除）、
+  `src/components/studio/characters/CharacterDetailModal.tsx`、`hooks/use-character-library.ts`
+
+## 18. 风格库（FR-SL）
+
+#### FR-SL-01 侧栏风格库与可搜索画风列表
+
+- 状态：已上线（#5069）
+- 需求：侧栏「风格库」进入；画风提示词描述可搜索、可多选，结果并排对比。
+- 行为与验收：① 侧栏有「风格库」入口且可点开（与资产库 / 角色库同族的全局视图）；
+  ② 画风列表按名字 / 说明 / 标签模糊搜索，输入即时收窄；
+  ③ 每条画风显示名字、说明与标签，可全选 / 清空，勾选数可见；
+  ④ 已有画风来自 Skill 系统（115 条 `style` 分类种子：108 条日系动漫画风细分 + 7 条原有风格模板，
+  #5097 扩充），不在本页再抄一份数据。
+- 落点：`src/components/studio/NavItems.tsx`（入口）、
+  `src/components/studio/LazyViews.tsx` + `WorkspaceViewStack.tsx`（视图注册）、
+  `src/components/studio/styles/StyleLibrary.tsx`（视图）、
+  `src/server/api/routers/skill.ts`（`skill.list` 搜索）。
+
+#### FR-SL-02 数据驱动的基础提示词拼接
+
+- 状态：已上线（#5069）
+- 需求：同一份基础提示词由用户输入 + 一个动漫角色形象 + 一个场景组成，可预览。
+- 行为与验收：① 角色与场景是内置文字预设（各 8 条），按 id 选择，不选则不放进提示词；
+  ② 拼接顺序固定为「用户输入 → 角色 → 场景」，空白项不进结果，页面显示拼好的预览；
+  ③ 新增角色 / 场景只加一条预设数据，不改组件；用例钉住唯一 id 与拼接顺序。
+- 落点：`src/components/studio/styles/style-presets.ts`（预设 + 纯拼接函数）、
+  `style-presets.test.ts`（形状与拼接口径）。
+
+#### FR-SL-03 多画风生图与画风扩展
+
+- 状态：已上线（#5069 / #5098）
+- 需求：对每个勾选画风用其提示词描述分别生图；只列支持文生图（T2I）的模型；
+  用户能在界面新建画风，新增后立刻可选，不改代码；生成中的格子可单条取消。
+- 行为与验收：① 模型候选经 `useModelCatalog("image", "T2I")` 收窄（本地工作流声明 T2I /
+  远端模型配了 T2I 适配器），其他模式不出现；
+  ② 本地走工作流封装 + `generate.generate` + SSE 观察取产物，远端走 `/api/workshop-api/generate`，
+  两条链路都不新造；③ 画风模板含 `{subject}` 时替换主体，否则作为后缀，负向词去重；
+  ④ 每格独立失败（一张失败不影响其他画风），有界并发 2；
+  ⑤ 新建画风写 `skill.create`，保存后刷新列表并自动勾选，slug 重复给明确冲突提示；
+  ⑥ 本地工作流通道在结果上记 taskId，单格「取消生成」打 `cancelTask` 后退订 SSE 并落到已取消；
+  远端模型通道不产生任务行，按钮禁用并明确说明，不能假装取消成功。
+- 落点：`src/components/studio/styles/hooks/use-style-library.ts`（编排，规范 17 ②）、
+  `src/components/studio/hooks/use-library-selection.ts`（勾选态）、
+  `src/components/studio/hooks/library-image-task.ts`（SSE 退订与取消落定）、
+  `src/lib/workshop/generation-client.ts` + `generation-api-client.ts`（既有生成链路）、
+  `src/lib/async-pool.ts`（有界并发）。
+
+## 19. 角色脸库（FR-FL）
+
+#### FR-FL-01 侧栏脸库与可搜索的脸部形象列表
+
+- 状态：已上线（#5087 / #5098）
+- 需求：侧栏「脸库」进入；脸部形象提示词可搜索、可多选（全选 / 清空）后批量入队。
+- 行为与验收：① 侧栏有「脸库」入口且可点开（与资产库 / 角色库 / 风格库同族的全局视图）；
+  ② 列表按名字 / 说明 / 提示词 / 标签模糊搜索，空词回全部；
+  ③ 每条显示名字、中文说明与标签，选中态可见，可勾选多条；
+  ④ 数据来自内置预设数组，不在本页再抄一份脸部词表；
+  ⑤ 默认选中第一张脸，勾选态走与风格库、角色库同一份共享 hook。
+- 落点：`src/components/studio/NavItems.tsx`（入口）、
+  `src/components/studio/LazyViews.tsx` + `WorkspaceViewStack.tsx`（视图注册）、
+  `src/components/studio/faces/FaceLibrary.tsx`（视图）、`face-presets.ts`（数据与纯函数）。
+
+#### FR-FL-02 数据驱动提示词拼接
+
+- 状态：已上线（#5087）
+- 需求：每条脸有一条完整正向提示词，可直接复制。
+- 行为与验收：① 内置 108 条脸部形象（脸型 / 眼型 / 表情 / 瞳色 / 发型 / 气质 / 题材，#5096 扩充），
+  按美术分类拆成多个静态数据文件汇总，避免单文件超 900 行；② 正向 = 脸部特写前缀 + 预设词 +
+  立绘唯一「无文字」正向约束（不另写第二份约束，避免误禁服饰装饰字）；负向复用立绘唯一口径；
+  ③ 预设 id 跨文件唯一、名字 / 说明 / 提示词 / 标签非空；用例钉住形状与拼接口径。
+- 落点：`src/components/studio/faces/face-presets.ts`、`face-presets.test.ts`、
+  `src/lib/character/portrait-prompt.ts`（既有约束的唯一出处）。
+
+#### FR-FL-03 一键复制与直接生图
+
+- 状态：已上线（#5087 / #5098）
+- 需求：复制提示词走平台唯一出口；选支持 T2I 的模型对勾选的脸批量生成，逐张可取消。
+- 行为与验收：① 复制走 `useCopyFeedback`（视图层不碰剪贴板 API），多张脸的提示词逐行排列；
+  ② 模型候选经 `useModelCatalog("image","T2I")` 收窄（本地声明 T2I 的工作流 /
+  配了 T2I 适配器的远端模型），其他模式不出现；
+  ③ 本地走工作流封装 + `generate.generate` + SSE 观察取产物，远端走
+  `/api/workshop-api/generate`，两条链路都不新造，有界并发 2；④ 失败有按条可读的出口；
+  ⑤ 本地通道逐张结果记 taskId，「取消生成」打 `cancelTask` 后退订 SSE 并落到已取消；
+  远端通道无任务行，按钮禁用并说明；脸库无持久化表，刷新后不恢复在途任务（本期范围外）。
+- 落点：`src/components/studio/faces/hooks/use-face-library.ts`（编排，规范 17 ②）、
+  `src/components/studio/hooks/use-library-selection.ts`（勾选态）、
+  `src/components/studio/hooks/library-image-task.ts`（SSE 退订与取消落定）、
+  `src/components/ui/use-copy-feedback.ts`（复制唯一出口）、
+  `src/lib/workshop/generation-client.ts` + `generation-api-client.ts`（既有生成链路）。

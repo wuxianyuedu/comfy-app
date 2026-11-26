@@ -41,6 +41,7 @@ const TASK_DETAIL_BASE: TaskDetail = {
   referenceImages: null,
   parentId: null,
   status: "SUCCEEDED",
+  sortOrder: 0,
   promptId: null,
   progress: 0,
   resultImages: null,
@@ -57,8 +58,8 @@ const TASK_DETAIL_BASE: TaskDetail = {
   images: [],
 };
 
-function makeDetail(params: unknown): TaskDetail {
-  return { ...TASK_DETAIL_BASE, params };
+function makeDetail(params: unknown, extra: Partial<TaskDetail> = {}): TaskDetail {
+  return { ...TASK_DETAIL_BASE, params, ...extra };
 }
 
 /** 造一份带作者标签的 IO 表（键是 ioKey：`<nodeId>::widget::<name>`）。 */
@@ -75,6 +76,39 @@ function io(...entries: Array<[nodeId: string, name: string, label?: string]>): 
   }
   return map;
 }
+
+/* ── RAW（UI 格式）执行快照夹具（ISSUE #5041）──────────────────────────
+ * comfy-cli 路径落库的 `workflowSnapshot.workflow` 是 LiteGraph 原件：
+ * 节点在 `nodes` 数组里，控件值在 `widgets_values` 下标里（不在 `inputs[].value`）。
+ * 形状照 minimax H3 文生图的真实快照简化。 */
+const CAPTURED_AT = "2026-01-01T00:00:00.000Z";
+
+const UI_GRAPH_MINIMAX = {
+  nodes: [
+    {
+      id: 14,
+      type: "ResolutionSelector",
+      inputs: [
+        { name: "aspect_ratio", link: null, widget: { name: "aspect_ratio" } },
+        { name: "megapixels", link: null, widget: { name: "megapixels" } },
+        { name: "multiple", link: null, widget: { name: "multiple" } },
+      ],
+      widgets_values: ["1:1 (Square)", 1, 64],
+    },
+    {
+      id: 23,
+      type: "sg-minimax-t2i",
+      inputs: [
+        { name: "replace", link: null, widget: { name: "replace" } },
+        { name: "switch", link: null, widget: { name: "switch" } },
+        { name: "seed", link: null, widget: { name: "seed" } },
+        { name: "width", link: 41, widget: { name: "width" } },
+      ],
+      widgets_values: ["图内默认提示词", true, 731_030_653_625_918, 3104],
+    },
+  ],
+  definitions: { subgraphs: [{ id: "sg-minimax-t2i", nodes: [] }] },
+};
 
 describe("workflowInputsOf", () => {
   it("非数组回落为空数组", () => {
@@ -191,6 +225,64 @@ describe("deriveWorkshopParams", () => {
       null,
     );
     expect(canvasRows.find((r) => r.id === "reference-image")?.value).toBe("canvas.png");
+  });
+
+  it("本次没传的尺寸 / 种子口回落工作流图内默认值，来源标 default（ISSUE #5041）", () => {
+    const ioMap: WorkflowIOMap = {
+      "14::widget::aspect_ratio": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "14",
+        name: "aspect_ratio",
+        label: "宽高比",
+      },
+      "14::widget::megapixels": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "14",
+        name: "megapixels",
+        label: "百万像素",
+      },
+      "14::widget::multiple": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "14",
+        name: "multiple",
+        label: "对齐倍数",
+      },
+      "23::widget::seed": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "23",
+        name: "seed",
+        label: "种子",
+      },
+    };
+    const detail = makeDetail(
+      { workflow: "w", prompt: "工坊提示词" },
+      {
+        workflowSnapshot: {
+          workflow: UI_GRAPH_MINIMAX,
+          capturedAt: CAPTURED_AT,
+          source: "execution",
+        },
+      },
+    );
+    const rows = deriveWorkshopParams(detail, "T2I", null, ioMap);
+    expect(rows.find((r) => r.id === "prompt")).toMatchObject({
+      value: "工坊提示词",
+      source: "submitted",
+    });
+    expect(rows.find((r) => r.id === "size")).toMatchObject({
+      value: "宽高比 1:1 (Square) · 百万像素 1 · 对齐倍数 64",
+      source: "default",
+    });
+    expect(rows.find((r) => r.id === "seed")).toMatchObject({
+      value: 731_030_653_625_918,
+      source: "default",
+    });
+    /* 模型没有负向词口：负向词如实「未提供」（图里也确实没有可读的默认值）。 */
+    expect(rows.find((r) => r.id === "negative")?.value).toBeUndefined();
   });
 });
 
@@ -324,6 +416,234 @@ describe("deriveWorkflowParams", () => {
     };
     expect(deriveWorkflowParams(makeDetail({}), ioMap, "T2V").rows[0]?.value).toBe(30);
     expect(deriveWorkflowParams(makeDetail({}), ioMap, "T2I").rows[0]?.value).toBe(20);
+  });
+
+  it("IO 没写默认值时，回退到执行快照图里节点配置的值（工作流默认一定有值）", () => {
+    const ioMap: WorkflowIOMap = {
+      "14::widget::aspect_ratio": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "14",
+        name: "aspect_ratio",
+        label: "宽高比",
+      },
+      "14::widget::megapixels": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "14",
+        name: "megapixels",
+        label: "百万像素",
+      },
+      "8::widget::seed": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "8",
+        name: "seed",
+        label: "种子",
+      },
+      "5:23::widget::scale": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "23",
+        hostNodeId: "5",
+        name: "scale",
+        label: "缩放",
+      },
+    };
+    const detail = makeDetail(
+      {
+        workflow: "w",
+      },
+      {
+        workflowSnapshot: {
+          workflow: {
+            14: {
+              class_type: "ResolutionSelector",
+              inputs: { aspect_ratio: "1:1 (Square)", megapixels: 4, multiple: 32 },
+            },
+            8: { class_type: "KSampler", inputs: { seed: 941_524_759_465_139 } },
+            "5:23": { class_type: "ImageScaleBy", inputs: { scale: 1.5 } },
+          },
+          capturedAt: "2026-01-01T00:00:00.000Z",
+          source: "execution",
+        },
+      },
+    );
+    const rows = deriveWorkflowParams(detail, ioMap).rows;
+    expect(rows[0]).toMatchObject({ value: "1:1 (Square)", source: "default" });
+    expect(rows[1]).toMatchObject({ value: 4, source: "default" });
+    expect(rows[2]).toMatchObject({ value: 941_524_759_465_139, source: "default" });
+    /* 子图引脚：运行期展开后的节点 id 是 `宿主id:内部id`。 */
+    expect(rows[3]).toMatchObject({ value: 1.5, source: "default" });
+  });
+
+  it("执行快照里也没有的端口才如实显示未提供（不编造）", () => {
+    const ioMap = io(["14", "aspect_ratio", "宽高比"]);
+    const rows = deriveWorkflowParams(makeDetail({}), ioMap).rows;
+    expect(rows[0]).toMatchObject({ value: undefined, source: "default" });
+  });
+
+  it("执行快照是 RAW（UI 格式）图时，从 widgets_values 读图内默认值（comfy-cli 路径，ISSUE #5041）", () => {
+    const ioMap: WorkflowIOMap = {
+      "14::widget::aspect_ratio": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "14",
+        name: "aspect_ratio",
+        label: "宽高比",
+      },
+      "14::widget::megapixels": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "14",
+        name: "megapixels",
+        label: "百万像素",
+      },
+      "23::widget::switch": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "23",
+        name: "switch",
+        label: "开关",
+      },
+      "23::widget::seed": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "23",
+        name: "seed",
+        label: "种子",
+      },
+    };
+    const detail = makeDetail(
+      { workflow: "w" },
+      {
+        workflowSnapshot: {
+          workflow: UI_GRAPH_MINIMAX,
+          capturedAt: CAPTURED_AT,
+          source: "execution",
+        },
+      },
+    );
+    const rows = deriveWorkflowParams(detail, ioMap).rows;
+    expect(rows[0]).toMatchObject({ value: "1:1 (Square)", source: "default" });
+    expect(rows[1]).toMatchObject({ value: 1, source: "default" });
+    expect(rows[2]).toMatchObject({ value: true, source: "default" });
+    expect(rows[3]).toMatchObject({ value: 731_030_653_625_918, source: "default" });
+  });
+
+  it("UI 图里 seed 哨兵槽（control_after_generate）使其后的控件槽位右移，读取时同样对齐", () => {
+    const ioMap: WorkflowIOMap = {
+      "7::widget::seed": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "7",
+        name: "seed",
+        label: "种子",
+      },
+      "7::widget::steps": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "7",
+        name: "steps",
+        label: "步数",
+      },
+    };
+    const detail = makeDetail(
+      { workflow: "w" },
+      {
+        workflowSnapshot: {
+          workflow: {
+            nodes: [
+              {
+                id: 7,
+                type: "KSampler",
+                inputs: [
+                  { name: "seed", link: null, widget: { name: "seed" } },
+                  { name: "steps", link: null, widget: { name: "steps" } },
+                ],
+                /* ComfyUI 在 seed 后序列化了控制模式哨兵槽：steps 实际在 3 号位。 */
+                widgets_values: [42, "randomize", 6],
+              },
+            ],
+          },
+          capturedAt: CAPTURED_AT,
+          source: "execution",
+        },
+      },
+    );
+    const rows = deriveWorkflowParams(detail, ioMap).rows;
+    expect(rows[0]).toMatchObject({ value: 42, source: "default" });
+    expect(rows[1]).toMatchObject({ value: 6, source: "default" });
+  });
+
+  it("UI 图的子图内部引脚按 宿主:内部 链下钻子图定义读图内值", () => {
+    const ioMap: WorkflowIOMap = {
+      "23:7::widget::scale": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "7",
+        hostNodeId: "23",
+        name: "scale",
+        label: "缩放",
+      },
+    };
+    const detail = makeDetail(
+      { workflow: "w" },
+      {
+        workflowSnapshot: {
+          workflow: {
+            nodes: [{ id: 23, type: "sg-minimax-t2i", inputs: [], widgets_values: [] }],
+            definitions: {
+              subgraphs: [
+                {
+                  id: "sg-minimax-t2i",
+                  nodes: [
+                    {
+                      id: 7,
+                      type: "ImageScaleBy",
+                      inputs: [{ name: "scale", link: null, widget: { name: "scale" } }],
+                      widgets_values: [1.5],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          capturedAt: CAPTURED_AT,
+          source: "execution",
+        },
+      },
+    );
+    expect(deriveWorkflowParams(detail, ioMap).rows[0]).toMatchObject({
+      value: 1.5,
+      source: "default",
+    });
+  });
+
+  it("UI 图里连线喂入的槽不当作图内默认值（widget 里存的只是旧值）", () => {
+    const ioMap: WorkflowIOMap = {
+      "23::widget::width": {
+        direction: "input",
+        kind: "widget",
+        nodeId: "23",
+        name: "width",
+        label: "宽度",
+      },
+    };
+    const detail = makeDetail(
+      { workflow: "w" },
+      {
+        workflowSnapshot: {
+          workflow: UI_GRAPH_MINIMAX,
+          capturedAt: CAPTURED_AT,
+          source: "execution",
+        },
+      },
+    );
+    expect(deriveWorkflowParams(detail, ioMap).rows[0]).toMatchObject({
+      value: undefined,
+      source: "default",
+    });
   });
 
   it("工坊顶层值也算提交值（没画线时它不会落进 workflowInputs）", () => {

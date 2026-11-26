@@ -584,8 +584,8 @@ export async function generateImageViaComfyUI(input: {
   size?: SizeSpec;
 }): Promise<string> {
   const settings = loadSettings();
-  /* 生效的尺寸表现读磁盘（ISSUE #3972）：设置里改过的表、被「保存到项目代码库」
-   * 改过的项目默认，都在这份里 —— 宽高换算与界面同源。 */
+  /* 生效的尺寸表现读磁盘（ISSUE #3972）：设置里改过的表、随代码更新过的项目
+   * 默认，都在这份里 —— 宽高换算与界面同源。 */
   const sizeTable = await loadSizePresetTable();
   const workflow =
     settings.imageWorkflow !== undefined && settings.imageWorkflow !== null

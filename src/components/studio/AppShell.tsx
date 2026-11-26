@@ -49,6 +49,19 @@ import { isTabClosable, type ViewTab } from "./workspace-tabs";
 import { ViewActionsProvider } from "./ViewActions";
 import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
 
+/* 打开态胶片的 class（全局导航项 / 项目行共用，#5040 定位、#5059 悬浮拉宽）：
+ * 展开态是 size-7 浅底胶片；折叠成图标轨时按钮内容盒只有 16px（size-8! + p-2!），
+ * 28px 胶片会 overflow 并把图标推右 6px，与临时页签的裸图标不对齐。折叠态改成
+ * 铺满按钮（inset-0 / size-full），图标回到按钮中心，与裸图标同列。悬停 / 聚焦时
+ * 底片**只向右**拉宽（w calc(100%+8px)，left 保持 0 不动）——左缘钉在按钮左缘，
+ * 不往左扩盖住轨左缘那条「当前打开页签」指示条（data-active:before）。图标用
+ * justify-start + pl-2 固定在按钮内容盒（x=8+8=16 起），悬浮前后**位置不变**，
+ * 不随底片拉宽居中右移；关闭钮贴拉宽底片的右缘，两者不相交。按钮本身有 relative
+ * 可承载 absolute；折叠态打开项显式开 overflow-visible 并藏掉名称，免得扩出的底片
+ * 被按钮裁掉 / 名称从轨里漏出来。 */
+const OPEN_TAB_GLYPH_CLASS =
+  "bg-primary-soft text-primary-strong inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-[width] duration-150 group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:inset-0 group-data-[collapsible=icon]:size-full group-data-[collapsible=icon]:justify-start group-data-[collapsible=icon]:pl-2 group-data-[collapsible=icon]:rounded-[inherit] group-hover/menu-item:group-data-[collapsible=icon]:w-[calc(100%+8px)] group-focus-within/menu-item:group-data-[collapsible=icon]:w-[calc(100%+8px)]";
+
 /** 侧栏底部「项目」分组里列出的一条项目（只需 id + 展示名）。 */
 export type SidebarProject = {
   id: string;
@@ -166,7 +179,13 @@ function SidebarProjectsGroup({
                          本行的 li，外层不带 `group/row`，串色链条断在这里。 */
                       <SidebarMenuItem className="group/row" key={project.id}>
                         <SidebarMenuButton
-                          className="group-hover/row:bg-sidebar-accent group-hover/row:text-sidebar-accent-foreground"
+                          className={cn(
+                            "group-hover/row:bg-sidebar-accent group-hover/row:text-sidebar-accent-foreground",
+                            /* #5059：与全局导航项同款 —— 折叠态打开项放开 overflow，
+                               让悬浮拉宽的胶片不被裁；名称显式隐藏不漏出轨外。 */
+                            openProjectTabs.length > 0 &&
+                              "group-data-[collapsible=icon]:overflow-visible",
+                          )}
                           isActive={insideProject && project.id === activeProjectId}
                           onClick={() => {
                             onOpenProject(project.id);
@@ -189,16 +208,15 @@ function SidebarProjectsGroup({
                           {openProjectTabs.length > 0 ? (
                             /* 打开态（与上方导航项同款）：图标落进品牌色浅底胶片，
                                读起来是「这个项目的界面开着」。 */
-                            <span
-                              className="bg-primary-soft text-primary-strong inline-flex size-7 shrink-0 items-center justify-center rounded-md"
-                              data-open-state="true"
-                            >
+                            <span className={OPEN_TAB_GLYPH_CLASS} data-open-state="true">
                               <ProjectGlyph />
                             </span>
                           ) : (
                             <ProjectGlyph />
                           )}
-                          <span>{project.name}</span>
+                          <span className="group-data-[collapsible=icon]:sr-only">
+                            {project.name}
+                          </span>
                         </SidebarMenuButton>
                         {openProjectTabs.length > 0 ? (
                           /* 关闭按钮（悬停浮现）：关掉这个项目开着的**全部**页签
@@ -458,6 +476,12 @@ export function AppShell({
                                `disabled:opacity-50` 因此不生效。这里显式置灰但不动
                                pointer-events —— 悬停仍要能弹出「即将推出」提示。 */
                             !enabled && "opacity-50",
+                            /* #5059：折叠态打开项要放得下向右拉宽的胶片（否则被
+                               按钮的 overflow-hidden 裁回 32px）。名称同批改 sr-only ——
+                               否则 overflow 一放开，轨外的文字会从按钮里漏出来；
+                               用 sr-only 而非 hidden，保留折叠态的可访问名。 */
+                            openTab !== undefined &&
+                              "group-data-[collapsible=icon]:overflow-visible",
                           )}
                           disabled={!enabled}
                           /* 首页不参与选中变色（Issue #4813）：它是常驻落点，
@@ -475,16 +499,15 @@ export function AppShell({
                                （`primary-soft`，明暗两态自有值），读起来是「这一页在用」，
                                不再像「有通知」的角点。与「当前在这页」的选中指示条
                                （侧栏 `data-active`）是两个维度，互不替代。 */
-                            <span
-                              className="bg-primary-soft text-primary-strong inline-flex size-7 shrink-0 items-center justify-center rounded-md"
-                              data-open-state="true"
-                            >
+                            <span className={OPEN_TAB_GLYPH_CLASS} data-open-state="true">
                               {item.icon}
                             </span>
                           ) : (
                             item.icon
                           )}
-                          <span>{item.label}</span>
+                          <span className="group-data-[collapsible=icon]:sr-only">
+                            {item.label}
+                          </span>
                         </SidebarMenuButton>
                         {openTab ? (
                           /* 关闭按钮（ISSUE #3740）：只在悬停 / 聚焦时浮现 —— 打开态

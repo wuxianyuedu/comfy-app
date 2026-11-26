@@ -7,21 +7,17 @@
  * 数据的**唯一持有者**在服务端（项目默认入库在 `src/lib/media/size-preset-defaults.json`，
  * 本机覆盖落 `data/size-presets.json`，读取侧逐格合并），本件只渲染与改格，改完即存。
  *
- * 两种保存口径与「界面页签行为」「模式契约」同一套（ISSUE #3948）：
- *   · 本机覆盖 —— **改一格即存**（落应用数据，开发版与正式包都能用）；
- *   · 「保存为项目默认（跟代码走）」 —— 写入库那份 JSON，只有开发检出可用。
+ * 保存口径（ISSUE #3948）：本机覆盖**改一格即存**（落应用数据，开发版与正式包
+ * 都能用）；项目默认那份入库 JSON 是编译期基线，运行期只读不写（ISSUE #5001）——
+ * 改它走改代码 / 提 PR 那条路。
  */
 
 import { DataLocationBadge } from "~/components/data-location/DataLocationBadge";
-import { Button } from "~/components/ui/button";
 import { SettingsCard } from "~/components/ui/settings-card";
 import { SizePresetTablePanel } from "~/components/studio/workflow-form/SizePresetTableModal";
 
-import { useSizePresetTable } from "~/components/studio/workflow-form/hooks/use-size-preset-table";
-
 export function SizePresetSection() {
-  /* 订阅尺寸表快照（画布 / 表单与设置页共用同一份 React Query 之外的 store）。 */
-  const c = useSizePresetTable();
+  /* 表格面板自己订阅尺寸表快照（画布 / 表单与设置页共用同一份数据源）。 */
   return (
     <SettingsCard
       title="尺寸配置表"
@@ -38,30 +34,6 @@ export function SizePresetSection() {
         （src/lib/media/size-preset-defaults.json）。
       </p>
       <SizePresetTablePanel />
-
-      {/* 「保存为项目默认（跟代码走）」：只有开发检出有可写的目标文件（正式包没有源码可写）。
-          写的是**当前这份表**（本机覆盖 + 项目默认合起来的那份），提交后每个检出
-          与每个桌包都是它 —— 与「界面页签」「模式契约」的项目默认同一套口径与同一句
-          文案（§12.14：同一件事只许一种说法）。 */}
-      {c.projectDefaultEditable && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button
-            disabled={c.savingProjectDefaults}
-            onClick={() => {
-              void c.saveAsProjectDefaults();
-            }}
-            variant="outline"
-          >
-            {c.savingProjectDefaults ? "写入中…" : "保存为项目默认（跟代码走）"}
-          </Button>
-        </div>
-      )}
-
-      {c.status && (
-        <p className="bg-success/10 text-success-strong mt-3 rounded-lg px-3 py-2 text-xs">
-          {c.status}
-        </p>
-      )}
     </SettingsCard>
   );
 }

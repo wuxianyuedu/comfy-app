@@ -65,6 +65,12 @@ function fakeRepo(overrides: Record<string, unknown> = {}) {
     /* SAFETY: 类型断言已复核 */
     claimNextQueued: vi.fn(() => Promise.resolve([] as Array<string>)),
     /* SAFETY: 类型断言已复核 */
+    peekNextQueued: vi.fn(() => Promise.resolve(null as { id: string; type: string } | null)),
+    /* SAFETY: 类型断言已复核（默认未暂停：暂停闸用例各自覆写） */
+    getGenerationPauseState: vi.fn(() =>
+      Promise.resolve({ paused: false, pausedAt: null as Date | null }),
+    ),
+    /* SAFETY: 类型断言已复核 */
     findExecJob: vi.fn(() => Promise.resolve(null as ExecJobRow)),
     /* SAFETY: 类型断言已复核 */
     finalizeFailure: vi.fn(() => Promise.resolve("written" as const)),
@@ -611,5 +617,74 @@ describe("循环启动点由宿主显式调用（模块加载零副作用）", (
 
     mod.stopDispatchLoop();
     expect(globalThis.__comfyDispatch_v1?.handle).toBeNull();
+  });
+});
+
+describe("生图暂停闸（ISSUE #5055）", () => {
+  it("暂停中 + 队首是生图任务：整拍不领（当前任务照常跑完，后续挂起）", async () => {
+    openWs();
+    const repo = fakeRepo({
+      getGenerationPauseState: vi.fn(() =>
+        Promise.resolve({ paused: true, pausedAt: new Date(0) }),
+      ),
+      peekNextQueued: vi.fn(() => Promise.resolve({ id: "t-img", type: "T2I" })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-img"])),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    expect(await mod.claimAndDispatchOnce()).toBeNull();
+    expect(repo.peekNextQueued).toHaveBeenCalledWith("inline");
+    expect(repo.claimNextQueued).not.toHaveBeenCalled();
+    expect(cli.executeViaComfyCli).not.toHaveBeenCalled();
+  });
+
+  it("暂停中 + 队首是视频任务：照常领取（暂停只作用在生图）", async () => {
+    openWs();
+    const repo = fakeRepo({
+      getGenerationPauseState: vi.fn(() =>
+        Promise.resolve({ paused: true, pausedAt: new Date(0) }),
+      ),
+      peekNextQueued: vi.fn(() => Promise.resolve({ id: "t-vid", type: "T2V" })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-vid"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({ workflowName: "w", execPayload: {}, params: {} }),
+      ),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    expect(await mod.claimAndDispatchOnce()).toBe("t-vid");
+    expect(repo.claimNextQueued).toHaveBeenCalledWith("inline", 1);
+  });
+
+  it("暂停中 + 队首是音频任务：照常领取", async () => {
+    openWs();
+    const repo = fakeRepo({
+      getGenerationPauseState: vi.fn(() =>
+        Promise.resolve({ paused: true, pausedAt: new Date(0) }),
+      ),
+      peekNextQueued: vi.fn(() => Promise.resolve({ id: "t-aud", type: "T2A" })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-aud"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({ workflowName: "w", execPayload: {}, params: {} }),
+      ),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    expect(await mod.claimAndDispatchOnce()).toBe("t-aud");
+  });
+
+  it("未暂停：生图任务照常领取（闸门不添副作用）", async () => {
+    openWs();
+    const repo = fakeRepo({
+      peekNextQueued: vi.fn(() => Promise.resolve({ id: "t-img", type: "T2I" })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-img"])),
+      findExecJob: vi.fn((): Promise<ExecJobRow> =>
+        Promise.resolve({ workflowName: "w", execPayload: {}, params: {} }),
+      ),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    expect(await mod.claimAndDispatchOnce()).toBe("t-img");
+    expect(repo.peekNextQueued).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, authedProcedure, rateLimitedProcedure } from "~/server/api/trpc";
 import { taskRepository, workflowModelTagRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
-import { errorMessage } from "~/lib/error-message";
+import { errorMessage, errorText } from "~/lib/error-message";
 import { asRecord } from "~/lib/is-record";
 import { taskOutputDir } from "~/lib/media/output-paths";
 import { cancelTask as cancelExecutorTask } from "~/lib/comfyui/enqueue";
@@ -63,6 +63,9 @@ export const taskRouter = createTRPCRouter({
           projectId: z.string().optional(),
           media: z.enum(["image", "video", "audio"]).optional(),
           status: z.string().optional(),
+          /** 计数口径（#5076）：与行过滤解耦。历史页按状态筛选时行只取该状态，
+           *  角标仍需各档全量 —— 传终态全集；不传则与 `status` 同口径（既有调用方不变）。 */
+          countStatus: z.string().optional(),
         })
         .default({ take: 60, cursor: 0 }),
     )
@@ -75,11 +78,19 @@ export const taskRouter = createTRPCRouter({
               .filter(Boolean)
           : undefined;
 
-      const PAGE = input.take;
+      const countStatusList =
+        input.countStatus !== undefined && input.countStatus !== ""
+          ? input.countStatus
+              .split(",")
+              .map((status) => upperToken(status))
+              .filter(Boolean)
+          : statusList;
+
       const needsQueuePositions = statusList === undefined || statusList.includes("QUEUED");
       const queuedPositions = needsQueuePositions
         ? await taskRepository.queuedPositionsByUser(ctx.user.id)
         : new Map<string, number>();
+      const PAGE = input.take;
       /* media 过滤的判据（`inferMediaType`）依赖首图扩展名等应用层解析，
        * 纯 SQL 复刻不了，内存过滤保留；但把原先「固定 ×4（最多 400 行，
        * 含大 JSON 关联）」改成**迭代补页**——大多数请求第 1 页就凑满，
@@ -126,8 +137,11 @@ export const taskRouter = createTRPCRouter({
             status: task.status,
             prompt: task.prompt,
             createdAt: task.createdAt,
-            claimedAt: task.claimedAt,
-            finishedAt: task.finishedAt,
+            /* 最近活动时刻（#5076）：终态任务的 finishedAt 才是「刚跑完」的时间，
+             * 只有提交时刻会停在几小时前。claimedAt 供老行 / 中断行回落。 */
+            finishedAt: task.finishedAt ?? null,
+            claimedAt: task.claimedAt ?? null,
+            /* 完整队列位次（#5045）：来自全表 QUEUED 排序，不随列表分页或筛选重编号。 */
             queuePosition: task.status === "QUEUED" ? (queuedPositions.get(task.id) ?? null) : null,
             cover,
             checkpoint,
@@ -143,13 +157,20 @@ export const taskRouter = createTRPCRouter({
       /* hasMore 的语义（#4044）：「这一页之外还可能有更多」——只要扫描没有
        * 触到表尾（exhausted）就为 true；精确与否由调用方的下一页兜底
        * （下一页拉回 0 行时 hasMore 自然变 false）。 */
-      /* 总数（历史页「已加载 X / 总数 Y」）：与列表同一套过滤（状态 / 项目），
-       * 只数行数不拉行。media 过滤是内存判据，不进这个 SQL 计数——带 media
-       * 筛选时前端的总数显示退回「已加载」口径。 */
-      const total = await taskRepository.countByUser(ctx.user.id, {
-        projectId: input.projectId,
-        statusList,
-      });
+      /* 总数与各状态计数（历史页「已加载 X / 总数 Y」与状态筛选枚上的真实
+       * 计数）：与列表同一套过滤（状态 / 项目），只数行数不拉行。media 过滤
+       * 是内存判据，不进这个 SQL 计数——带 media 筛选时前端的总数显示退回
+       * 「已加载」口径。 */
+      const countFilter = { projectId: input.projectId, statusList: countStatusList };
+      /* 今日零点按本机时区算，与队列页卡片此前用 `createdAt.toDateString()` 的
+       * 「今天」同一口径。按状态分组的服务端计数不受 take 截断影响。 */
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const [total, statusCounts, todayCounts] = await Promise.all([
+        taskRepository.countByUser(ctx.user.id, countFilter),
+        taskRepository.countByStatusByUser(ctx.user.id, countFilter),
+        taskRepository.countByStatusByUser(ctx.user.id, countFilter, todayStart),
+      ]);
       if (!input.media) {
         /* 多取一行判 hasMore（#4594）：请求 PAGE+1 行，返回行数超过 PAGE = 还有下一页。
          * 此前 scanOnce 只取 PAGE 行，`rows.length > PAGE` 恒假 ⇒ hasMore 恒 false，
@@ -164,6 +185,8 @@ export const taskRouter = createTRPCRouter({
           scanned: rows.length,
           nextScanCursor: input.cursor + Math.min(rows.length, PAGE),
           total,
+          statusCounts,
+          todayCounts,
         };
       }
 
@@ -199,6 +222,8 @@ export const taskRouter = createTRPCRouter({
         scanned,
         nextScanCursor: input.cursor + scanned,
         total,
+        statusCounts,
+        todayCounts,
       };
     }),
 
@@ -236,6 +261,54 @@ export const taskRouter = createTRPCRouter({
      * 负责（`executor-host.mjs` 的 reconcileCancelled）。 */
     await cancelExecutorTask(input.id);
     return { ok: true };
+  }),
+
+  /**
+   * 取消当前用户全部未结束任务（ISSUE #5064）：候选由仓储层按归属 + 终态过滤，
+   * 逐个走与单条取消同一个执行层出口 `cancelExecutorTask` —— 在飞的会中断 comfy-cli、
+   * 归还槽位，排队的行只翻状态，不会出现「按了取消还在出图」。
+   *
+   * 部分失败语义（规范 05「批量必答部分成功」）：单条失败不中断其余（每条自己记
+   * warn 日志），返回 `failed` 让 UI 如实报「取消了几条、几条没取消掉」—— 近千条
+   * 队列里一条脏行不该让剩下九百九十九条继续跑。重复点幂等：第二轮的候选里已经
+   * 没有上一轮取消掉的行。
+   */
+  cancelAll: authedProcedure.mutation(async ({ ctx }) => {
+    const ids = await taskRepository.listActiveIdsForUser(ctx.user.id);
+    let cancelled = 0;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：每条各自收口，串行避免与派发循环抢同一个槽
+        await cancelExecutorTask(id);
+        cancelled += 1;
+      } catch (error) {
+        failed += 1;
+        /* 错因文案走 errorText（P42）：动作前缀与详情由同一个出口拼，不在这里手拼。 */
+        logger.warn(`[task.cancelAll] ${errorText(error, `取消 ${id} 失败`)}`);
+      }
+    }
+    return { cancelled, failed, total: ids.length };
+  }),
+
+  /**
+   * 把一条排队任务提前到队首：只认归属用户 + QUEUED，不叠 owner（host 片的行
+   * 也要能排）。单条条件 UPDATE 与领取语句在 SQLite 上原子互斥，行若在请求
+   * 期间已被领走则影响 0 行 —— 如实回 ok:false + 人话原因，不假装调整成功。
+   * 运行中 / 终态一律不动。
+   */
+  reorder: authedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const outcome = await taskRepository.reorderQueuedToFrontForUser(ctx.user.id, input.id);
+    if (outcome === "moved") {
+      return { ok: true, detail: "已提前到队首，下一轮就轮到它" };
+    }
+    if (outcome === "already-first") {
+      return { ok: true, detail: "这条已经在队首了" };
+    }
+    logger.warn(
+      `[task.reorder] 未能调整顺序（已开跑 / 不属于当前用户 / 不存在）：taskId=${input.id}`,
+    );
+    return { ok: false, detail: "这条已开跑或已结束，无法调整顺序" };
   }),
 
   /** 打开产物目录：返回 comfyapp:// 深链（协议未注册时的引导见 openTaskFolder）。 */

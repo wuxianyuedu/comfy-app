@@ -65,3 +65,50 @@ export async function removeCharacterStoreDir(
 ): Promise<void> {
   await fs.rm(characterStoreDir(characterId, root), { recursive: true, force: true });
 }
+
+/**
+ * 删除角色目录里的**单张**立绘（按角色产物地址定位）。
+ *
+ * 与整目录删除的区别：这里只收一张，且落点必须正好在
+ * `generated/character-library/<characterId>/` 这一层——地址解析越出产物根、
+ * 指向别的角色目录或更深的路径都拒绝，避免用一张图的地址删掉整棵目录。
+ * 文件不存在按已清理处理（幂等）。
+ */
+export async function removeCharacterPortrait(
+  url: string,
+  characterId: string,
+  root: string = characterLibraryRoot(),
+): Promise<void> {
+  const source = artifactDiskPath(url);
+  if (source === null || !isWithinGeneratedRoot(source)) {
+    logger.warn(`[character-store] 立绘地址不可解析或越出产物根，拒绝删除：${url}`);
+    return;
+  }
+  const dir = path.resolve(characterStoreDir(characterId, root));
+  const target = path.resolve(source);
+  if (path.dirname(target) !== dir) {
+    logger.warn(`[character-store] 立绘不在该角色目录内，拒绝删除：${source}`);
+    return;
+  }
+  try {
+    await fs.unlink(target);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+}
+
+/** 读一份产物地址的字节（质量打分要拿原始 PNG 解析）；失败返回 null。 */
+export async function readArtifactBytes(url: string): Promise<Uint8Array | null> {
+  const source = artifactDiskPath(url);
+  if (source === null || !isWithinGeneratedRoot(source)) {
+    return null;
+  }
+  try {
+    return new Uint8Array(await fs.readFile(source));
+  } catch {
+    return null;
+  }
+}

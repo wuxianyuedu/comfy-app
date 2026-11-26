@@ -480,16 +480,48 @@ export async function appendComment(ctx, number, body, marker) {
   if (!posted.ok) {
     return { ok: false, detail: `写评论：${posted.detail}` };
   }
-  const listed = await cnbCall(ctx, "GET", `issues/${number}/comments?page=1&page_size=20`, {
-    retries: RETRIES,
-  });
+  return findCommentMarker(ctx, number, marker, 1);
+}
+
+/**
+ * 翻页找评论里的 marker（递归：`await` 不进循环体）。
+ *
+ * 为什么不能只回读第 1 页：`issues/{n}/comments` 默认按 `created` **升序**排
+ *（CLI 的同名选项默认也是 `created`），而新贴的评论在最后一页。规则单每天追加
+ * 一条读数评论，很快就会过 20 条 —— 只回读第 1 页会把「写成了」误判成「没写成」，
+ * 下一次巡检又贴一条，评论数只增不减，最终永远红（ISSUE 见 code scanning mirror #18）。
+ * 这里逐页翻到命中为止；翻完仍没找到才算失败，页数上限防止无限翻。
+ *
+ * @param {{fetchImpl: FetchLike, token: string, base: string, slug: string}} ctx
+ * @param {number} number 单号
+ * @param {string} marker 凭据
+ * @param {number} page 当前页（从 1 起）
+ * @returns {Promise<{ok: true} | {ok: false, detail: string}>}
+ */
+async function findCommentMarker(ctx, number, marker, page) {
+  const listed = await cnbCall(
+    ctx,
+    "GET",
+    `issues/${number}/comments?page=${page}&page_size=${PER_PAGE}`,
+    { retries: RETRIES },
+  );
   if (!listed.ok || !Array.isArray(listed.json)) {
     return { ok: false, detail: "评论已发，但回读列表没跑起来（不拿回执当结论）" };
   }
   const bodies = listed.json.map((c) => String(c?.body ?? ""));
-  return bodies.some((text) => text.includes(marker))
-    ? { ok: true }
-    : { ok: false, detail: "回读里没找到这一条评论的 marker" };
+  if (bodies.some((text) => text.includes(marker))) {
+    return { ok: true };
+  }
+  if (listed.json.length < PER_PAGE) {
+    return { ok: false, detail: `回读里没找到这一条评论的 marker（翻到第 ${page} 页）` };
+  }
+  if (page >= MAX_PAGES) {
+    return {
+      ok: false,
+      detail: `评论超过 ${MAX_PAGES * PER_PAGE} 条 ⇒ 没翻完，不能判「没写成」`,
+    };
+  }
+  return findCommentMarker(ctx, number, marker, page + 1);
 }
 
 /**

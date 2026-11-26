@@ -53,7 +53,9 @@ export type DataLocationCategoryInfo = {
 export type DataKind =
   | "app-settings"
   | "appearance"
+  | "asset-library"
   | "backup"
+  | "character-library"
   | "database"
   | "llm-config"
   | "log-categories"
@@ -95,9 +97,13 @@ export type DataLocationId =
   | "app-database"
   | "app-settings"
   | "appearance"
+  | "asset-library-db"
+  | "asset-library-disk"
   | "backup-archive"
   | "canvas-browser"
   | "canvas-server"
+  | "character-library-db"
+  | "character-library-disk"
   | "llm-config"
   | "log-categories"
   | "mode-contract-local"
@@ -177,6 +183,21 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
       "跟着浏览器走：换机器 / 清浏览器数据会回到默认；自定义字体的字体文件在浏览器的 IndexedDB 里，迁移时也要一并导出。",
     target: "浏览器 localStorage（comfyapp:appearance-v1）",
   },
+  "asset-library-db": {
+    category: "database",
+    kind: "asset-library",
+    kindLabel: "资产库",
+    migration: "资产记录（分类 / 目录 / 生成参数快照 / 产物路径）在 asset 表里，跟着库走。",
+    target: "asset 表",
+  },
+  "asset-library-disk": {
+    category: "local-disk",
+    kind: "asset-library",
+    kindLabel: "资产库",
+    migration:
+      "资产文件在 generated/assets/<资产id>/ 里，库里只存路径：迁移要单独把整个 generated/ 目录拷过去（否则记录还在、文件没了）。",
+    target: "<应用根>/generated/assets/",
+  },
   "backup-archive": {
     category: "app-data-file",
     kind: "backup",
@@ -199,6 +220,22 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     kindLabel: "项目画布",
     migration: "服务端镜像在 project 表里，跟着库走（备份 / 恢复库即覆盖它）。",
     target: "project 表",
+  },
+  "character-library-db": {
+    category: "database",
+    kind: "character-library",
+    kindLabel: "角色库",
+    migration:
+      "角色档案（名字 / 原型 / 描述 / 特征标签 / 立绘路径）在 characterProfile 表里，跟着库走。",
+    target: "characterProfile 表",
+  },
+  "character-library-disk": {
+    category: "local-disk",
+    kind: "character-library",
+    kindLabel: "角色库",
+    migration:
+      "角色立绘在 generated/character-library/<角色id>/ 里，库里只存路径：迁移要单独把整个 generated/ 目录拷过去（否则档案还在、图没了）。",
+    target: "<应用根>/generated/character-library/",
   },
   "llm-config": {
     category: "database",
@@ -291,7 +328,7 @@ export const DATA_LOCATIONS: Record<DataLocationId, DataLocationEntry> = {
     kind: "size-presets",
     kindLabel: "尺寸配置表",
     migration:
-      "项目默认跟代码走：src/lib/media/size-preset-defaults.json 就是这份基线（设置页「保存到项目代码库」写的就是它），改默认值等于改代码。",
+      "项目默认跟代码走：src/lib/media/size-preset-defaults.json 就是这份基线（改默认值等于改代码，走提交 / PR），运行期只读不写。",
     target: "src/lib/media/size-preset-defaults.json",
   },
   "task-artifacts-db": {

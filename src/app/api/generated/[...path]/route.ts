@@ -1,5 +1,6 @@
-import { promises as fs } from "node:fs";
+import { createReadStream, promises as fs } from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
 import type { NextRequest } from "next/server";
 
 import { contentTypeForPath } from "~/lib/media/mime-ext";
@@ -25,6 +26,17 @@ const SHARED_HEADERS = {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/** Node 的 stream/web 与 DOM 的 ReadableStream 类型在 BYOB reader 上不兼容，
+ * 运行时是同一个 Web 流规范对象 —— 用结构守卫代替不安全断言。 */
+function isWebReadableStream(value: unknown): value is ReadableStream<Uint8Array> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "getReader" in value &&
+    typeof value.getReader === "function"
+  );
+}
 
 export async function GET(
   req: NextRequest,
@@ -85,47 +97,25 @@ export async function GET(
    * 预览抓取都不带 Range，按原实现会把整份产物（视频可达数百 MB）一次性
    * alloc 进内存。Range 窗口请求仍走定长缓冲（每段只有窗口那么大）。 */
   if (!window) {
-    const handle = await fs.open(abs, "r");
-    let position = 0;
-    let open = true;
-    const chunkSize = 1024 * 1024;
-    const body = new ReadableStream<Uint8Array>({
-      async pull(controller) {
-        if (!open || position >= size) {
-          if (open) {
-            open = false;
-            await handle.close();
-          }
-          controller.close();
-          return;
-        }
-        const buf = Buffer.allocUnsafe(Math.min(chunkSize, size - position));
-        try {
-          const { bytesRead } = await handle.read(buf, 0, buf.length, position);
-          position += bytesRead;
-          if (bytesRead > 0) {
-            controller.enqueue(new Uint8Array(buf.subarray(0, bytesRead)));
-          }
-          if (bytesRead === 0) {
-            /* 文件在一次请求之内被裁短：读不到更多就按 EOF 收尾，
-             * 不许无限空转（ISSUE #4252）。 */
-            if (open) {
-              open = false;
-              await handle.close();
-            }
-            controller.close();
-          }
-        } catch (error) {
-          open = false;
-          await Promise.resolve(handle.close()).catch(() => undefined);
-          controller.error(error instanceof Error ? error : new Error(String(error)));
-        }
-      },
-      cancel() {
-        open = false;
-        void Promise.resolve(handle.close()).catch(() => undefined);
-      },
+    /* 整档分支不再自己持有 FileHandle（ISSUE #5039）：旧实现 `fs.open` 后把
+     * close 全压在 Web 流的 pull/cancel 上——响应体既没被读到底、也没被
+     * cancel 时（客户端提前断开、流被 GC），句柄无人关闭，Node 26 把 GC
+     * 回收未关闭句柄从警告升级成 ERR_INVALID_STATE uncaughtException。
+     * 改走路径式 `createReadStream`：fd 由 Node 流自管，`autoClose` 在
+     * end/error/destroy 时确定性关闭；请求 signal 把客户端断开传到真正
+     * 干活的流（§8.11②）。这一路不再产生 FileHandle 对象，GC finalizer
+     * 没有可报错的目标。分块大小沿用 #4252 的 1MB，不把整份读进内存。 */
+    const stream = createReadStream(abs, {
+      autoClose: true,
+      highWaterMark: 1024 * 1024,
+      signal: req.signal,
     });
+    const body: unknown = Readable.toWeb(stream);
+    if (!isWebReadableStream(body)) {
+      // 理论上不可达（toWeb 一定返回 Web 流）；保底把 fd 收掉，不留悬空句柄。
+      stream.destroy();
+      return new Response("Not found", { status: 404 });
+    }
     return new Response(body, {
       headers: { "Content-Type": contentTypeForPath(abs), ...SHARED_HEADERS },
     });

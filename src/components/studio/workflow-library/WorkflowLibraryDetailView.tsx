@@ -41,6 +41,14 @@ const LazyWorkflowLibraryIoPanel = React.lazy(() =>
   })),
 );
 
+/* App Mode 选引脚页签懒加载：与 IO 预览同族的轻面板（状态查询 + 导出 / 打开 /
+ * 读回三个动作），不牵画布引擎；按页签分块让详情首屏保持轻。 */
+const LazyWorkflowLibraryAppModePanel = React.lazy(() =>
+  import("./sections/WorkflowLibraryAppModePanel").then((m) => ({
+    default: m.WorkflowLibraryAppModePanel,
+  })),
+);
+
 export function WorkflowLibraryDetailView({
   controller,
   openedAtRef,
@@ -80,6 +88,7 @@ export function WorkflowLibraryDetailView({
   } = controller;
   /* dev server 重建后懒分块可能已被换掉，这一块自己给出路（与画布预览同款）。 */
   const ioChunkFallback = useLazyChunkFallback("IO 预览");
+  const appModeChunkFallback = useLazyChunkFallback("App Mode 选引脚");
 
   /* 在线工作流的「从 JSON 更新」（#4377）：弹窗开关 + 提交 / 断线报告。 */
   const updateJson = useWorkflowUpdateFromJson();
@@ -288,6 +297,21 @@ export function WorkflowLibraryDetailView({
                   storedIO={storedIO}
                   workflowIO={workflowIO}
                 />
+              </React.Suspense>
+            </ErrorBoundary>
+          )}
+        </TabsContent>
+
+        {/* App Mode 选引脚页签：在 ComfyUI 原生前端里用 App Mode builder 勾选
+            暴露的输入 / 输出，读回 workflowIO 暴露面（显示名 / 必填 / seed /
+            模式覆盖仍走 IO 预览与编辑器）。 */}
+        <TabsContent className="min-h-0 flex-1 overflow-y-auto p-5" value="appMode">
+          {isLoading ? (
+            <TabContentLoading label={DETAIL_LOADING_LABEL} />
+          ) : (
+            <ErrorBoundary fallback={appModeChunkFallback}>
+              <React.Suspense fallback={<TabContentLoading label="加载 App Mode 面板…" />}>
+                <LazyWorkflowLibraryAppModePanel workflowId={workflow.id} />
               </React.Suspense>
             </ErrorBoundary>
           )}

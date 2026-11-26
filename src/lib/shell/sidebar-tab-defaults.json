@@ -2,6 +2,8 @@
   "models": "shared",
   "assets": "independent",
   "characters": "independent",
+  "style": "independent",
+  "face": "independent",
   "history": "independent",
   "queue": "independent",
   "comfyui": "independent",

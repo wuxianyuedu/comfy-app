@@ -199,6 +199,57 @@ describe("task.list", () => {
     expect(res.tasks).toEqual([]);
   });
 
+  it("statusCounts / todayCounts 是全量计数，不受 take 截断（#5073）", async () => {
+    seedTask(tdb, {
+      id: "q-old",
+      userId: "user-a",
+      status: "QUEUED",
+      createdAt: new Date("2020-01-01T00:00:00Z"),
+    });
+    seedTask(tdb, {
+      id: "q-today",
+      userId: "user-a",
+      status: "QUEUED",
+      createdAt: new Date(),
+    });
+    seedTask(tdb, {
+      id: "ok-today",
+      userId: "user-a",
+      status: "SUCCEEDED",
+      createdAt: new Date(),
+    });
+    const res = await createCaller(makeCtx()).list({ take: 1 });
+    expect(res.tasks).toHaveLength(1);
+    expect(res.statusCounts.QUEUED).toBe(2);
+    expect(res.todayCounts.QUEUED).toBe(1);
+    expect(res.todayCounts.SUCCEEDED).toBe(1);
+  });
+
+  it("投影带回 finishedAt / claimedAt；countStatus 与行 status 解耦（#5076）", async () => {
+    seedTask(tdb, {
+      id: "old-failed",
+      userId: "user-a",
+      status: "FAILED",
+      createdAt: new Date("2020-01-01T00:00:00Z"),
+      finishedAt: new Date(),
+    });
+    seedTask(tdb, {
+      id: "new-ok",
+      userId: "user-a",
+      status: "SUCCEEDED",
+      createdAt: new Date(),
+    });
+    const res = await createCaller(makeCtx()).list({
+      take: 10,
+      status: "FAILED",
+      countStatus: "SUCCEEDED,FAILED,CANCELLED",
+    });
+    expect(res.tasks.map((t) => t.id)).toEqual(["old-failed"]);
+    expect(res.tasks[0]?.finishedAt).toBeInstanceOf(Date);
+    expect(res.statusCounts.FAILED).toBe(1);
+    expect(res.statusCounts.SUCCEEDED).toBe(1);
+  });
+
   it("返回封面/进度/checkpoint 投影，mediaType 按封面与 taskType 推断，createdAt 倒序", async () => {
     seedTask(tdb, {
       id: "task-img",
@@ -558,6 +609,109 @@ describe("task.cancel", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     const row = tdb.$tables.tasks.find((t) => t.id === "task-1")!;
     expect(row.status).toBe("RUNNING");
+  });
+});
+
+// ─────────────────────────────── cancelAll (#5064) ───────────────────────────────
+
+describe("task.cancelAll", () => {
+  it("只取消当前用户的非终态任务：终态与他人行原样不动，计数如实", async () => {
+    seedTask(tdb, { id: "mine-queued", userId: "user-a", status: "QUEUED" });
+    seedTask(tdb, { id: "mine-running", userId: "user-a", status: "RUNNING" });
+    seedTask(tdb, { id: "mine-done", userId: "user-a", status: "SUCCEEDED" });
+    seedTask(tdb, { id: "others-queued", userId: "user-b", status: "QUEUED" });
+
+    const res = await createCaller(makeCtx()).cancelAll();
+    expect(res).toEqual({ cancelled: 2, failed: 0, total: 2 });
+
+    const status = (id: string) => tdb.$tables.tasks.find((t) => t.id === id)!.status;
+    expect(status("mine-queued")).toBe("CANCELLED");
+    expect(status("mine-running")).toBe("CANCELLED");
+    expect(status("mine-done")).toBe("SUCCEEDED");
+    expect(status("others-queued")).toBe("QUEUED");
+  });
+
+  it("重复点幂等：第二轮候选为空，不重复记取消", async () => {
+    seedTask(tdb, { id: "t1", userId: "user-a", status: "QUEUED" });
+    const caller = createCaller(makeCtx());
+    expect((await caller.cancelAll()).cancelled).toBe(1);
+    expect(await caller.cancelAll()).toEqual({ cancelled: 0, failed: 0, total: 0 });
+  });
+
+  it("空队列返回三个 0，不发任何取消", async () => {
+    expect(await createCaller(makeCtx()).cancelAll()).toEqual({
+      cancelled: 0,
+      failed: 0,
+      total: 0,
+    });
+  });
+});
+
+// ──────────────────────────────── reorder ────────────────────────────────
+
+describe("task.reorder", () => {
+  it("把排队行提前到队首：只改 sortOrder，不动 createdAt / 他人行；列表顺序跟着变", async () => {
+    const first = new Date("2026-01-01T00:00:00Z");
+    seedTask(tdb, {
+      id: "head",
+      userId: "user-a",
+      status: "QUEUED",
+      sortOrder: 0,
+      createdAt: first,
+    });
+    seedTask(tdb, {
+      id: "target",
+      userId: "user-a",
+      status: "QUEUED",
+      sortOrder: 0,
+      createdAt: new Date(first.getTime() + 1000),
+    });
+    seedTask(tdb, { id: "foreign", userId: "user-b", status: "QUEUED", sortOrder: 0 });
+
+    const caller = createCaller(makeCtx());
+    expect(await caller.reorder({ id: "target" })).toEqual({
+      ok: true,
+      detail: "已提前到队首，下一轮就轮到它",
+    });
+    const target = tdb.$tables.tasks.find((t) => t.id === "target")!;
+    expect(target.sortOrder).toBe(-1);
+    expect(target.createdAt).toEqual(new Date(first.getTime() + 1000));
+    expect(tdb.$tables.tasks.find((t) => t.id === "head")!.sortOrder).toBe(0);
+    expect(tdb.$tables.tasks.find((t) => t.id === "foreign")!.sortOrder).toBe(0);
+    /* 列表按 sortOrder 倒序：target 在末尾 = 队列页反转后的第 1 位。 */
+    expect((await caller.list({ take: 10 })).tasks.map((t) => t.id)).toEqual(["head", "target"]);
+  });
+
+  it("运行中 / 终态 / 他人行 / 不存在的行都不可重排：回 ok:false 并落日志", async () => {
+    seedTask(tdb, { id: "head", userId: "user-a", status: "QUEUED" });
+    seedTask(tdb, { id: "running", userId: "user-a", status: "RUNNING" });
+    seedTask(tdb, { id: "done", userId: "user-a", status: "SUCCEEDED" });
+    seedTask(tdb, { id: "foreign", userId: "user-b", status: "QUEUED" });
+
+    const caller = createCaller(makeCtx());
+    for (const id of ["running", "done", "foreign", "nope"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
+      const res = await caller.reorder({ id });
+      expect(res).toEqual({ ok: false, detail: "这条已开跑或已结束，无法调整顺序" });
+      /* 不存在的行取不到 sortOrder，按 0 兜底即可（这条用例判的是没被改过）。 */
+      expect(tdb.$tables.tasks.find((t) => t.id === id)?.sortOrder ?? 0).toBe(0);
+    }
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("task.reorder"));
+    expect((await caller.list({ take: 10 })).tasks.map((t) => t.id).sort()).toEqual([
+      "done",
+      "head",
+      "running",
+    ]);
+  });
+
+  it("已经是队首时幂等回报，不写入新的 sortOrder", async () => {
+    seedTask(tdb, { id: "head", userId: "user-a", status: "QUEUED", sortOrder: -5 });
+    seedTask(tdb, { id: "tail", userId: "user-a", status: "QUEUED", sortOrder: 0 });
+    expect(await createCaller(makeCtx()).reorder({ id: "head" })).toEqual({
+      ok: true,
+      detail: "这条已经在队首了",
+    });
+    expect(tdb.$tables.tasks.find((t) => t.id === "head")!.sortOrder).toBe(-5);
   });
 });
 

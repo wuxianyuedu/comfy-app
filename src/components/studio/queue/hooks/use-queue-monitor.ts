@@ -7,7 +7,7 @@
 // 轮询成本：状态栏已挂 useComfyQueue，本视图再挂一次即每 2s 两次（服务端量小）；重复消费未修，收口方向是模块级单例订阅（COMFY_QUEUE_POLL_MS 改动会同步影响成本）。
 
 import { useCallback, useMemo, useState } from "react";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { COMFY_QUEUE_POLL_MS, useComfyQueue } from "~/components/studio/hooks/use-comfy-queue";
 import { useCopyResult } from "~/components/ui/use-copy-feedback";
@@ -17,11 +17,12 @@ import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { revealTaskFolder } from "~/lib/history-detail-actions";
 import { refreshComfyQueue } from "~/lib/comfy/comfy-queue-store";
 import { formatSampleRateText, formatStepsText } from "~/lib/progress";
-import { cancelTask } from "~/lib/task-cancel-client";
-import { useTRPC, useTRPCClient } from "~/trpc/react";
+import { cancelAllTasks, cancelTask } from "~/lib/task-cancel-client";
+import { useTRPC, useTRPCClient, type RouterOutputs } from "~/trpc/react";
 
 import { useToast } from "../../ToastProvider";
 import type { QueueTaskLogTarget } from "../QueueTaskLogModal";
+import { useTaskLogStream } from "./use-task-log-stream";
 import {
   bucketQueueRows,
   estimateRemainingMs,
@@ -51,9 +52,11 @@ export type RunningCardView = {
   modelText: string;
   nodeText: string;
   progressPct: number;
+  progressValue: number | null;
   /** 平均速度（`12.58 it/s`）；步数或耗时拿不到时「—」。 */
   rateText: string;
   remainingText: string;
+  startedAt: number;
   /** 采样步数（`553/8196`）；progressNode 没带时「—」。 */
   stepsText: string;
   workflowName: string;
@@ -61,59 +64,53 @@ export type RunningCardView = {
 
 export type QueueMonitorController = {
   cancel: (id: string, label: string) => Promise<void>;
+  cancelAllBusy: boolean;
+  cancelAllOpen: boolean;
+  closeCancelAll: () => void;
   closeLog: () => void;
+  confirmCancelAll: () => Promise<void>;
   copyForReprint: (row: QueueRow) => Promise<void>;
-  /** 展开那条的详情是否还在拉取。 */
   detailLoading: boolean;
-  /** 展开的那条（输入参数表）；null = 全部收起。 */
   expandedId: string | null;
   hasMore: boolean;
-  /** 这一条正在被操作吗（判据在出口里，视图不再自己比 id）。 */
   isBusy: (id: string) => boolean;
-  /** 最近一次成功同步任一真相源的时刻；尚未读到数据时为 null。 */
   lastSyncedAt: number | null;
-  /** 已加载行数与服务端当前筛选总数。 */
   loadedCount: number;
-  /** 拉取失败的一句话；null 表示查询本身没问题（动作失败走 toast，不落这里）。 */
   loadError: string | null;
   loading: boolean;
   loadingMore: boolean;
   loadMore: () => void;
-  /** 正在查看执行日志的那条；null = 弹窗关着。 */
   logRow: QueueTaskLogTarget | null;
   matchedCount: number;
-  /** ComfyUI 是否可达。false 时列表照常渲染（数据来自本地库），只多一条
-   * 「未连接」横幅说明队列不会开始。 */
+  moveUp: (row: QueueRow) => Promise<void>;
   online: boolean;
   openFolder: (row: QueueRow) => Promise<void>;
   openLog: (task: QueueTaskLogTarget) => void;
-  /** 展开那条的输入参数行（task.detail → 纯派生）；未展开 / 拉取中为空。 */
   paramRows: Array<ReturnType<typeof queueTaskParamRows>[number]>;
-  /** 排队项；位次来自服务端完整队列，未命中时为 null（不按已加载子集编造）。 */
+  pauseBusy: boolean;
+  paused: boolean;
   queued: Array<{ position: number | null; row: QueueRow }>;
-  /** 最近结果（已截到窗口上限，新的在前）。 */
   recent: Array<QueueRow>;
   refresh: (showFeedback?: boolean) => void;
-  /** 手动刷新失败的一句话；重新刷新时清空。 */
   refreshError: string | null;
   refreshing: boolean;
-  /** 正在跑的那条（富卡片：来自 `/api/comfy/queue`）；没有在跑时为 null。 */
+  requestCancelAll: () => void;
   running: RunningCardView | null;
-  /** 库里 status=RUNNING 的行。`running` 为 null 而这里非空 = ComfyUI 没连上
-   * （富卡片的数据源不可达），离线兜底卡用它渲染。 */
+  runningDetail: Pick<
+    NonNullable<RouterOutputs["task"]["detail"]>,
+    "id" | "modelName" | "params" | "prompt" | "status" | "workflowName"
+  > | null;
+  runningLogs: ReturnType<typeof useTaskLogStream>["logs"];
   runningRows: Array<QueueRow>;
-  /** 当前搜索词（只匹配已加载行）。 */
+  runningSettled: ReturnType<typeof useTaskLogStream>["settled"];
   search: string;
   setSearch: (value: string) => void;
   setStatusFilter: (value: QueueStatusFilter) => void;
-  /** 顶部指标带四格（运行中 / 排队中 / 今日完成 / 失败）。 */
   stats: QueueStats;
   statusFilter: QueueStatusFilter;
-  /** 点同一行收起、点另一行切换。 */
   toggleExpanded: (id: string) => void;
+  togglePause: () => void;
   total: number | null;
-  /** 本应用排队 + ComfyUI 自己排队，与状态栏那格同一算法；离线时退回
-   * 「库里在跑 + 排队的行数」（`/api/comfy/queue` 读不到，不能报 0）。 */
   waitingCount: number;
 };
 
@@ -289,6 +286,8 @@ export function useQueueMonitor(): QueueMonitorController {
       elapsedText: runningElapsedText(queue.elapsedMs),
       remainingText: remainingText(remainingMs),
       progressPct: task.progress,
+      progressValue: task.progressValue,
+      startedAt: task.startedAt,
       stepsText: formatStepsText(task.progressValue, task.progressMax) ?? "—",
       rateText: formatSampleRateText(task.progressValue, queue.elapsedMs) ?? "—",
     };
@@ -342,15 +341,98 @@ export function useQueueMonitor(): QueueMonitorController {
     [action, copyText, report],
   );
 
+  /* ===== 以下为并行开发线合入的整表动作 / 就地详情（master 侧能力）===== */
+
+  /* 运行中那条的详情与就地日志：只在展开运行时那条时才取 / 订阅。 */
+  const runningId = running?.id ?? buckets.running[0]?.id ?? null;
+  const runningDetail =
+    expandedId !== null && expandedId === runningId ? (detailQ.data ?? null) : null;
+  const runningLogStream = useTaskLogStream(
+    expandedId !== null && expandedId === runningId ? runningId : null,
+  );
+
+  /* 取消全部：整表动作，用 null 作用域的同一把重入锁；部分失败如实报数。 */
+  const [cancelAllOpen, setCancelAllOpen] = useState(false);
+  const confirmCancelAll = useCallback(async () => {
+    setCancelAllOpen(false);
+    await action.run(null, async () => {
+      let outcome: Awaited<ReturnType<typeof cancelAllTasks>> | null = null;
+      await runAsyncAction(
+        async () => {
+          outcome = await cancelAllTasks();
+          return outcome;
+        },
+        {
+          report,
+          failureText: "取消全部失败，请稍后重试",
+          successText: () => {
+            if (outcome === null) {
+              return "已发送取消全部请求";
+            }
+            const { cancelled, failed } = outcome;
+            return failed === 0
+              ? `已取消 ${String(cancelled)} 条任务`
+              : `已取消 ${String(cancelled)} 条，${String(failed)} 条未能取消（详见执行日志）`;
+          },
+        },
+      );
+      refresh();
+    });
+  }, [action, refresh, report]);
+  const requestCancelAll = useCallback(() => setCancelAllOpen(true), []);
+  const closeCancelAll = useCallback(() => setCancelAllOpen(false), []);
+
+  /* 排队任务提前执行：服务端只发一条条件 UPDATE，已开跑如实回报。 */
+  const reorderM = useMutation(trpc.task.reorder.mutationOptions());
+  const moveUp = useCallback(
+    async (row: QueueRow) => {
+      await action.run(row.id, async () => {
+        await runAsyncAction(() => reorderM.mutateAsync({ id: row.id }), {
+          report,
+          failureText: `提前「${row.workflowName}」失败，请稍后重试`,
+        });
+        refresh();
+      });
+    },
+    [action, refresh, report, reorderM],
+  );
+
+  /* 生图暂停 / 恢复（状态落库，重启不丢）。 */
+  const pauseQ = useQuery(
+    trpc.generationControl.pauseState.queryOptions(undefined, { enabled: isTabActive }),
+  );
+  const setPausedM = useMutation(
+    trpc.generationControl.setPaused.mutationOptions({
+      onSuccess: () => {
+        pauseQ.refetch();
+      },
+    }),
+  );
+  const togglePause = useCallback(() => {
+    const next = !(pauseQ.data?.paused ?? false);
+    void runAsyncAction(() => setPausedM.mutateAsync({ paused: next }), {
+      report,
+      successText: next ? "已暂停：当前任务跑完后不再领取新的生图任务" : "已恢复：按队列序继续生成",
+      failureText: next ? "暂停失败，请稍后重试" : "恢复失败，请稍后重试",
+    });
+  }, [pauseQ.data, setPausedM, report]);
+
+  const isBusy = useCallback((id: string) => action.isBusy(id), [action]);
+  const openLog = useCallback((task: QueueTaskLogTarget) => setLogRow(task), []);
+  const closeLog = useCallback(() => setLogRow(null), []);
+
   return {
     online: queue.online,
     running,
     runningRows: buckets.running,
+    runningDetail,
+    runningLogs: runningLogStream.logs,
+    runningSettled: runningLogStream.settled,
     queued,
     stats,
     recent: buckets.recent,
     /* 离线时 `/api/comfy/queue` 读不到、两个计数恒为 0，而列表明明排着队 ——
-     * 退回「库里在跑 + 排队」的行数，别让「待执行 0」和下面的列表自相矛盾。 */
+     * 退回「库里在跑 + 排队」的行数。 */
     waitingCount: queue.online
       ? queue.queued + queue.comfy.pending
       : buckets.running.length + queued.length,
@@ -369,7 +451,7 @@ export function useQueueMonitor(): QueueMonitorController {
     toggleExpanded,
     detailLoading: detailQ.isFetching,
     paramRows,
-    isBusy: (id: string) => action.isBusy(id),
+    isBusy,
     refresh,
     refreshing: refreshingComfy || listQ.isFetching || summaryQ.isFetching,
     search,
@@ -379,11 +461,16 @@ export function useQueueMonitor(): QueueMonitorController {
     cancel,
     openFolder,
     copyForReprint,
-    openLog: (task) => {
-      setLogRow(task);
-    },
-    closeLog: () => {
-      setLogRow(null);
-    },
+    moveUp,
+    paused: pauseQ.data?.paused ?? false,
+    pauseBusy: setPausedM.isPending,
+    togglePause,
+    cancelAllOpen,
+    cancelAllBusy: action.isBusy(null),
+    confirmCancelAll,
+    requestCancelAll,
+    closeCancelAll,
+    openLog,
+    closeLog,
   };
 }

@@ -150,9 +150,10 @@ describe("侧栏打开项的页签态（ISSUE #3740）", () => {
   });
 });
 
-/* ── 折叠态（图标轨）的关闭按钮（ISSUE #4981）────────────────────────────
+/* ── 折叠态（图标轨）的关闭按钮（ISSUE #4981，#5040 改定位）──────────────
  * 此前关闭按钮挂 `group-data-[collapsible=icon]:hidden`，折叠后想关页签必须先
- * 展开侧栏。现在折叠态收成图标右上角的角标，悬停 / 聚焦浮现，交互链路不变。 */
+ * 展开侧栏。#4981 让它在折叠态也浮现（最初压在图标右上角盖住图标），#5040 移到
+ * 图标右侧、垂直居中（top-1/2 / right-[-6px] / size-3），交互链路不变。 */
 describe("折叠态侧栏的关闭按钮（ISSUE #4981）", () => {
   /** 折叠前提先验：侧栏真处于 `data-collapsible=icon`，后面的类断言才有意义。 */
   function expectCollapsedContext() {
@@ -160,7 +161,7 @@ describe("折叠态侧栏的关闭按钮（ISSUE #4981）", () => {
     expect(collapsed, "侧栏应处于折叠（图标轨）态").not.toBeNull();
   }
 
-  it("折叠态下开着页签的项，关闭按钮不再被藏，改为图标右上角角标", () => {
+  it("折叠态下开着页签的项，关闭按钮不再被藏，移到图标右侧（不盖图标）", () => {
     renderShell({
       active: "home",
       tabs: tabsOf("home", "models"),
@@ -169,9 +170,90 @@ describe("折叠态侧栏的关闭按钮（ISSUE #4981）", () => {
     expectCollapsedContext();
     const close = screen.getByRole("button", { name: "关闭 模型 页签" });
     expect(close.className).not.toContain("group-data-[collapsible=icon]:hidden");
-    expect(close.className).toContain("group-data-[collapsible=icon]:top-0.5");
-    expect(close.className).toContain("group-data-[collapsible=icon]:right-0.5");
-    expect(close.className).toContain("group-data-[collapsible=icon]:size-4");
+    /* #5040：不再是右上角盖图标的 top-0.5/right-0.5，改为垂直居中靠右缘外移。 */
+    expect(close.className).not.toContain("group-data-[collapsible=icon]:top-0.5");
+    expect(close.className).toContain("group-data-[collapsible=icon]:top-1/2");
+    /* #5059：贴住悬浮**只向右**拉宽的胶片右缘（right-[-8px]），图标固定在左半，不相交。 */
+    expect(close.className).toContain("group-data-[collapsible=icon]:right-[-8px]");
+    expect(close.className).toContain("group-data-[collapsible=icon]:size-3");
+    /* #5059：关闭钮比底片拉宽晚 100ms 淡入，节奏是「底片先展开、按钮再落位」。 */
+    expect(close.className).toContain("group-data-[collapsible=icon]:delay-100");
+  });
+
+  it("折叠态打开态胶片铺满按钮，图标与未打开项同列中心（#5040）", () => {
+    renderShell({
+      active: "history",
+      tabs: tabsOf("history", "models"),
+      defaultSidebarOpen: false,
+    });
+    expectCollapsedContext();
+    const glyph = document.querySelector('[data-open-state="true"]');
+    expect(glyph, "打开态项应有胶片").not.toBeNull();
+    /* 折叠态胶片 absolute 铺满按钮（inset-0 / size-full），图标回到按钮中心，
+     * 不再用 28px 胶片在 16px 内容盒里 overflow 推右 6px。 */
+    expect(glyph!.className).toContain("group-data-[collapsible=icon]:absolute");
+    expect(glyph!.className).toContain("group-data-[collapsible=icon]:inset-0");
+    expect(glyph!.className).toContain("group-data-[collapsible=icon]:size-full");
+    /* #5059 反馈：悬浮 / 聚焦时底片**只向右**拉宽，左缘保持 0 与轨对齐，
+     * 不往左扩盖住按钮左侧那条「当前打开页签」指示条（data-active:before）。 */
+    expect(glyph!.className).not.toContain(
+      "group-hover/menu-item:group-data-[collapsible=icon]:-left-2",
+    );
+    expect(glyph!.className).not.toContain(
+      "group-focus-within/menu-item:group-data-[collapsible=icon]:-left-2",
+    );
+    expect(glyph!.className).toContain(
+      "group-hover/menu-item:group-data-[collapsible=icon]:w-[calc(100%+8px)]",
+    );
+    expect(glyph!.className).toContain(
+      "group-focus-within/menu-item:group-data-[collapsible=icon]:w-[calc(100%+8px)]",
+    );
+  });
+
+  it("折叠态底片只向右拉宽、左缘不动，关闭钮贴底片右侧不挡图标（#5059 反馈）", () => {
+    renderShell({
+      active: "history",
+      tabs: tabsOf("history", "models"),
+      defaultSidebarOpen: false,
+    });
+    expectCollapsedContext();
+    const glyph = document.querySelector('[data-open-state="true"]');
+    expect(glyph, "打开态项应有胶片").not.toBeNull();
+    /* 左缘保持 0 / inset-0：不往左扩，才不会盖住当前页签指示条（left-0 的伪元素）。 */
+    expect(glyph!.className).toContain("group-data-[collapsible=icon]:inset-0");
+    expect(glyph!.className).not.toContain(
+      "group-hover/menu-item:group-data-[collapsible=icon]:-left-2",
+    );
+    expect(glyph!.className).not.toContain(
+      "group-focus-within/menu-item:group-data-[collapsible=icon]:-left-2",
+    );
+    /* 只改宽度：动画面也不含 left，免得哪天又偷偷加回左移。 */
+    expect(glyph!.className).toContain("transition-[width]");
+    /* 图标固定在按钮内容盒左侧（justify-start + pl-2），悬浮拉宽前后位置不变，
+     * 不被拉宽的底片带着居中右移，才不会撞上右侧的关闭钮。 */
+    expect(glyph!.className).toContain("group-data-[collapsible=icon]:justify-start");
+    expect(glyph!.className).toContain("group-data-[collapsible=icon]:pl-2");
+    const close = screen.getByRole("button", { name: "关闭 模型 页签" });
+    /* 关闭钮贴拉宽底片右缘（right-[-8px]），不压在图标上（不回 right-0 与图标重叠）。 */
+    expect(close.className).toContain("group-data-[collapsible=icon]:right-[-8px]");
+    expect(close.className).not.toContain("group-data-[collapsible=icon]:right-0");
+  });
+
+  it("折叠态打开项放开按钮 overflow 并隐藏名称，拉宽胶片不被裁、文字不漏出轨外（#5059）", () => {
+    renderShell({
+      active: "models",
+      tabs: tabsOf("models"),
+      defaultSidebarOpen: false,
+    });
+    expectCollapsedContext();
+    const button = screen.getByRole("button", { name: "模型" });
+    expect(button.className).toContain("group-data-[collapsible=icon]:overflow-visible");
+    const label = [...button.querySelectorAll("span")].find(
+      (el) => el.textContent?.trim() === "模型",
+    );
+    expect(label, "名称 span 应存在").toBeDefined();
+    /* 视觉上藏掉，但必须保留可访问名 —— 折叠态仍要能被读屏器/E2E 按名称定位。 */
+    expect(label!.className).toContain("group-data-[collapsible=icon]:sr-only");
   });
 
   it("折叠态点关闭按钮仍走 pointerdown → onCloseViewTab（链路不回退）", () => {

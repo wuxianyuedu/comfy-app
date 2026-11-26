@@ -15,6 +15,16 @@ export const dateNotNull = customType<{ data: Date; driverData: string }>({
   toDriver: (v) => v.toISOString(),
 });
 
+/** 可空日期列（库文件里存 ISO 字符串，NULL 原样进出）。与 `dateNotNull` 同一
+ *  形态的可空版，拆分件（schema-generation-control 等）与 schema.ts 共用。 */
+export const dateNull = customType<{ data: Date | null; driverData: string | null }>({
+  dataType() {
+    return "text";
+  },
+  fromDriver: (v) => (v === null || v === undefined ? null : new Date(v)),
+  toDriver: (v) => (v === null || v === undefined ? null : v.toISOString()),
+});
+
 export const cuid = () =>
   text("id")
     .$defaultFn(() => createId())

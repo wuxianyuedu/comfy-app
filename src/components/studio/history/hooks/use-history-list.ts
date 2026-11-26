@@ -37,7 +37,6 @@ import {
   emptyStateText,
   filterTasks,
   groupByDate,
-  hasActiveTasks,
   paginateGroups,
   sortTasks,
 } from "../history-list-derive";
@@ -50,6 +49,7 @@ import {
   type TaskItem,
 } from "../history-types";
 import { PAGE_SIZE, useSimulatedProgress } from "../history-utils";
+import { useStableHistoryTasks } from "./use-stable-history-tasks";
 import { useTRPC } from "~/trpc/react";
 
 /** 有进行中任务时的轮询节奏（与画布历史面板同一档）：任务完成 / 新任务入队
@@ -73,7 +73,8 @@ export type HistoryListController = {
   /** 「复制去重投」：把本次提交的全部参数折成 JSON 复制到剪贴板（ISSUE #4769，
    *  粘贴侧 = 测试模型的 JSON 输入模式）。 */
   copyForReprint: (task: TaskItem) => Promise<void>;
-  /** 各状态计数，key 为 FilterKey 或任务 status。 */
+  /** 各状态计数（服务端 GROUP BY 的**真实总数**，不是已拉取行的计数）；
+   *  key 为 FilterKey 或任务 status。 */
   counts: Record<string, number>;
   detail: TaskDetail | null;
   detailId: string | null;
@@ -155,7 +156,14 @@ export function useHistoryList(args: {
   const isTabActive = useViewTabActive();
   const tasksQ = useInfiniteQuery(
     trpc.task.list.infiniteQueryOptions(
-      { take: PAGE_SIZE, status: HISTORY_TASK_STATUSES },
+      {
+        take: PAGE_SIZE,
+        /* 行过滤下推服务端（#5076）：点「失败 / 已取消」只拉该状态的任务，
+           cursor 也从该状态的第一条开始 —— 不再只对已拉取的 100 行本地过滤。 */
+        status: filter === "ALL" ? HISTORY_TASK_STATUSES : filter,
+        /* 角标仍按终态全集计数，与当前筛选解耦。 */
+        countStatus: HISTORY_TASK_STATUSES,
+      },
       {
         getNextPageParam: (lastPage) => {
           if (!lastPage.hasMore) {
@@ -167,10 +175,10 @@ export function useHistoryList(args: {
            * 回传前沿后两侧语义统一。 */
           return lastPage.nextScanCursor;
         },
-        refetchInterval: (query) => {
-          const rows = (query.state.data?.pages ?? []).flatMap((page) => page.tasks);
-          return hasActiveTasks(rows) ? HISTORY_POLL_MS : false;
-        },
+        /* 此前用「已拉取行里有没有 QUEUED/RUNNING」判轮询，但历史查询只取终态，
+         * 判据恒假 —— 页面永远不会自己冒出新完成的任务（#5076）。改为页签活跃
+         * 就按固定节奏重问，仍由 enabled 在隐藏时停摆。 */
+        refetchInterval: isTabActive ? HISTORY_POLL_MS : false,
         enabled: isTabActive,
       },
     ),
@@ -181,16 +189,9 @@ export function useHistoryList(args: {
   const total = tasksQ.data?.pages.at(-1)?.total ?? null;
 
   /* 各页并集（按 id 去重、保持「新到旧」的页序）：渲染期从查询结果派生，
-   * 不在 effect 里 setState（规范 8.6 / 2.4）。 */
-  const tasks = useMemo<Array<TaskItem>>(() => {
-    const byId = new Map<string, TaskItem>();
-    for (const page of tasksQ.data?.pages ?? []) {
-      for (const task of page.tasks) {
-        byId.set(task.id, { ...task, createdAt: String(task.createdAt) });
-      }
-    }
-    return [...byId.values()];
-  }, [tasksQ.data]);
+   * 不在 effect 里 setState（规范 8.6 / 2.4）；4s 轮询内容不变时沿用旧引用，
+   * 否则 100 张已 memo 的卡片会跟着新数组一起失效。 */
+  const tasks = useStableHistoryTasks(tasksQ.data?.pages);
   const loading = tasksQ.isLoading;
   const progressMap = useSimulatedProgress(tasks);
 
@@ -244,7 +245,14 @@ export function useHistoryList(args: {
     () => sortTasks(filterTasks(tasks, filter), sort),
     [tasks, filter, sort],
   );
-  const counts = useMemo(() => countByStatus(tasks), [tasks]);
+  /* 状态枚上的计数用服务端的 GROUP BY（真实总数，不是「已拉取的行」的计数，
+   * ISSUE #5009 反馈：历史有多少就显示多少）；首页未到时退回已拉取行的计数。
+   * ALL = 终态任务总数。 */
+  const serverStatusCounts = tasksQ.data?.pages.at(-1)?.statusCounts ?? null;
+  const counts = useMemo<Record<string, number>>(() => {
+    const base = serverStatusCounts ?? countByStatus(tasks);
+    return { ALL: total ?? base.ALL ?? 0, ...base };
+  }, [serverStatusCounts, tasks, total]);
   /* 已拉取的行全部可见（分页走服务端 cursor，#4044）；「还有没有下一页」由
    * 服务端的 hasMore 回答——media 过滤的 400 行截断也因此对调用方可见。 */
   const { visibleGroups, visibleTotal } = useMemo(
@@ -311,7 +319,11 @@ export function useHistoryList(args: {
         await deleteTask.mutateAsync({ id });
         /* 乐观移除：直接改无限查询缓存里的各页（避免本地镜像 state，#4044） */
         queryClient.setQueryData(
-          trpc.task.list.infiniteQueryKey({ take: PAGE_SIZE }),
+          trpc.task.list.infiniteQueryKey({
+            take: PAGE_SIZE,
+            status: filter === "ALL" ? HISTORY_TASK_STATUSES : filter,
+            countStatus: HISTORY_TASK_STATUSES,
+          }),
           /* 键自带 DataTag：`old` 的形状由查询结果推导，不再手写窄类型 */
           (old) => {
             if (!old) {
@@ -332,7 +344,7 @@ export function useHistoryList(args: {
       },
       { report, failureText: "删除失败", successText: "已删除任务" },
     );
-  }, [deleteTask, detailId, removeTarget, report, queryClient, trpc]);
+  }, [deleteTask, detailId, filter, removeTarget, report, queryClient, trpc]);
 
   /* 「重试」= 带参回到输入面（#4841）：取详情 + 模式契约，按「复制去重投」
    * 同一份派生（buildModelTestRetryPayload）折成预填载荷，交给工作区带到
@@ -446,6 +458,11 @@ export function useHistoryList(args: {
     setLogTarget(null);
   }, []);
 
+  /* 行级判据收成稳定函数（规范 04 §4.8）：此前 return 里现造两个箭头，
+   * 每次 controller 重建都换身份，memo 的卡片列表因此陪跑。 */
+  const isRetrying = useCallback((id: string) => retryAction.isBusy(id), [retryAction]);
+  const isRowBusy = useCallback((id: string) => rowAction.isBusy(id), [rowAction]);
+
   return {
     tasks,
     loading,
@@ -461,8 +478,8 @@ export function useHistoryList(args: {
     empty,
     progressMap,
     retryingId: retryAction.busyId,
-    isRetrying: retryAction.isBusy,
-    isRowBusy: (id: string) => rowAction.isBusy(id),
+    isRetrying,
+    isRowBusy,
     logTarget,
     detailId,
     detail,

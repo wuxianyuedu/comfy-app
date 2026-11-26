@@ -1,9 +1,9 @@
 /**
  * sidebar.router 的闸门用例（ISSUE #3623）。
  *
- * 这一层要判的是**入参闸**与**两个保存出口的分工**：档位写错的值要在入参这一层
- * 就被打回（不能让用户得到一句「保存成功」却什么都没变）；「保存」与「保存为项目
- * 默认」落在**两个不同的文件**上（本机 `data/` 与入库那份 JSON），还原默认只动前者。
+ * 这一层要判的是**入参闸**与保存落点：档位写错的值要在入参这一层就被打回
+ * （不能让用户得到一句「保存成功」却什么都没变）；「保存」落本机 `data/`，
+ * 还原默认只动它。项目默认那份入库 JSON 运行期只读（ISSUE #5001）。
  *
  * mock：落盘层换成真读写临时目录的替身（判据就是「写到哪去了」），其余走真实现。
  */
@@ -12,8 +12,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const { devCheckout } = vi.hoisted(() => ({ devCheckout: { isDevCheckout: vi.fn(() => false) } }));
 
 vi.mock("~/server/db", async () => {
   const { createTestDb } = await import("../../../../tests/helpers/test-db");
@@ -24,9 +22,6 @@ vi.mock("~/server/better-auth", () => ({
 }));
 vi.mock("~/lib/core/logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-}));
-vi.mock("~/lib/shell/dev-checkout.server", () => ({
-  isDevCheckout: devCheckout.isDevCheckout,
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
@@ -42,7 +37,6 @@ let root: string;
 beforeEach(async () => {
   root = await fs.mkdtemp(path.join(tmpdir(), "sidebar-router-"));
   vi.clearAllMocks();
-  devCheckout.isDevCheckout.mockReturnValue(false);
   /* 落盘层指向临时目录：判据是「写到哪去了」，桩掉 fs 就判不出来。 */
   vi.spyOn(process, "cwd").mockReturnValue(root);
 });
@@ -53,18 +47,11 @@ afterEach(async () => {
 });
 
 describe("tabConfigGet —— 读生效配置", () => {
-  it("没有本机覆盖时读到的是项目默认，并带上「能不能写项目默认」这一格", async () => {
+  it("没有本机覆盖时读到的是项目默认", async () => {
     const res = await caller().tabConfigGet();
     expect(Object.keys(res.config).length).toBeGreaterThan(0);
     expect(res.config.models).toBe("shared");
     expect(res.config["mode-contract"]).toBe("independent");
-    expect(res.projectDefaultEditable).toBe(false);
-  });
-
-  it("开发检出才给「保存为项目默认」这个入口（正式包没有源码可写）", async () => {
-    devCheckout.isDevCheckout.mockReturnValue(true);
-    const res = await caller().tabConfigGet();
-    expect(res.projectDefaultEditable).toBe(true);
   });
 });
 
@@ -91,26 +78,6 @@ describe("tabConfigSave —— 落本机", () => {
     await expect(
       fs.readFile(path.join(root, "data", "sidebar-tab-behavior.json"), "utf8"),
     ).rejects.toThrow();
-  });
-});
-
-describe("tabConfigSaveProjectDefaults —— 落项目默认（跟代码走）", () => {
-  it("非开发检出大声拒绝，且一个字都不写", async () => {
-    await expect(
-      caller().tabConfigSaveProjectDefaults({ config: { console: "shared" } }),
-    ).rejects.toThrow(/只在开发检出可用/);
-    await expect(
-      fs.readFile(path.join(root, "src", "lib", "shell", "sidebar-tab-defaults.json"), "utf8"),
-    ).rejects.toThrow();
-  });
-
-  it("开发检出：写进入库那份 JSON，并把路径回传给界面", async () => {
-    devCheckout.isDevCheckout.mockReturnValue(true);
-    const res = await caller().tabConfigSaveProjectDefaults({
-      config: { console: "shared", models: "shared" },
-    });
-    expect(res.config).toEqual({ console: "shared", models: "shared" });
-    expect(res.file).toBe(path.join(root, "src", "lib", "shell", "sidebar-tab-defaults.json"));
   });
 });
 

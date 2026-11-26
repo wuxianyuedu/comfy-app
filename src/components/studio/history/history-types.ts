@@ -3,10 +3,13 @@ import type { ValidationError } from "~/lib/comfyui/validation";
 import type { RouterOutputs } from "~/trpc/react";
 
 export type TaskItem = {
+  /** 最近活动时刻：终态任务取完成时刻，老行回落领取 / 提交时刻（#5076）。 */
+  claimedAt?: string | null;
   cover: string | null;
   coverIsCover?: boolean;
   createdAt: string;
   error?: string | null;
+  finishedAt?: string | null;
   id: string;
   /** 模型名称（ISSUE #4619）：任务所用工作流上挂的模型标签，服务端随
    *  task.list 批量解析；工作流没挂标签 / 模板引用缺失时为 null（前端回落

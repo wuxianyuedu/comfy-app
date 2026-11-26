@@ -1,15 +1,10 @@
-// 树形菜单纯构建的行为测试（ISSUE #4916）：三种布局的分组、多模式候选的
-// 叶子展开、同值去重、选中路径与「按来源」布局的模式解析。
+// 树形菜单纯构建的行为测试（ISSUE #4916）：三种布局的分组、多模式候选的叶子
+// 展开与同值去重；「按来源」按本地 / 远端分组后仍按用途 → 模式 → 模型展开。
 import { describe, expect, it } from "vitest";
 
 import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 
-import {
-  buildModelTree,
-  modelTreeEntriesForKind,
-  resolveSourceSelection,
-  type ModelTreeEntry,
-} from "./model-test-tree";
+import { buildModelTree, modelTreeEntriesForKind, type ModelTreeEntry } from "./model-test-tree";
 import type { AdaptersByModel, ModelTestKind, TestCandidate } from "./model-test-config";
 
 /** 远端候选（设置页条目形状：baseUrl 非空才进候选池）。 */
@@ -138,7 +133,37 @@ describe("buildModelTree", () => {
     expect(chat?.children[0]?.entry?.value).toBe("minimax_h3");
   });
 
-  it("按来源：本地 / 远端两组，同一取值只列一次", () => {
+  it("按来源：本地 / 远端各自按用途 → 模式 → 模型展开，与按用途同构", () => {
+    const tree = buildModelTree("source", entries);
+    expect(tree.map((n) => n.label)).toEqual(["本地模型", "远端模型"]);
+
+    const localGroup = tree[0];
+    expect(localGroup?.key).toBe("source:local");
+    expect(localGroup?.local).toBe(true);
+    expect(localGroup?.children.map((n) => n.label)).toEqual(["图片", "对话"]);
+    const localImage = localGroup?.children[0];
+    expect(localImage?.key).toBe("source:local:kind:image");
+    expect(localImage?.children.map((n) => n.label)).toEqual(["文生图", "图像编辑"]);
+    expect(localImage?.children[0]?.key).toBe("source:local:kind:image:T2I");
+    expect(localImage?.children[0]?.children.map((n) => n.entry?.value)).toEqual(["wf::wf1"]);
+    expect(localImage?.children[1]?.children.map((n) => n.entry?.value)).toEqual(["wf::wf2"]);
+    /* 对话没有模式层：叶直接挂在用途下。 */
+    expect(localGroup?.children[1]?.children[0]?.entry?.value).toBe("minimax_h3");
+
+    const remoteGroup = tree[1];
+    expect(remoteGroup?.key).toBe("source:remote");
+    expect(remoteGroup?.local).toBe(false);
+    /* 视频与图片同口径镜像，不只图片有模式层。 */
+    expect(remoteGroup?.children.map((n) => n.label)).toEqual(["图片", "视频"]);
+    const remoteImage = remoteGroup?.children[0];
+    expect(remoteImage?.children.map((n) => n.label)).toEqual(["文生图"]);
+    expect(remoteImage?.children[0]?.children[0]?.entry?.value).toBe("agnes");
+    const remoteVideo = remoteGroup?.children[1];
+    expect(remoteVideo?.children.map((n) => n.label)).toEqual(["文生视频"]);
+    expect(remoteVideo?.children[0]?.children[0]?.entry?.value).toBe("nova");
+  });
+
+  it("按来源：多模式候选在每个模式组各列一次，同模式组内同取值不重复", () => {
     const withDup: Array<ModelTreeEntry> = [
       ...entries,
       {
@@ -149,20 +174,31 @@ describe("buildModelTree", () => {
         modelName: "agnes-image",
         value: "agnes",
       },
+      {
+        kind: "image",
+        label: "agnes-image（重复条目）",
+        local: false,
+        mode: "I2I",
+        modelName: "agnes-image",
+        value: "agnes",
+      },
     ];
     const tree = buildModelTree("source", withDup);
-    expect(tree.map((n) => n.label)).toEqual(["本地模型", "远端模型"]);
-    const localGroup = tree[0];
-    expect(localGroup?.children.map((n) => n.entry?.value)).toEqual([
-      "wf::wf1",
-      "wf::wf2",
-      "minimax_h3",
-    ]);
-    const remoteGroup = tree[1];
-    expect(remoteGroup?.children.map((n) => n.entry?.value)).toEqual(["agnes", "nova"]);
+    const remoteImage = tree[1]?.children[0];
+    expect(remoteImage?.children.map((n) => n.label)).toEqual(["文生图", "图像编辑"]);
+    expect(remoteImage?.children[0]?.children.map((n) => n.entry?.value)).toEqual(["agnes"]);
+    expect(remoteImage?.children[1]?.children.map((n) => n.entry?.value)).toEqual(["agnes"]);
   });
 
-  it("按模型：模型名 → 模式 → 条目；来源不同的同名模型不混组", () => {
+  it("按来源：没有候选的来源组不出现", () => {
+    const tree = buildModelTree(
+      "source",
+      entries.filter((e) => e.local),
+    );
+    expect(tree.map((n) => n.label)).toEqual(["本地模型"]);
+  });
+
+  it("按模型：模型名 → 模式（模式即叶子，无第三层）；来源不同的同名模型不混组", () => {
     const withClash: Array<ModelTreeEntry> = [
       ...entries,
       {
@@ -179,59 +215,11 @@ describe("buildModelTree", () => {
     expect(zImageGroups).toHaveLength(2);
     const localZ = zImageGroups.find((n) => n.local === true);
     expect(localZ?.children.map((n) => n.label)).toEqual(["文生图", "图像编辑"]);
-    expect(localZ?.children[0]?.children[0]?.entry?.value).toBe("wf::wf1");
-    expect(localZ?.children[1]?.children[0]?.entry?.value).toBe("wf::wf2");
-  });
-});
-
-describe("resolveSourceSelection", () => {
-  const entries: Array<ModelTreeEntry> = [
-    { kind: "image", label: "dual", local: false, mode: "T2I", modelName: "dual", value: "dual" },
-    { kind: "image", label: "dual", local: false, mode: "I2I", modelName: "dual", value: "dual" },
-    {
-      kind: "chat",
-      label: "minimax_h3",
-      local: true,
-      mode: "",
-      modelName: "minimax_h3",
-      value: "minimax_h3",
-    },
-  ];
-
-  it("当前用途 + 模式可用时优先落当前格", () => {
-    const resolved = resolveSourceSelection({
-      currentKind: "image",
-      currentMode: "I2I",
-      entries,
-      value: "dual",
-    });
-    expect(resolved?.mode).toBe("I2I");
-  });
-
-  it("当前模式不可用时落该候选在同用途下的第一个可测模式", () => {
-    const resolved = resolveSourceSelection({
-      currentKind: "image",
-      currentMode: "T2V",
-      entries,
-      value: "dual",
-    });
-    expect(resolved?.mode).toBe("T2I");
-  });
-
-  it("跨用途选中（图片页里点对话模型）整条切换", () => {
-    const resolved = resolveSourceSelection({
-      currentKind: "image",
-      currentMode: "T2I",
-      entries,
-      value: "minimax_h3",
-    });
-    expect(resolved?.kind).toBe("chat");
-    expect(resolved?.mode).toBe("");
-  });
-
-  it("未知取值给 null", () => {
-    expect(
-      resolveSourceSelection({ currentKind: "image", currentMode: "T2I", entries, value: "ghost" }),
-    ).toBeNull();
+    /* 模式节点自己就是叶子（带 entry、无 children），不再套一层重复模型名。 */
+    expect(localZ?.children.every((n) => n.children.length === 0 && n.entry !== undefined)).toBe(
+      true,
+    );
+    expect(localZ?.children[0]?.entry?.value).toBe("wf::wf1");
+    expect(localZ?.children[1]?.entry?.value).toBe("wf::wf2");
   });
 });

@@ -4,7 +4,7 @@
  */
 import "server-only";
 
-import { and, desc, eq, inArray, like, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, like, or, sql, type SQL } from "drizzle-orm";
 
 import { db } from "~/lib/db";
 import { compareText } from "~/lib/ordered-set";
@@ -259,6 +259,68 @@ export class CharacterProfileRepository extends DrizzleRepository<CharacterProfi
       .update(characterProfile)
       .set({ status: "failed", taskId })
       .where(and(eq(characterProfile.id, id), eq(characterProfile.userId, userId)));
+  }
+
+  /** 写入立绘质量分与问题清单（打分接口的落点）。 */
+  async updateQuality(
+    id: string,
+    userId: string,
+    score: number,
+    issues: Array<string>,
+  ): Promise<CharacterProfile | null> {
+    const rows = await db
+      .update(characterProfile)
+      .set({ qualityScore: score, qualityIssues: issues })
+      .where(and(eq(characterProfile.id, id), eq(characterProfile.userId, userId)))
+      .returning();
+    return rows[0] ?? null;
+  }
+
+  /** 已就绪且有立绘地址的角色（质量打分的遍历面）。 */
+  async listReadyWithPortraits(userId: string): Promise<Array<CharacterProfile>> {
+    return db
+      .select()
+      .from(characterProfile)
+      .where(
+        and(
+          eq(characterProfile.userId, userId),
+          eq(characterProfile.status, "ready"),
+          isNotNull(characterProfile.portraitUrl),
+        ),
+      )
+      .orderBy(desc(characterProfile.createdAt));
+  }
+
+  /** 已就绪但质量分低于阈值的角色（判为需要重新生成）。 */
+  async listFlaggedLowQuality(userId: string, minScore: number): Promise<Array<CharacterProfile>> {
+    return db
+      .select()
+      .from(characterProfile)
+      .where(
+        and(
+          eq(characterProfile.userId, userId),
+          eq(characterProfile.status, "ready"),
+          isNotNull(characterProfile.portraitUrl),
+          sql`${characterProfile.qualityScore} < ${minScore}`,
+        ),
+      )
+      .orderBy(desc(characterProfile.createdAt));
+  }
+
+  /** 就绪 → 待生成（重新生成前先把状态退回去；旧立绘保留为候选）。 */
+  async resetToDraft(id: string, userId: string): Promise<CharacterProfile | null> {
+    const rows = await db
+      .update(characterProfile)
+      .set({ status: "draft" })
+      .where(
+        and(
+          eq(characterProfile.id, id),
+          eq(characterProfile.userId, userId),
+          eq(characterProfile.status, "ready"),
+        ),
+      )
+      .returning();
+    return rows[0] ?? null;
   }
 }
 

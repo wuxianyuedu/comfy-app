@@ -110,30 +110,50 @@ describe("ModelTestTree", () => {
     expect(screen.getByRole("radio", { name: /z-image · 工作流A/ })).toBeInTheDocument();
   });
 
-  it("按来源布局：本地 / 远端两组，多模式候选只列一次，选中按当前模式解析", async () => {
-    const { onSelect } = renderTree({ currentMode: "I2I" });
+  it("按来源布局：本地 / 远端 → 用途 → 模式 → 模型，叶子回填自己的三态", async () => {
+    const { onSelect } = renderTree({ currentMode: "T2I" });
     await userEvent.setup().click(screen.getByRole("radio", { name: "按来源" }));
 
     expect(screen.getByText("本地模型")).toBeInTheDocument();
     expect(screen.getByText("远端模型")).toBeInTheDocument();
-    /* dual 在 T2I / I2I 各有一条目，来源布局只列一次。 */
-    expect(screen.getAllByRole("radio", { name: /dual-model/ })).toHaveLength(1);
+    /* 与按用途同构的层级锚点：来源前缀 + 用途 + 模式；视频也在层级里。 */
+    expect(document.querySelector('[data-tree-key="source:local:kind:image"]')).not.toBeNull();
+    expect(document.querySelector('[data-tree-key="source:remote:kind:video"]')).not.toBeNull();
+    expect(document.querySelector('[data-tree-key="source:remote:kind:image:I2I"]')).not.toBeNull();
 
-    /* 当前模式是 I2I：来源布局选中 dual 落 I2I 格，不落第一条（T2I）。 */
-    await userEvent.setup().click(screen.getAllByRole("radio", { name: /dual-model/ })[0]!);
+    /* dual 配了 T2I / I2I：每个模式组各列一次，同组内同取值不重复。 */
+    expect(screen.getAllByRole("radio", { name: /dual-model/ })).toHaveLength(2);
+    expect(document.querySelectorAll('[data-tree-key^="leaf:source:remote:image:"]')).toHaveLength(
+      3,
+    );
+
+    /* 点图像编辑组里的 dual，回填叶子自己的模式，不受当前页 T2I 影响。 */
+    const i2iLeaf = document.querySelector('[data-tree-key="leaf:source:remote:image:I2I:dual"]');
+    if (i2iLeaf === null) {
+      throw new Error("来源布局里找不到图像编辑模式下的 dual 叶子");
+    }
+    await userEvent.setup().click(i2iLeaf);
     expect(onSelect).toHaveBeenCalledWith("image", "I2I", "dual");
   });
 
-  it("按模型布局：模型名 → 模式 → 条目，同一模型的多个工作流分开列", async () => {
+  it("按模型布局：模型名 → 模式（模式直接可选，没有第三层重复条目）", async () => {
     const { onSelect } = renderTree();
     await userEvent.setup().click(screen.getByRole("radio", { name: "按模型" }));
 
-    /* 模型组与其下的两个模式组都在（data-tree-key 是稳定锚，不随文案变）。 */
+    /* 模型组与其下两个模式都在（data-tree-key 是稳定锚，不随文案变）。 */
     expect(document.querySelector('[data-tree-key="model:l::z-image"]')).not.toBeNull();
     expect(document.querySelector('[data-tree-key="model:l::z-image:T2I"]')).not.toBeNull();
     expect(document.querySelector('[data-tree-key="model:l::z-image:I2I"]')).not.toBeNull();
 
-    await userEvent.setup().click(screen.getByRole("radio", { name: /z-image · 工作流B/ }));
+    /* 模式节点自己带取值、可直接点选；树里不再有重复的模型名叶子。 */
+    const modeLeaf = document.querySelector('[data-model-value="wf::2"]');
+    if (modeLeaf === null) {
+      throw new Error("模型布局里找不到 mode 叶子");
+    }
+    expect(modeLeaf.textContent).toContain("图像编辑");
+    expect(screen.queryByRole("radio", { name: /z-image · 工作流B/ })).toBeNull();
+
+    await userEvent.setup().click(modeLeaf);
     expect(onSelect).toHaveBeenCalledWith("image", "I2I", "wf::2");
   });
 
@@ -167,7 +187,7 @@ describe("ModelTestTree", () => {
     cleanup();
     renderTree();
     expect(screen.getByText("本地模型")).toBeInTheDocument();
-    expect(screen.queryByText("文生图")).toBeNull();
+    expect(document.querySelector('[data-tree-key="source:local:kind:image"]')).not.toBeNull();
   });
 
   it("取数中显示骨架屏", () => {
@@ -201,6 +221,22 @@ describe("树形容器的高度契约（ISSUE #4978）", () => {
 /* ISSUE #4997：左栏 aside 是**普通静态栏**——不吸顶、不设 max-h / 内部滚动、
  * 高度随内容（h-fit 都不用）。钉住 ModelTestView 里 aside 的类，防止这套
  * 「吸附 + 内部滚动 + 拉伸填补空白」的形态回流（#4983 / #4991 的账）。 */
+/* ISSUE #5082：模型名是密集列表行，叶子用 11px 具名档（text-2xs）——
+ * 14px 默认档会把「MiniMax H3 Image」这类长名字截成省略号。 */
+describe("叶子模型名的字号契约（ISSUE #5082）", () => {
+  it("模型名走密集列表行档位，不用字面 px，也不放大到正文档", () => {
+    renderTree();
+    const leaf = screen.getByRole("radio", { name: /agnes-image/ });
+    const label = leaf.querySelector("span");
+    expect(label).not.toBeNull();
+    const cls = label?.className ?? "";
+    expect(cls).toContain("text-2xs");
+    expect(cls).not.toMatch(/text-\[\d+px\]/);
+    expect(cls).not.toContain("text-sm");
+    expect(cls).not.toContain("text-base");
+  });
+});
+
 describe("左栏 aside 的静态栏契约（ISSUE #4997）", () => {
   it("aside 不带 sticky / max-h / 内部滚动 / h-fit 类", () => {
     /* happy-dom 里 import.meta.url 不是 file:// 协议，改按 cwd 相对路径读源码

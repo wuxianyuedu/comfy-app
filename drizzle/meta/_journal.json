@@ -71,6 +71,27 @@
       "when": 1795543853414,
       "tag": "0009_silly_morbius",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1795586774687,
+      "tag": "0010_yielding_solo",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1795611101262,
+      "tag": "0011_aberrant_shadowcat",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1795676048909,
+      "tag": "0012_crazy_cloak",
+      "breakpoints": true
     }
   ]
 }

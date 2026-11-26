@@ -32,6 +32,10 @@ import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
 import { VirtualLogList } from "~/components/studio/logs/VirtualLogList";
 import { displayValue } from "~/lib/display-value";
 
+/* 稳定引用：VirtualLogList 用它做 layoutRows 的 useMemo 依赖，内联箭头每次父渲染
+ * 新建会让日志位置表每帧重算（#5035 卡顿）。 */
+const stepLogMessage = (log: StepLogEntry): string => log.msg;
+
 type Level = StepLogEntry["level"];
 
 const FILTER_LABELS: Array<{ label: string; value: Level | "all" }> = [
@@ -305,7 +309,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               }
               entries={visible}
               following={autoscroll}
-              getMessage={(log) => log.msg}
+              getMessage={stepLogMessage}
               onFollowingChange={setAutoscroll}
               renderRow={(log) => <StepLogRow log={log} />}
               topSlot={

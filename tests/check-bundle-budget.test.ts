@@ -4,6 +4,7 @@
  * 内部 `__dirname/..` 定位产物）。口径只看 gzip 与文件数（逐文件账仅作诊断，chunk 名是内容哈希）；两条用例钉「失效也是绿」的位置。
  */
 import { execFileSync } from "node:child_process";
+import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import { defineGateRepo, describe, expectGateRan } from "./helpers/gate-repo";
 import { expectActionableRefusal } from "./helpers/ratchet-refusal";
 
@@ -578,6 +579,20 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
   testWithGit("基线修订号不可达时改按 generatedAt 归因，并把那几笔提交带出来", ({ repo }) => {
     seedChunks(repo);
     expect(repo.run(["--update"]).code).toBe(0);
+    /* 归因第二通道按 `generatedAt` 数「其后 src/ 主干提交」。夹具的依赖闭包会往工作区放
+       src/ 文件，seed 提交因此动过 src/；它与后面的 feat 提交同一天落，`git log --since`
+       会把 seed 也数进去（实测 2 次），与这条用例钉的「基线之后追加一笔」自相矛盾。
+       把 seed 的提交时间钉到基线之前的历史档，让夹具忠实表达「其后只有那一笔」；
+       不放宽判据本体，也不把断言退化成「1 或 2 都算过」。 */
+    execFileSync("git", ["commit", "--amend", "--no-edit", "--date", "2020-01-01T00:00:00+00:00"], {
+      cwd: repo.dir,
+      encoding: "utf8",
+      env: gitSandboxEnv({
+        GIT_AUTHOR_DATE: "2020-01-01T00:00:00+00:00",
+        GIT_COMMITTER_DATE: "2020-01-01T00:00:00+00:00",
+      }),
+      stdio: "ignore",
+    });
     /* 基线之后追加一次**真动过 src/** 的提交 —— 归因通道读的就是这个面。 */
     repo.write("src/a.ts", "export const a = 1;\n");
     repo.git("add", "-A");

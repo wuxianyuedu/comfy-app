@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as ComfyQueueModule from "~/components/studio/hooks/use-comfy-queue";
 import { revealTaskFolder } from "~/lib/history-detail-actions";
-import { cancelTask } from "~/lib/task-cancel-client";
+import { cancelAllTasks, cancelTask } from "~/lib/task-cancel-client";
 
 import type { QueueRow } from "../queue-monitor-config";
 import { refreshComfyQueue } from "~/lib/comfy/comfy-queue-store";
@@ -80,6 +80,8 @@ const listQueryKeyMock = vi.fn();
 const summaryRefetch = vi.fn();
 const listFirstPageQuery = vi.fn();
 const fetchNextPage = vi.fn();
+const reorderMutate = vi.fn<(input: { id: string }) => Promise<unknown>>();
+const setPausedMutate = vi.fn<(input: { paused: boolean }) => Promise<unknown>>();
 const listInputMock = vi.hoisted(() => vi.fn());
 const infiniteOptionsMock = vi.hoisted(() => vi.fn<(options: InfiniteOptions) => void>());
 const summaryInputMock = vi.hoisted(() => vi.fn<(input: { todayStartedAt: string }) => void>());
@@ -137,9 +139,14 @@ vi.mock("~/trpc/react", () => ({
           return { queryKey: ["task", "summary"] };
         },
       },
+      reorder: { mutationOptions: () => ({ mutationKey: ["task", "reorder"] }) },
       /* 展开看参数（#5019）会挂 detail 查询：这里给一个能对上 queryKey 的
        * 工厂即可，数据态由上面替掉的 useQuery 统一给。 */
       detail: { queryOptions: () => ({ queryKey: ["task", "detail"] }) },
+    },
+    generationControl: {
+      pauseState: { queryOptions: () => ({ queryKey: ["generationControl", "pauseState"] }) },
+      setPaused: { mutationOptions: () => ({ mutationKey: ["generationControl", "setPaused"] }) },
     },
   }),
 }));
@@ -163,7 +170,23 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
             dataUpdatedAt: summaryUpdatedAt,
             refetch: summaryRefetch,
           }
-        : { data: undefined, isPending: false, isError: false, isFetching: false, refetch },
+        : options.queryKey[0] === "generationControl"
+          ? {
+              data: { paused: false },
+              isPending: false,
+              isError: false,
+              isFetching: false,
+              refetch,
+            }
+          : { data: undefined, isPending: false, isError: false, isFetching: false, refetch },
+    useMutation: (options: { mutationKey?: Array<string> }) => ({
+      mutateAsync: options?.mutationKey?.includes("reorder")
+        ? reorderMutate
+        : options?.mutationKey?.includes("setPaused")
+          ? setPausedMutate
+          : vi.fn(() => Promise.resolve(undefined)),
+      isPending: false,
+    }),
     useInfiniteQuery: (options: InfiniteOptions) => {
       infiniteOptionsMock(options);
       return {
@@ -192,13 +215,14 @@ vi.mock("~/lib/comfy/comfy-queue-store", () => ({ refreshComfyQueue: vi.fn() }))
 vi.mock("~/components/studio/ToastProvider", () => ({
   useToast: () => toast,
 }));
-vi.mock("~/lib/task-cancel-client", () => ({ cancelTask: vi.fn() }));
+vi.mock("~/lib/task-cancel-client", () => ({ cancelTask: vi.fn(), cancelAllTasks: vi.fn() }));
 vi.mock("~/lib/history-detail-actions", () => ({ revealTaskFolder: vi.fn() }));
 vi.mock("~/components/ui/use-copy-feedback", () => ({
   useCopyResult: () => copyResult,
 }));
 
 const mockedCancel = vi.mocked(cancelTask);
+const mockedCancelAll = vi.mocked(cancelAllTasks);
 const mockedReveal = vi.mocked(revealTaskFolder);
 const mockedRefreshComfyQueue = vi.mocked(refreshComfyQueue);
 
@@ -613,6 +637,66 @@ describe("useQueueMonitor", () => {
     });
     expect(result.current.refreshError).toContain("未完整同步");
     expect(toast.info).not.toHaveBeenCalledWith("队列已同步");
+  });
+
+  it("提前：打到 task.reorder，按服务端信封报成功并三源刷新", async () => {
+    reorderMutate.mockResolvedValue({ ok: true, detail: "已提前到队首，下一轮就轮到它" });
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.moveUp(queuedRow("late", "后提交的工作流"));
+    });
+    expect(reorderMutate).toHaveBeenCalledWith({ id: "late" });
+    expect(fetchListFirstPage).toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalledWith("已提前到队首，下一轮就轮到它");
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("提前：行已被领走时服务端回 ok:false，原因照实报、列表也刷新", async () => {
+    reorderMutate.mockResolvedValue({ ok: false, detail: "这条已开跑或已结束，无法调整顺序" });
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.moveUp(queuedRow("late", "后提交的工作流"));
+    });
+    expect(fetchListFirstPage).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("这条已开跑或已结束，无法调整顺序");
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it("取消全部：确认后打到一个出口、关弹窗、刷新，并如实报出取消条数", async () => {
+    mockedCancelAll.mockResolvedValue({ cancelled: 5, failed: 0, total: 5 });
+    const { result } = renderHook(() => useQueueMonitor());
+    act(() => {
+      result.current.requestCancelAll();
+    });
+    expect(result.current.cancelAllOpen).toBe(true);
+
+    await act(async () => {
+      await result.current.confirmCancelAll();
+    });
+    expect(mockedCancelAll).toHaveBeenCalledTimes(1);
+    expect(mockedCancel).not.toHaveBeenCalled();
+    expect(result.current.cancelAllOpen).toBe(false);
+    expect(fetchListFirstPage).toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalledWith("已取消 5 条任务");
+  });
+
+  it("取消全部部分失败：条数照实报出来，不把没取消掉的藏起来", async () => {
+    mockedCancelAll.mockResolvedValue({ cancelled: 3, failed: 2, total: 5 });
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.confirmCancelAll();
+    });
+    expect(toast.info).toHaveBeenCalledWith(expect.stringContaining("3 条，2 条未能取消"));
+  });
+
+  it("取消全部失败也刷新并把原因给用户", async () => {
+    mockedCancelAll.mockRejectedValue(new Error("后端无响应"));
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.confirmCancelAll();
+    });
+    expect(fetchListFirstPage).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("后端无响应");
   });
 
   it("openLog / closeLog：目标行是快照，closeLog 清空", () => {

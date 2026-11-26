@@ -1,7 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
-import { Boxes, ListChecks, ListOrdered, RefreshCcw, WifiOff, X } from "lucide-react";
+import { memo, useMemo } from "react";
+import {
+  Ban,
+  Boxes,
+  ListChecks,
+  ListOrdered,
+  Pause,
+  Play,
+  RefreshCcw,
+  WifiOff,
+  X,
+} from "lucide-react";
 
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
@@ -9,29 +19,242 @@ import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ViewActions } from "~/components/studio/ViewActions";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
+import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
 import { Skeleton } from "~/components/ui/skeleton";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { ProgressBar } from "~/components/ui/progress-bar";
-import { StatusBadge } from "~/components/ui/status-badge";
 import { Spinner } from "~/components/ui/spinner";
 import { TimeAgo } from "~/components/ui/time-ago";
+import { StatusBadge } from "~/components/ui/status-badge";
 import { SectionCard } from "~/components/workshop/ModelTestSectionCard";
 import { ModelTestTree } from "~/components/workshop/ModelTestTree";
 import { displayValue } from "~/lib/display-value";
 import { taskStatusLabel } from "~/lib/task-state";
 
 import type { QueueModelTreeController } from "./hooks/use-queue-model-tree";
-import type { QueueMonitorController } from "./hooks/use-queue-monitor";
+import type { QueueMonitorController, RunningCardView } from "./hooks/use-queue-monitor";
 import type { QueueRow } from "./queue-monitor-config";
-import { Field, QueueOverview, QueueRowLine, SectionHeading } from "./QueueMonitorParts";
+import { Field, QueueOverview, RunningDetails, SectionHeading } from "./QueueMonitorParts";
+import { QueueRowVirtualList } from "./QueueRowVirtualList";
+import { RunningTiming } from "./RunningTiming";
 import {
   offlineBannerText,
   offlineEmptyText,
   offlineRunningCardNote,
   runningHintText,
 } from "./queue-monitor-config";
+
+/** 左树不需要「正在生成」标记：引用恒定的空集合，避免每次渲染造新 Set。 */
+const EMPTY_GENERATING_MODELS = new Set<string>();
+
+/**
+ * 顶部操作条：位次读数 + 暂停 / 恢复 + 取消全部 + 刷新（#5055 / #5064）。
+ * 从主视图切出只为守住函数长度 400 行硬闸（§12.13）：这一段是独立的一组控件，
+ * 收齐 props 即可整块搬迁，读屏顺序与主视图一致。
+ */
+function QueueActionBar({
+  cancelAllBusy,
+  hasActive,
+  lastSyncedAt,
+  pauseBusy,
+  paused,
+  refresh,
+  refreshing,
+  requestCancelAll,
+  togglePause,
+  waitingCount,
+}: {
+  cancelAllBusy: boolean;
+  hasActive: boolean;
+  lastSyncedAt: number | null;
+  pauseBusy: boolean;
+  paused: boolean;
+  refresh: (showFeedback?: boolean) => void;
+  refreshing: boolean;
+  requestCancelAll: () => void;
+  togglePause: () => void;
+  waitingCount: number;
+}) {
+  return (
+    <ViewActions>
+      <span className="text-ink-faint text-xs tabular-nums">
+        {`待执行 ${String(waitingCount)}`}
+      </span>
+      <span className="text-ink-faint text-xs">
+        {lastSyncedAt === null ? (
+          "等待同步"
+        ) : (
+          <>
+            最后同步 <TimeAgo value={lastSyncedAt} />
+          </>
+        )}
+      </span>
+      {/* 生图暂停态角标 + 播放 / 暂停按钮（ISSUE #5055）：暂停语义在执行器
+          闸门——当前任务照常跑完，之后不再领取生图任务；图标随状态切换。 */}
+      {paused ? (
+        <span className="bg-warning/10 text-warning-strong rounded-full px-2.5 py-0.5 text-xs font-medium">
+          生图已暂停
+        </span>
+      ) : null}
+      <Button
+        aria-label={paused ? "恢复生成" : "暂停生成"}
+        className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+        disabled={pauseBusy}
+        onClick={togglePause}
+        size="xs"
+        variant="outline"
+      >
+        {paused ? (
+          <Play aria-hidden className="size-3" data-icon="inline-start" />
+        ) : (
+          <Pause aria-hidden className="size-3" data-icon="inline-start" />
+        )}
+        {paused ? "恢复生成" : "暂停生成"}
+      </Button>
+      {/* 「取消全部」整表动作（ISSUE #5064）：danger 变体 + 二次确认，
+          与删除项目同一口径；没有可取消的任务时禁用。 */}
+      <Button
+        aria-label="打开取消全部确认"
+        className="border-destructive/40 h-auto gap-1.5 rounded-lg px-3 py-1.5"
+        disabled={!hasActive || cancelAllBusy}
+        onClick={requestCancelAll}
+        size="xs"
+        variant="danger"
+      >
+        <Ban aria-hidden className="size-3" data-icon="inline-start" />
+        取消全部
+      </Button>
+      <Button
+        aria-label="立即重新读取队列"
+        className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+        disabled={refreshing}
+        onClick={() => {
+          refresh(true);
+        }}
+        size="xs"
+        variant="outline"
+      >
+        {refreshing ? (
+          <Spinner aria-hidden className="size-3" />
+        ) : (
+          <RefreshCcw aria-hidden className="size-3" data-icon="inline-start" />
+        )}
+        刷新
+      </Button>
+    </ViewActions>
+  );
+}
+
+/** 「取消全部」二次确认（ISSUE #5064）：破坏面写在弹窗里 —— 正在生成的一条会
+ * 被中断、排队行全部作废且不可恢复；已产出的文件不删。与操作条一样从主视图切出，
+ * 守住函数长度硬闸。 */
+function CancelAllDialog({
+  busy,
+  onClose,
+  onConfirm,
+  open,
+}: {
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  open: boolean;
+}) {
+  return (
+    <ConfirmDialog
+      cancelLabel="返回"
+      confirmLabel="取消全部任务"
+      danger
+      description="将取消当前所有未结束的任务：正在生成的这一条会被中断，排队中的条目一并作废且不可恢复。已经生成的文件不会删除，可在「历史」里查到取消记录。"
+      onClose={onClose}
+      onConfirm={onConfirm}
+      open={open}
+      pending={busy}
+      title="取消全部任务？"
+    />
+  );
+}
+
+/** 在线时的跑动中富卡（#5075 从主视图拆出，守 400 行函数长度硬闸）：
+ *  六格读数 + 详情 / 日志 / 取消三个动作，详情展开走 controller 的同一个门控。 */
+function RunningCard({ c, running }: { c: QueueMonitorController; running: RunningCardView }) {
+  return (
+    <article className="bg-card border-border rounded-2xl border p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h3 className="text-ink-bright min-w-0 flex-1 text-sm font-semibold">
+          <TruncatedText className="block truncate">
+            {displayValue(running.workflowName, { fallback: "（未知工作流）" })}
+          </TruncatedText>
+        </h3>
+        <StatusBadge label={taskStatusLabel("RUNNING")} status="RUNNING" />
+      </div>
+      <ProgressBar className="mt-3" label="采样进度" value={running.progressPct} />
+      <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+        <RunningTiming
+          progressPct={running.progressPct}
+          progressValue={running.progressValue}
+          startedAt={running.startedAt}
+          stepsText={running.stepsText}
+        />
+        <Field label="当前节点">{running.nodeText}</Field>
+        <Field label="主模型">{running.modelText}</Field>
+      </dl>
+      <div className="mt-3 flex justify-end gap-1">
+        {/* #5075：展开统一输入 / 请求读数，与测试模型页同口径。 */}
+        <Button
+          aria-expanded={c.expandedId === running.id}
+          aria-label="查看正在跑这条的统一输入与请求信息"
+          className="h-auto gap-1"
+          onClick={() => {
+            c.toggleExpanded(running.id);
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          详情
+        </Button>
+        <Button
+          aria-label="查看正在跑这条的执行日志"
+          className="h-auto gap-1"
+          onClick={() => {
+            c.openLog({
+              id: running.id,
+              workflowName: running.workflowName,
+              status: "RUNNING",
+            });
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          日志
+        </Button>
+        <Button
+          aria-label="取消正在跑的这条"
+          className="border-border rounded-lg"
+          disabled={c.isBusy(running.id)}
+          onClick={() => {
+            void c.cancel(running.id, running.workflowName);
+          }}
+          size="xs"
+          variant="outline"
+        >
+          {c.isBusy(running.id) ? "处理中" : "取消这条"}
+        </Button>
+      </div>
+      {c.expandedId === running.id ? (
+        <RunningDetails
+          detail={c.runningDetail}
+          detailLoading={c.detailLoading}
+          logs={c.runningLogs}
+          paramRows={c.paramRows}
+          progressPct={running.progressPct}
+          settled={c.runningSettled}
+        />
+      ) : null}
+    </article>
+  );
+}
 
 /** 队列与运行 · 第③层（纯视图）：只渲染 controller，不发请求、不含业务规则。
  * 三段顺序即读屏顺序：跑动中（还要多久）→ 排队中（下一条是不是我的）→ 最近结果（失败原因）。
@@ -41,7 +264,7 @@ import {
  * 左栏树（ISSUE #5019）：与测试模型页同一份「用途 / 模式 / 模型」候选树
  * （useModelTestTree），选中一片叶子 = 按那个模型过滤三段列表；再点同一片取消。
  * 列表逐条带模型徽标，排队 / 最近行可就地展开看输入参数（#5010 的能力并入这里）。 */
-export function QueueMonitorView({
+export const QueueMonitorView = memo(function QueueMonitorView({
   c,
   onOpenComfyui,
   tree,
@@ -59,13 +282,21 @@ export function QueueMonitorView({
     [c.runningRows, c.queued, c.recent],
   );
   const keepIds = useMemo(() => tree.filterIds(allRows), [tree, allRows]);
-  const showRunningCard = running !== null && keepIds.has(running.id);
   const runningRows = c.runningRows.filter((row) => keepIds.has(row.id));
   const queued = c.queued.filter((entry) => keepIds.has(entry.row.id));
   const recent = c.recent.filter((row) => keepIds.has(row.id));
+  /* 虚拟列表的项形状在这里定型，位次文案也只算一次。 */
+  const queuedRows = useMemo(
+    () => queued.map(({ position, row }) => ({ leading: `第 ${String(position)} 位`, row })),
+    [queued],
+  );
+  const recentRows = useMemo(() => recent.map((row) => ({ row })), [recent]);
   /* 空态判据看**未筛选**的全量：筛到一个不剩时不能误报「一条任务都没有」。 */
   const hasAny =
     running !== null || c.runningRows.length > 0 || c.queued.length > 0 || c.recent.length > 0;
+  /* 「取消全部」的判据只看**还能取消**的行：终态任务留在「最近结果」里不算。
+   * 用 `hasAny` 会让只有历史记录时也亮着按钮，点了只回一句「已取消 0 条」。 */
+  const hasActive = running !== null || c.runningRows.length > 0 || c.queued.length > 0;
   const empty = offlineEmptyText();
   const banner = offlineBannerText();
   const runningHint = runningHintText(c.online, c.waitingCount);
@@ -74,28 +305,26 @@ export function QueueMonitorView({
   const treeKind = tree.selection?.kind;
   const treeCurrentKind = treeKind === "video" || treeKind === "chat" ? treeKind : "image";
 
-  const rowProps = (row: QueueRow) => ({
-    row,
-    busy: c.isBusy(row.id),
-    paramsExpanded: c.expandedId === row.id,
-    paramRows: c.expandedId === row.id ? c.paramRows : [],
-    paramsLoading: c.expandedId === row.id && c.detailLoading,
-    onToggleParams: () => {
-      c.toggleExpanded(row.id);
-    },
-    onCancel: () => {
-      void c.cancel(row.id, row.workflowName);
-    },
-    onCopy: () => {
-      void c.copyForReprint(row);
-    },
-    onOpenFolder: () => {
-      void c.openFolder(row);
-    },
-    onOpenLog: () => {
-      c.openLog(row);
-    },
-  });
+  /* 逐行闭包收在行组件自己的 render 里（QueueRowLine 已 memo），视图这里
+   * 只传稳定 handler；行身份由 controller 给，轮询不会换掉静止行的 props。 */
+  const handleToggleParams = (id: string) => {
+    c.toggleExpanded(id);
+  };
+  const handleCancel = (row: QueueRow) => {
+    void c.cancel(row.id, row.workflowName);
+  };
+  const handleMoveUp = (row: QueueRow) => {
+    void c.moveUp(row);
+  };
+  const handleCopy = (row: QueueRow) => {
+    void c.copyForReprint(row);
+  };
+  const handleOpenFolder = (row: QueueRow) => {
+    void c.openFolder(row);
+  };
+  const handleOpenLog = (row: QueueRow) => {
+    c.openLog(row);
+  };
 
   return (
     <DocumentFrame
@@ -110,39 +339,20 @@ export function QueueMonitorView({
           由顶栏标题右侧那颗问号承载（`viewHelp()`），页头里不再放第二颗。 */}
       <PageHeader srTitle={pageHeaderTitle("queue")} />
 
-      {/* 位次统计与刷新挂到顶栏（`ViewActions`）—— 见 `ViewActions` 里那段
+      {/* 位次统计与操作挂到顶栏（`ViewActions`）—— 见 `ViewActions` 里那段
           「屏名由页签给出之后，留在屏内那一行只剩右对齐的几颗控件」（ISSUE #1871）。 */}
-      <ViewActions>
-        <span className="text-ink-faint text-xs tabular-nums">
-          {`待执行 ${String(c.waitingCount)}`}
-        </span>
-        <span className="text-ink-faint text-xs">
-          {c.lastSyncedAt === null ? (
-            "等待同步"
-          ) : (
-            <>
-              最后同步 <TimeAgo value={c.lastSyncedAt} />
-            </>
-          )}
-        </span>
-        <Button
-          aria-label="立即重新读取队列"
-          className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
-          disabled={c.refreshing}
-          onClick={() => {
-            c.refresh(true);
-          }}
-          size="xs"
-          variant="outline"
-        >
-          {c.refreshing ? (
-            <Spinner aria-hidden className="size-3" />
-          ) : (
-            <RefreshCcw aria-hidden className="size-3" data-icon="inline-start" />
-          )}
-          刷新
-        </Button>
-      </ViewActions>
+      <QueueActionBar
+        cancelAllBusy={c.cancelAllBusy}
+        hasActive={hasActive}
+        lastSyncedAt={c.lastSyncedAt}
+        pauseBusy={c.pauseBusy}
+        paused={c.paused}
+        refresh={c.refresh}
+        refreshing={c.refreshing}
+        requestCancelAll={c.requestCancelAll}
+        togglePause={c.togglePause}
+        waitingCount={c.waitingCount}
+      />
 
       {c.refreshError === null ? null : (
         <div className="mb-6" role="alert">
@@ -218,7 +428,7 @@ export function QueueMonitorView({
                   currentKind={treeCurrentKind}
                   currentMode={tree.selection?.mode ?? ""}
                   entries={tree.entries}
-                  generatingModels={new Set([])}
+                  generatingModels={EMPTY_GENERATING_MODELS}
                   loading={false}
                   onSelect={tree.select}
                   selectedValue={tree.selection?.value ?? ""}
@@ -248,6 +458,7 @@ export function QueueMonitorView({
               </p>
             ) : null}
 
+            {/* 搜索 / 状态筛选 / 全局指标：主视图只保留三段任务明细。 */}
             <QueueOverview
               hasMore={c.hasMore}
               matchedCount={c.matchedCount}
@@ -260,58 +471,9 @@ export function QueueMonitorView({
 
             <section aria-labelledby="queue-running-heading">
               <SectionHeading id="queue-running-heading">跑动中</SectionHeading>
-              {showRunningCard ? (
-                <article className="bg-card border-border rounded-2xl border p-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h3 className="text-ink-bright min-w-0 flex-1 text-sm font-semibold">
-                      <TruncatedText className="block truncate">
-                        {displayValue(running.workflowName, {
-                          fallback: "（未知工作流）",
-                        })}
-                      </TruncatedText>
-                    </h3>
-                    <StatusBadge label={taskStatusLabel("RUNNING")} status="RUNNING" />
-                  </div>
-                  <ProgressBar className="mt-3" label="采样进度" value={running.progressPct} />
-                  <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
-                    <Field label="已跑">{running.elapsedText}</Field>
-                    <Field label="预计剩余">{running.remainingText}</Field>
-                    <Field label="步数">{running.stepsText}</Field>
-                    <Field label="速度">{running.rateText}</Field>
-                    <Field label="当前节点">{running.nodeText}</Field>
-                    <Field label="主模型">{running.modelText}</Field>
-                  </dl>
-                  <div className="mt-3 flex justify-end gap-1">
-                    <Button
-                      aria-label="查看正在跑这条的执行日志"
-                      className="h-auto gap-1"
-                      onClick={() => {
-                        c.openLog({
-                          id: running.id,
-                          workflowName: running.workflowName,
-                          status: "RUNNING",
-                        });
-                      }}
-                      size="xs"
-                      variant="ghost"
-                    >
-                      日志
-                    </Button>
-                    <Button
-                      aria-label="取消正在跑的这条"
-                      className="border-border rounded-lg"
-                      disabled={c.isBusy(running.id)}
-                      onClick={() => {
-                        void c.cancel(running.id, running.workflowName);
-                      }}
-                      size="xs"
-                      variant="outline"
-                    >
-                      {c.isBusy(running.id) ? "处理中" : "取消这条"}
-                    </Button>
-                  </div>
-                </article>
-              ) : runningRows.length > 0 ? (
+              {running !== null && keepIds.has(running.id) ? (
+                <RunningCard c={c} running={running} />
+              ) : running === null && runningRows.length > 0 ? (
                 <ol className="flex flex-col gap-3">
                   {runningRows.map((row) => (
                     <li className="bg-card border-border rounded-2xl border p-4" key={row.id}>
@@ -326,9 +488,7 @@ export function QueueMonitorView({
                         <StatusBadge label={taskStatusLabel("RUNNING")} status="RUNNING" />
                       </div>
                       <ProgressBar className="mt-3" label="采样进度" value={row.progress} />
-                      <p className="text-ink-fainter mt-2 text-xs">
-                        {c.online ? "ComfyUI 尚未回报运行明细，当前显示任务库状态。" : offlineNote}
-                      </p>
+                      <p className="text-ink-fainter mt-2 text-xs">{offlineNote}</p>
                       <div className="mt-3 flex justify-end gap-1">
                         <Button
                           aria-label="查看正在跑这条的执行日志"
@@ -377,16 +537,19 @@ export function QueueMonitorView({
                 {`排队中（${String(queued.length)}）`}
               </SectionHeading>
               {queued.length > 0 ? (
-                <ol className="border-border bg-card overflow-hidden rounded-2xl border">
-                  {queued.map(({ row, position }) => (
-                    <li className="border-border border-b px-4 py-3 last:border-b-0" key={row.id}>
-                      <QueueRowLine
-                        leading={position === null ? "排队中" : `第 ${String(position)} 位`}
-                        {...rowProps(row)}
-                      />
-                    </li>
-                  ))}
-                </ol>
+                <QueueRowVirtualList
+                  expandedId={c.expandedId}
+                  isBusy={c.isBusy}
+                  onCancel={handleCancel}
+                  onCopy={handleCopy}
+                  onMoveUp={handleMoveUp}
+                  onOpenFolder={handleOpenFolder}
+                  onOpenLog={handleOpenLog}
+                  onToggleParams={handleToggleParams}
+                  paramRows={c.paramRows}
+                  paramsLoading={c.detailLoading}
+                  rows={queuedRows}
+                />
               ) : (
                 <p className="text-ink-fainter flex items-center gap-1.5 text-xs">
                   <ListOrdered aria-hidden className="size-3.5" />
@@ -398,13 +561,19 @@ export function QueueMonitorView({
             <section aria-labelledby="queue-recent-heading">
               <SectionHeading id="queue-recent-heading">最近结果</SectionHeading>
               {recent.length > 0 ? (
-                <ul className="border-border bg-card overflow-hidden rounded-2xl border">
-                  {recent.map((row) => (
-                    <li className="border-border border-b px-4 py-3 last:border-b-0" key={row.id}>
-                      <QueueRowLine {...rowProps(row)} />
-                    </li>
-                  ))}
-                </ul>
+                <QueueRowVirtualList
+                  expandedId={c.expandedId}
+                  isBusy={c.isBusy}
+                  onCancel={handleCancel}
+                  onCopy={handleCopy}
+                  onMoveUp={handleMoveUp}
+                  onOpenFolder={handleOpenFolder}
+                  onOpenLog={handleOpenLog}
+                  onToggleParams={handleToggleParams}
+                  paramRows={c.paramRows}
+                  paramsLoading={c.detailLoading}
+                  rows={recentRows}
+                />
               ) : (
                 <p className="text-ink-fainter text-xs">
                   还没有跑完过的任务。完整历史在侧栏「历史」里看。
@@ -433,6 +602,15 @@ export function QueueMonitorView({
           </div>
         </div>
       ) : null}
+
+      <CancelAllDialog
+        busy={c.cancelAllBusy}
+        onClose={c.closeCancelAll}
+        onConfirm={() => {
+          void c.confirmCancelAll();
+        }}
+        open={c.cancelAllOpen}
+      />
     </DocumentFrame>
   );
-}
+});

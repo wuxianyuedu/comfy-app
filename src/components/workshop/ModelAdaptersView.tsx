@@ -413,8 +413,6 @@ export function ModelAdaptersView() {
     addMode,
     save,
     saving,
-    saveToCodebase,
-    codebaseSaving,
     reset,
     message,
     summary,
@@ -587,10 +585,7 @@ export function ModelAdaptersView() {
                 {/* 保存这一行跟着上面那段映射表单一起出现（同一判据 `selectedModel`）：
                     没选模型时右栏只有引导语，这一颗就成了一条悬在空白里的禁用件。
                     主 CTA 档（h-auto px-4 py-2），与全站其余实心按钮同形。
-                    「还原默认」（ISSUE #3741）回到服务端当前存档，与保存并列。
-                    「保存为项目默认」（ISSUE #3951）把当前草稿写进入库基线
-                    （model-adapter-defaults.json）—— 与模式契约编辑器的同名按钮
-                    同一档：只有开发检出写得进去，正式包里点它会得到可读报错。 */}
+                    「还原默认」（ISSUE #3741）回到服务端当前存档，与保存并列。 */}
                 <div className="mt-4 flex items-center justify-end gap-2">
                   <Button
                     className="h-auto px-4 py-2"
@@ -601,16 +596,6 @@ export function ModelAdaptersView() {
                     variant="outline"
                   >
                     还原默认
-                  </Button>
-                  <Button
-                    className="h-auto px-4 py-2"
-                    disabled={codebaseSaving || saving}
-                    onClick={() => {
-                      void saveToCodebase();
-                    }}
-                    variant="outline"
-                  >
-                    {codebaseSaving ? "写入中…" : "保存为项目默认（跟代码走）"}
                   </Button>
                   <Button
                     className="h-auto px-4 py-2"

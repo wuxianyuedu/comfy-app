@@ -89,9 +89,10 @@ export const INPUT_FACES = [
       "scripts/gates/.bundle-budget-baseline.json",
       "tests/check-bundle-budget.test.ts",
       "tests/helpers/gate-repo.ts",
+      "tests/helpers/git-sandbox-env.ts",
       "tests/helpers/ratchet-refusal.ts",
     ],
-    why: "把判据当黑盒跑在**临时工作区**里（它内部按 `__dirname/..` 找 `.next/static/chunks`）—— 本仓真实产物不在它的读取面上，它读的是脚本自己、基线 JSON 与两个直接 import 的夹具（临时仓库 + 拒绝话术的断言口径）",
+    why: "把判据当黑盒跑在**临时工作区**里（它内部按 `__dirname/..` 找 `.next/static/chunks`）—— 本仓真实产物不在它的读取面上，它读的是脚本自己、基线 JSON 与三个直接 import 的夹具（临时仓库、沙箱 git 环境、拒绝话术的断言口径）",
   },
   {
     test: "tests/a11y-rules-gate.test.ts",

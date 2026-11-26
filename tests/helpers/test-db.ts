@@ -40,6 +40,7 @@ const jsonColumns = new Set<string>([
   "scriptReview",
   "styleTags",
   "tags",
+  "qualityIssues",
   "portraits",
   "inputTypes",
   "outputTypes",
@@ -81,6 +82,7 @@ const TABLES = [
   "character",
   "episode_character",
   "characterProfile",
+  "generationControl",
 ];
 
 const CREATE_SQL = `
@@ -123,7 +125,7 @@ CREATE TABLE IF NOT EXISTS favorite (
 CREATE TABLE IF NOT EXISTS task (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, type TEXT NOT NULL, prompt TEXT NOT NULL, negativePrompt TEXT,
   params TEXT NOT NULL, workflowName TEXT NOT NULL, workflowSnapshot TEXT, projectId TEXT, shotId TEXT, referenceImages TEXT,
-  status TEXT NOT NULL DEFAULT 'QUEUED', parentId TEXT, promptId TEXT, progress INTEGER NOT NULL DEFAULT 0, resultImages TEXT,
+  status TEXT NOT NULL DEFAULT 'QUEUED', sortOrder INTEGER NOT NULL DEFAULT 0, parentId TEXT, promptId TEXT, progress INTEGER NOT NULL DEFAULT 0, resultImages TEXT,
   logs TEXT, error TEXT, validationErrors TEXT, createdAt TEXT NOT NULL, finishedAt TEXT, claimedBy TEXT, execPayload TEXT, progressNode TEXT, claimedAt TEXT, rawCli TEXT
 );
 CREATE TABLE IF NOT EXISTS taskImage (
@@ -243,6 +245,7 @@ CREATE TABLE IF NOT EXISTS characterProfile (
   gender TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '[]',
   portraitUrl TEXT, portraits TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'draft',
   source TEXT NOT NULL DEFAULT 'manual', taskId TEXT, params TEXT, width INTEGER, height INTEGER,
+  qualityScore INTEGER, qualityIssues TEXT,
   createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 
@@ -258,6 +261,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS episode_project_uniq ON episode (projectId);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_character_uniq ON episode_character (episodeId, characterId);
 CREATE UNIQUE INDEX IF NOT EXISTS wmtt_tag_wt_uniq ON workflowModelTag_workflowTemplate (workflowModelTag, workflowTemplate);
 CREATE UNIQUE INDEX IF NOT EXISTS character_series_name_uniq ON "character" (seriesId, name);
+CREATE TABLE IF NOT EXISTS generationControl (
+  id TEXT PRIMARY KEY, paused INTEGER NOT NULL DEFAULT 0, pausedAt TEXT, updatedAt TEXT NOT NULL
+);
 CREATE UNIQUE INDEX IF NOT EXISTS characterProfile_user_name_uniq ON characterProfile (userId, name);
 CREATE UNIQUE INDEX IF NOT EXISTS season_series_number_uniq ON season (seriesId, seasonNumber);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_season_number_uniq ON episode (seasonId, episodeNumber);
@@ -670,6 +676,8 @@ export type SeedTaskInput = {
   prompt?: string;
   referenceImages?: unknown;
   shotId?: string | null;
+  /** 队列顺序（领取与列表排序的判据；缺省 0 = 先入先出）。 */
+  sortOrder?: number;
   status?: string;
   type?: string;
   userId: string;
@@ -694,11 +702,12 @@ export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
     referenceImages: input.referenceImages ?? null,
     parentId: input.parentId ?? null,
     execPayload: input.execPayload ?? null,
+    sortOrder: input.sortOrder ?? 0,
     progress: input.progress ?? 0,
     error: input.error ?? null,
     createdAt: input.createdAt ?? new Date(),
-    finishedAt: input.finishedAt ?? null,
     claimedAt: input.claimedAt ?? null,
+    finishedAt: input.finishedAt ?? null,
   });
   // task 表没有 images 列（Drizzle 用 taskImage 子表 + 关系装载）：
   // seed 的 images 逐行写入 taskImage，首图 isCover=1（与 task.list 封面投影一致）

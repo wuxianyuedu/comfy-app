@@ -21,7 +21,7 @@ import { clampPct } from "~/lib/progress";
 import { cn } from "~/lib/utils";
 
 import type { TaskItem } from "./history-types";
-import { modelLabelOf, modeLabelOf } from "./history-list-derive";
+import { activityAtOf, modelLabelOf, modeLabelOf } from "./history-list-derive";
 import { QUEUED_STATUS_STYLE, STATUS_STYLE } from "./history-utils";
 
 type HistoryTaskCardProps = {
@@ -172,7 +172,7 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
           </TruncatedText>
           <span className="text-ink-fainter ml-auto shrink-0 text-xs tabular-nums">
             {/* 水合安全口径（ISSUE #4852）：挂载前渲染稳定占位，挂载后再算相对时间。 */}
-            <TimeAgo fallback="刚刚" value={task.createdAt} />
+            <TimeAgo fallback="刚刚" value={activityAtOf(task)} />
           </span>
         </div>
 

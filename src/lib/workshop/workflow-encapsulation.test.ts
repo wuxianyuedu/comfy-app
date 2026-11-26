@@ -12,6 +12,7 @@ import {
   buildEncapsulatedInputs,
   describeUnmatchedInputs,
   exposedValueOf,
+  negativeAsPositiveText,
   pruneEmptyExposedValues,
   withExposedValue,
 } from "./workflow-encapsulation";
@@ -1117,5 +1118,77 @@ describe("LoRA 契约口的控件值读写（#4494）", () => {
     expect(pruned.loraStrength).toBe(0);
     expect(pruneEmptyExposedValues({ loraName: "  " }).loraName).toBeUndefined();
     expect(pruneEmptyExposedValues({}).loraStrength).toBeUndefined();
+  });
+});
+
+/* ── 负向词折进正向词（ISSUE #5042）────────────────────────────────────
+ * 模型 / 工作流不接负向词（作者没连负向线）时，负向词改写成正向表述折进
+ * 正向词一起下发；有落点时行为不变。 */
+describe("负向词折进正向词（#5042）", () => {
+  /** 只有正向词口、没有负向口的工作流（如 minimax H3 文生图）。 */
+  const IO_NO_NEGATIVE: WorkflowIOMap = {
+    text: {
+      direction: "input",
+      kind: "widget",
+      nodeId: "6",
+      name: "text",
+      label: "positive_prompt",
+      type: "STRING",
+      multiline: true,
+      defaultValue: "a cat",
+    },
+  };
+
+  it("负向词没有落点时改写折进正向词，不再报「负向词未生效」", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO_NO_NEGATIVE,
+      paramMap: wire("T2I", { prompt: "text" }),
+      mode: "T2I",
+      values: { prompt: "一只猫", negativePrompt: "低质量，模糊，文字" },
+    });
+    expect(valueOf(res.workflowInputs, "text")).toBe("一只猫，无低质量，无模糊，无文字");
+    expect(res.unmatched).not.toContain("negative");
+  });
+
+  it("作者显式断开负向线（null）同样算「没有落点」，照折", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO_NO_NEGATIVE,
+      paramMap: wire("T2I", { prompt: "text", negative: null }),
+      mode: "T2I",
+      values: { prompt: "一只猫", negativePrompt: "文字、水印" },
+    });
+    expect(valueOf(res.workflowInputs, "text")).toBe("一只猫，无文字，无水印");
+  });
+
+  it("负向词有落点时行为不变（原样落到负向口，正向词不折）", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO,
+      paramMap: wire("T2I", { prompt: "text", negative: "negative" }),
+      mode: "T2I",
+      values: { prompt: "一只猫", negativePrompt: "低质量" },
+    });
+    expect(valueOf(res.workflowInputs, "text")).toBe("一只猫");
+    /* 负向口的 pin 名也是 text（nodeId 7），按节点分辨。 */
+    const landed = res.workflowInputs.find((i) => i.nodeId === "7");
+    expect(landed?.value).toBe("低质量");
+  });
+
+  it("正向词自己也没落点时不折：负向词如实进 unmatched（不静默丢）", () => {
+    const res = buildEncapsulatedInputs({
+      io: IO_NO_NEGATIVE,
+      paramMap: wire("T2I", {}),
+      mode: "T2I",
+      values: { prompt: "一只猫", negativePrompt: "低质量" },
+    });
+    expect(res.unmatched).toContain("negative");
+    expect(res.workflowInputs).toHaveLength(0);
+  });
+
+  it("negativeAsPositiveText：按中英文分隔符切项、去空白、逐项加「无」；切不出项给空串", () => {
+    expect(negativeAsPositiveText("低质量，模糊，文字")).toBe("无低质量，无模糊，无文字");
+    expect(negativeAsPositiveText(" 文字 、 水印 ")).toBe("无文字，无水印");
+    expect(negativeAsPositiveText("低质量,blurry;文字")).toBe("无低质量，无blurry，无文字");
+    expect(negativeAsPositiveText("  ")).toBe("");
+    expect(negativeAsPositiveText("，、")).toBe("");
   });
 });
