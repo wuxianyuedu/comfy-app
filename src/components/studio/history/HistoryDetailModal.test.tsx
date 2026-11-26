@@ -63,6 +63,22 @@ function renderModal(detail: TaskDetail) {
   );
 }
 
+describe("HistoryDetailModal 生成耗时（ISSUE #5115）", () => {
+  it("终态任务在头部显示与卡片同口径的耗时", () => {
+    renderModal({
+      ...TASK_DETAIL_BASE,
+      claimedAt: new Date("2026-11-26T10:00:00.000Z"),
+      finishedAt: new Date("2026-11-26T10:00:45.000Z"),
+    });
+    expect(screen.getByText("耗时 45s")).toBeTruthy();
+  });
+
+  it("没有终态时刻不渲染耗时盒子", () => {
+    renderModal(TASK_DETAIL_BASE);
+    expect(screen.queryByText(/耗时/)).toBeNull();
+  });
+});
+
 describe("HistoryDetailModal 提示词定高滚动（ISSUE #4665）", () => {
   it("工坊参数里的提示词行：值在定高滚动格里（h-24 + overflow-y-auto）", () => {
     renderModal({

@@ -2,8 +2,10 @@
 // 筛选 / 排序 / 状态计数 / 日期分组 / 分页裁剪——纯函数、可直接单测，
 // 这五条规则是「历史记录怎么看」的全部业务。
 
+import { formatDurationMs } from "~/lib/time-format";
 import { getWorkflowType } from "~/lib/workflow/workflow-types";
 
+import { taskDurationMs } from "../queue/queue-monitor-config";
 import type { FilterKey, SortKey, TaskItem } from "./history-types";
 import { dateBucket } from "./history-utils";
 import { getOrCreate } from "~/lib/collections";
@@ -50,6 +52,19 @@ export function filterTasks(tasks: Array<TaskItem>, filter: FilterKey): Array<Ta
  */
 export function activityAtOf(task: TaskItem): string {
   return task.finishedAt ?? task.claimedAt ?? task.createdAt;
+}
+
+/**
+ * 生成耗时读数（ISSUE #5115）：card 与详情共用同一个派生 + 同一个格式化出口，
+ * 保证同一条任务两处读到的时长逐字一致。null = 没有终态时刻（未完 / 中断），
+ * 界面据此不渲染空盒子。formatDurationMs 的 `s/m/h` 口径与队列页一致。
+ */
+export function taskDurationTextOf(task: {
+  claimedAt?: Date | string | null;
+  createdAt: Date | string;
+  finishedAt?: Date | string | null;
+}): string | null {
+  return formatDurationMs(taskDurationMs(task));
 }
 
 /** 排序：newest 时间倒序，oldest 时间正序。返回新数组，不改入参。 */
