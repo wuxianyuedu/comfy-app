@@ -1,0 +1,2 @@
+## Fixed
+- `pnpm db:push` 写库前先跑一次**不写库的 dry-run**，挡住 drizzle-kit 0.31 误判产生的清表计划（#5103）。现场：新列写成裸 `.default(0)` 时 drizzle-kit 把 falsy 的 `0` 当「没有默认值」，给出 `delete from task;` + `ALTER TABLE task ADD sortOrder …`；一旦 `--force` 执行，表还在、结构也收敛，原有「表数 > 0」与「二次收敛」两道复核都看不出整表数据没了。现在凡语句清单不全在「建表 / 建索引 / 加列」白名单就非零退出，逐条给人话说明（清表说成「清空整张表的数据」），并指路 `db:generate` + `db:migrate` 审阅 SQL。实测 `.default(sql`0`)` 虽能消掉清表语句、却会让 drizzle 二次收敛永远判有差异，因此不采用；规范 §9.1 同步写清安全出口。同批补清表语句解析、人话描述、护栏在 --force 之前的回归用例。

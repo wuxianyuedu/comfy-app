@@ -39,7 +39,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { describeSpawnFailure, pushSchema } from "./db-push-core.mjs";
+import {
+  canAutoApply,
+  describeRiskyChanges,
+  describeSpawnFailure,
+  pendingStatements,
+  pushSchema,
+} from "./db-push-core.mjs";
 import { pnpmCli, spawnSettled } from "../ci/ci-install-deps.mjs";
 import { rejectUnknownArgs } from "../lib/cli-arg-contract.mjs";
 import { sweepLegacyTimestamps } from "./db-legacy-sweep.mjs";
@@ -152,6 +158,31 @@ function syncSchema() {
   /* ⚠️ 平台节点上的 PATH 里没有 pnpm（服务账号会话，ISSUE #2281）：先把它的
    * 落点找出来，再按「绝对路径 + 参数」起 —— 命令形态仍然只有一份实现
    * （`pnpmCli` → `ensurePnpmOnPath`），这里不自己拼可执行名。 */
+  /* #5103：push 之前先拿一份**不写库**的语句清单，挡住 drizzle-kit 误判产生的
+   * 清表计划。现场：新列写成裸 `.default(0)` 时 drizzle-kit 0.31 把它当
+   * 「无默认值」，给出 `delete from task;` + `ALTER TABLE task ADD sortOrder …`。
+   * 它不带 `--force` 时先把清单列出来、停在确认那一步（无 TTY 直接退出、库不动），
+   * 这份清单就是唯一能在写库之前看到它的机会 —— 一旦 `--force` 执行，表还在、
+   * 结构也收敛，下面「表数 > 0」与「结构收敛」两道复核都看不出整表数据没了。 */
+  const probe = pushSchema(root, { force: false, verifyConvergence: false });
+  const pending = pendingStatements(probe.firstOutput);
+  if (pending.length > 0 && !canAutoApply(pending)) {
+    fail(
+      [
+        "这批 schema 变更含会丢数据的语句，db:push 不替你执行：",
+        ...describeRiskyChanges(pending).map((line) => `  · ${line}`),
+        "",
+        "常见成因（ISSUE #5103）：新列写成 `.default(0)` 时 drizzle-kit 0.31 会",
+        "把它当「没有默认值」，生成 `delete from <表>;` 的清表计划。新增 NOT NULL",
+        "列请走 `pnpm db:generate` + `pnpm db:migrate`，先审阅生成的 SQL 再应用。",
+        "确认过可以丢这些数据时，手工跑 `pnpm exec drizzle-kit push --force`。",
+        "",
+        "drizzle 的完整语句清单：",
+        ...pending.map((line) => `  ${line}`),
+      ].join("\n"),
+    );
+  }
+
   const cli = pnpmCli();
   /* 唯一索引上线前的存量重复清洗（#3849）：必须在 push **之前** —— 库里已有
    * 重复行时 `CREATE UNIQUE INDEX` 直接失败。空转档（指纹已同步）不进来：

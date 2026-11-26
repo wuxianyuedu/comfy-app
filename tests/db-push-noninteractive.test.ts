@@ -82,6 +82,20 @@ describe("pnpm db:push 非交互可用", () => {
     expect(src).not.toMatch(/result\.status\s*===/);
   });
 
+  it("写库前先 dry-run 判危险语句（#5103：误判的清表计划不能靠 --force 悄悄执行）", () => {
+    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db/db-push.mjs"), "utf8");
+    expect(src).toContain("pendingStatements");
+    expect(src).toContain("canAutoApply");
+    expect(src).toContain("describeRiskyChanges");
+    /* 护栏必须在 --force 那次 push **之前** —— 写在后面等于数据已经没了才报警。
+     * 锚点取真正的调用行，而不是注释里的 `pushSchema(root, { force: true })`。 */
+    const guardAt = src.indexOf("const probe = pushSchema(root, { force: false");
+    const forceAt = src.indexOf("const result = pushSchema(root, {");
+    expect(guardAt, "护栏调用不在场").toBeGreaterThan(-1);
+    expect(forceAt, "force 那次 push 不在场").toBeGreaterThan(-1);
+    expect(guardAt).toBeLessThan(forceAt);
+  });
+
   it("无 TTY 真跑：库文件建不出来时非零退出，而不是留个空库当成功", () => {
     // 指向一个不存在的目录 → drizzle-kit 建不了库，脚本必须失败退出。
     const result = spawnSync(

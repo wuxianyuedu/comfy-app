@@ -3742,6 +3742,10 @@ TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `
 比直接失败更难查（§9.2 第 3 条禁止的静默失败形态，历史上 `db:push` 就这么潜伏过）。
 现在 `pnpm db:push` 走 `scripts/db/db-push.mjs`：
 
+- **写库前先拿一份不写库的语句清单**（ISSUE #5103）：不带 `--force` 跑一次 diff，
+  drizzle 在无 TTY 上会把待执行语句列出来后退出、库不动；只要这批不全在
+  「建表 / 建索引 / 加列」白名单里，就把清单连同人话解释交回、非零退出。
+  `--force` 直接执行时「表还在、结构也收敛」，下面两道复核都看不出数据被清空；
 - 以 `--force` 运行（无交互、幂等；已有 schema 时输出 `No changes detected`）；
 - **复核库里到底有没有表**——不看 drizzle-kit 的退出码（它在无 TTY 上正是
   「报错但 exit 0」，退出码在这条链路上不是事实来源）；
@@ -3760,6 +3764,15 @@ TTY terminal` 后 **exit 0**，并把 `db.sqlite` 留成 **0 字节**。此时 `
 > 既有数据时它会直接执行而不询问**——那时请先备份，或改用 `pnpm db:generate`
 >
 > - `pnpm db:migrate` 审阅 SQL 后再应用（它是 `scripts/db/db-migrate.mjs`：先判决 `drizzle/` 里有没有迁移，再跑，最后按库里的真事实复核 —— 不看 drizzle-kit 的退出码）。
+>
+> **新增 NOT NULL 整数列别指望 `db:push`**（ISSUE #5103）：drizzle-kit 0.31
+> 把 falsy 的 `0` 当成「没有默认值」，于是给新列生成的计划是
+> `delete from <表>;` + `ALTER TABLE <表> ADD …` —— 清表后才加列。安全出口是
+> `pnpm db:generate` + `pnpm db:migrate`：先审阅生成的 SQL（正确形态是
+> `ALTER TABLE <表> ADD <列> integer DEFAULT 0 NOT NULL`），确认无清表语句再应用。
+> `db:push` 的护栏只负责在写库前把清表计划拦下，不会替你决定数据能不能丢。
+> 实测 `.default(sql`0`)` 虽能消掉清表语句，却会让 drizzle 的二次收敛判据永远
+> 认为表结构有差异（`db-migrate-equivalence` 会红），**不是**可直接照搬的替代写法。
 
 **两条建库路「结构等价」不等于「物理同序」**（ISSUE #2655，写在 `db:migrate` 旁边是因为
 只有读这两条路的人才会撞上它）：`db:migrate` 给一张已存在的表补新列只能走

@@ -156,6 +156,11 @@ export function describeRiskyChanges(statements) {
       desc = recreated.has(m.groups?.table ?? "")
         ? `${m.groups?.table ?? ""}（重建表，对不上的列的数据会丢）`
         : `${m.groups?.table ?? ""}（删表，整张表的数据会丢）`;
+    } else if ((m = sql.match(/^DELETE\s+FROM\s+`?(?<table>[\w.]+)`?$/i))) {
+      /* #5103：裸 `.default(0)` 被 drizzle-kit 当「无默认值」时，新增 NOT NULL 列
+       * 的计划会先 `delete from <表>;` 清空数据再加列。它不是删表，表还在、
+       * 结构最终也收敛，光看 DDL 摘要发现不了 —— 必须单独说清丢的是整表数据。 */
+      desc = `${m.groups?.table ?? ""}（清空整张表的数据）`;
     } else if (/__new_/.test(sql)) {
       continue; /* 重建表的搬运 / 改名步骤，上面那条已经讲过 */
     }
