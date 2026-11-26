@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { appendComment } from "../scripts/ci/ci-code-scanning-triage-platform.mjs";
 import {
   CODE,
   aggregateByRule,
@@ -381,5 +382,59 @@ describe("建单路径：创建 → 补标签 → 独立回读", () => {
     expect(labelPost?.init.body).toContain("提单人:ci-daily");
     expect(labelPost?.init.body).toContain("code-scanning");
     expect(logs.join("\n")).toContain("已回读");
+  });
+});
+
+/* ── ⑥ 评论回读翻页（mirror #18：新评论默认排在升序列表的最后一页） ── */
+
+type CnbFetch = (url: string, init?: { body?: string; method?: string }) => Promise<FakeResponse>;
+
+const CNB_CTX = {
+  token: "cnb-token",
+  base: "https://api.cnb.cool",
+  slug: "moon-read/comfy-app-t3",
+};
+
+function commentFetch(pages: Array<Array<{ body: string }>>): {
+  calls: string[];
+  fetchImpl: CnbFetch;
+} {
+  const calls: string[] = [];
+  const fetchImpl: CnbFetch = (url, init) => {
+    calls.push(`${init?.method ?? "GET"} ${url}`);
+    if (init?.method === "POST") {
+      return response(201, { id: "new" });
+    }
+    const page = Number(new URL(url).searchParams.get("page") ?? "1");
+    return response(200, pages[page - 1] ?? []);
+  };
+  return { fetchImpl, calls };
+}
+
+describe("评论回读要翻页（不拿回执当结论，也不把写成误判成没写成）", () => {
+  const marker = "巡检读数 · `b3bad377`";
+
+  it("marker 在第 2 页时算写成（文档默认按 created 升序，新评论在末页）", async () => {
+    const first = Array.from({ length: 100 }, (_, i) => ({ body: `旧评论 ${i}` }));
+    const second = [{ body: `**[评论人：ci-daily]**\n\n## ${marker}\n\n- 读数` }];
+    const { fetchImpl, calls } = commentFetch([first, second]);
+    const result = await appendComment({ ...CNB_CTX, fetchImpl }, 3327, "正文", marker);
+    expect(result).toEqual({ ok: true });
+    expect(calls.some((c) => c.includes("page=2"))).toBe(true);
+  });
+
+  it("翻完仍没找到 marker 才算失败", async () => {
+    const first = Array.from({ length: 100 }, (_, i) => ({ body: `旧评论 ${i}` }));
+    const { fetchImpl } = commentFetch([first, []]);
+    const result = await appendComment({ ...CNB_CTX, fetchImpl }, 3327, "正文", marker);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.detail).toContain("没找到");
+  });
+
+  it("回读列表没跑起来时明确报「不拿回执当结论」", async () => {
+    const fetchImpl: CnbFetch = (_url, init) =>
+      init?.method === "POST" ? response(201, {}) : response(500, "boom");
+    const result = await appendComment({ ...CNB_CTX, fetchImpl }, 3327, "正文", marker);
+    expect(result.ok === false && result.detail).toContain("不拿回执当结论");
   });
 });
