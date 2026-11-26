@@ -37,9 +37,13 @@ import {
   type FacePreset,
 } from "../face-presets";
 
-/** 一格生成结果。taskId 只在本地工作流通道产生，远端通道没有可取消的任务行。 */
+/** 一格生成结果。taskId 只在本地工作流通道产生，远端通道没有可取消的任务行；
+ *  远端通道把 url / 提示词 / 模型名留在结果里，供「加入资产库」复用（#5114）。 */
 export type FaceResult = {
   error?: string;
+  modelName?: string;
+  negativePrompt?: string;
+  prompt?: string;
   status: "pending" | "cancelling" | "cancelled" | "done" | "failed";
   taskId?: string;
   url?: string;
@@ -144,6 +148,7 @@ export function useFaceLibrary() {
           const builtPrompt = buildFacePrompt(preset);
           const negative = buildFaceNegative();
           let url: string;
+          let taskId: string | undefined;
           if (workflowId === "") {
             url = await apiGenerateImage({
               mode: "T2I",
@@ -156,7 +161,7 @@ export function useFaceLibrary() {
               negativePrompt: negative,
               prompt: builtPrompt,
             });
-            const taskId = await startLocalGenerate(built.input);
+            taskId = await startLocalGenerate(built.input);
             if (cancelled.current.has(preset.id)) {
               return;
             }
@@ -168,7 +173,17 @@ export function useFaceLibrary() {
           if (cancelled.current.has(preset.id)) {
             return;
           }
-          patchResult(preset.id, { status: "done", url });
+          patchResult(preset.id, {
+            ...(taskId === undefined
+              ? {
+                  modelName: candidate.name,
+                  negativePrompt: negative,
+                  prompt: builtPrompt,
+                }
+              : { taskId }),
+            status: "done",
+            url,
+          });
         } catch (error) {
           if (cancelled.current.has(preset.id) || error instanceof LibraryTaskCancelledError) {
             return;

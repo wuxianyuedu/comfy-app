@@ -82,6 +82,21 @@ vi.mock("~/components/workshop/ModelCascadeSelect", () => ({
 vi.mock("~/components/ui/image-viewer", () => ({
   ViewableImage: ({ alt }: { alt: string }) => <img alt={alt} src="x" />,
 }));
+vi.mock("~/components/studio/assets/AddToAssetLibraryDialog", () => ({
+  AddToAssetLibraryDialog: ({
+    candidate,
+    taskId,
+  }: {
+    candidate: { sourceUrl: string } | null;
+    taskId: string | null;
+  }) => (
+    <div
+      data-candidate={candidate?.sourceUrl ?? ""}
+      data-task-id={taskId ?? ""}
+      data-testid="add-to-library"
+    />
+  ),
+}));
 vi.mock("~/components/ui/select-menu", () => ({
   SelectMenu: ({
     "aria-label": label,
@@ -142,5 +157,26 @@ describe("风格库视图（ISSUE #5069）", () => {
     const remote = screen.getByLabelText("取消生成：油画厚涂写实");
     expect(remote.hasAttribute("disabled")).toBe(true);
     expect(screen.getByText("远端通道不可取消")).toBeTruthy();
+  });
+
+  it("成品卡可加入资产库：本地带 taskId，远端带 URL（#5114）", () => {
+    mocks.controller.results = {
+      "anime-illustration": { status: "done", taskId: "task-local", url: "/api/generated/x.png" },
+      "oil-painting": {
+        modelName: "remote-model",
+        prompt: "oil painting",
+        status: "done",
+        url: "https://example.test/oil.png",
+      },
+    };
+    render(<StyleLibrary />);
+
+    fireEvent.click(screen.getByLabelText("把「日系动漫插画」加入资产库"));
+    expect(screen.getByTestId("add-to-library")?.dataset.taskId).toBe("task-local");
+
+    fireEvent.click(screen.getByLabelText("把「油画厚涂写实」加入资产库"));
+    expect(screen.getByTestId("add-to-library")?.dataset.candidate).toBe(
+      "https://example.test/oil.png",
+    );
   });
 });

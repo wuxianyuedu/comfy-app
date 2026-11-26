@@ -136,6 +136,12 @@ describe("useFaceLibrary 多选与单条取消（ISSUE #5098）", () => {
     });
     expect(mocks.apiGenerateImage).toHaveBeenCalledTimes(1);
     expect(result.current.results["silver-mage"]?.taskId).toBeUndefined();
+    /* 远端没有任务行，结果要留住入库所需元数据（#5114）。 */
+    const done = result.current.results["silver-mage"];
+    expect(done?.modelName).toBe("local-model");
+    expect(typeof done?.prompt).toBe("string");
+    expect(done?.status).toBe("done");
+    expect(done?.url).toBe("https://example.test/face.png");
 
     await act(async () => {
       await result.current.cancelOne("silver-mage");

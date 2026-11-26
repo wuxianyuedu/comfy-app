@@ -129,6 +129,12 @@ describe("useStyleLibrary 单条取消（ISSUE #5098）", () => {
     expect(mocks.apiGenerateImage).toHaveBeenCalledTimes(1);
     expect(result.current.results["anime-illustration"]?.status).toBe("done");
     expect(result.current.results["anime-illustration"]?.taskId).toBeUndefined();
+    /* 远端结果要留住入库所需元数据（#5114）。 */
+    const done = result.current.results["anime-illustration"];
+    expect(typeof done?.modelName).toBe("string");
+    expect(typeof done?.prompt).toBe("string");
+    expect(done?.status).toBe("done");
+    expect(typeof done?.url).toBe("string");
 
     await act(async () => {
       await result.current.cancelOne("anime-illustration");
