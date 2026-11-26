@@ -135,9 +135,14 @@ export const taskRouter = createTRPCRouter({
        * 是内存判据，不进这个 SQL 计数——带 media 筛选时前端的总数显示退回
        * 「已加载」口径。 */
       const countFilter = { projectId: input.projectId, statusList };
-      const [total, statusCounts] = await Promise.all([
+      /* 今日零点按本机时区算，与队列页卡片此前用 `createdAt.toDateString()` 的
+       * 「今天」同一口径。按状态分组的服务端计数不受 take 截断影响。 */
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const [total, statusCounts, todayCounts] = await Promise.all([
         taskRepository.countByUser(ctx.user.id, countFilter),
         taskRepository.countByStatusByUser(ctx.user.id, countFilter),
+        taskRepository.countByStatusByUser(ctx.user.id, countFilter, todayStart),
       ]);
       if (!input.media) {
         /* 多取一行判 hasMore（#4594）：请求 PAGE+1 行，返回行数超过 PAGE = 还有下一页。
@@ -154,6 +159,7 @@ export const taskRouter = createTRPCRouter({
           nextScanCursor: input.cursor + Math.min(rows.length, PAGE),
           total,
           statusCounts,
+          todayCounts,
         };
       }
 
@@ -190,6 +196,7 @@ export const taskRouter = createTRPCRouter({
         nextScanCursor: input.cursor + scanned,
         total,
         statusCounts,
+        todayCounts,
       };
     }),
 

@@ -21,10 +21,6 @@ export type QueueTaskParamsSource = {
 /** 参数表的一行：label 是给用户看的名字，value 已收成可显示的字符串。 */
 export type QueueTaskParamRow = { label: string; value: string };
 
-/** 长值的显示上限：参数表是给人核对「提交了什么」的，超长原文去任务详情 /
- * 执行日志看，这里截断保排版。 */
-const VALUE_TEXT_CAP = 400;
-
 /** 认得的键给中文名；不认识的键原样回显（与 taskStatusLabel 同一口径）。 */
 const PARAM_LABELS: Record<string, string> = {
   aspectRatio: "比例",
@@ -75,7 +71,9 @@ function paramValueText(value: unknown): string | null {
     if (text === "") {
       return null;
     }
-    return text.length > VALUE_TEXT_CAP ? `${text.slice(0, VALUE_TEXT_CAP)}…` : text;
+    /* 参数表是核对「提交了什么」的出口，长提示词 / 工坊参数原样保留，交给
+     * 视图换行展示（#5074：截断后用户看不见完整内容）。 */
+    return text;
   }
   if (typeof value === "number" || typeof value === "boolean") {
     return String(value);

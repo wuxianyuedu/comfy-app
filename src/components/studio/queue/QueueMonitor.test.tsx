@@ -186,7 +186,7 @@ describe("QueueMonitor", () => {
     expect(screen.getByText(/连接后显示耗时与节点明细/)).toBeInTheDocument();
   });
 
-  it("每一行都有「日志」入口，点击把该行交给 controller 打开弹窗", () => {
+  it("排队中没有日志入口，已执行的行点「日志」把该行交给 controller（#5074）", () => {
     const openLog = vi.fn();
     monitorMock.mockReturnValue(
       controller({
@@ -199,12 +199,12 @@ describe("QueueMonitor", () => {
     const logButtons = screen.getAllByRole("button", {
       name: /查看这一条的执行日志/,
     });
-    expect(logButtons).toHaveLength(2);
-    /* 读屏顺序：排队段在前、最近结果在后 —— 每个按钮各归属那一行。 */
+    expect(logButtons).toHaveLength(1);
     logButtons[0]!.click();
-    expect(openLog).toHaveBeenCalledWith(expect.objectContaining({ id: "q1", status: "QUEUED" }));
-    logButtons[1]!.click();
     expect(openLog).toHaveBeenCalledWith(expect.objectContaining({ id: "bad", status: "FAILED" }));
+    expect(openLog).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: "q1", status: "QUEUED" }),
+    );
   });
 
   it("logRow 非空时挂载执行日志弹窗，关闭回调交还 controller", () => {

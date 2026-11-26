@@ -75,6 +75,32 @@ describe("task.list", () => {
     expect(res.tasks).toEqual([]);
   });
 
+  it("statusCounts / todayCounts 是全量计数，不受 take 截断（#5073）", async () => {
+    seedTask(tdb, {
+      id: "q-old",
+      userId: "user-a",
+      status: "QUEUED",
+      createdAt: new Date("2020-01-01T00:00:00Z"),
+    });
+    seedTask(tdb, {
+      id: "q-today",
+      userId: "user-a",
+      status: "QUEUED",
+      createdAt: new Date(),
+    });
+    seedTask(tdb, {
+      id: "ok-today",
+      userId: "user-a",
+      status: "SUCCEEDED",
+      createdAt: new Date(),
+    });
+    const res = await createCaller(makeCtx()).list({ take: 1 });
+    expect(res.tasks).toHaveLength(1);
+    expect(res.statusCounts.QUEUED).toBe(2);
+    expect(res.todayCounts.QUEUED).toBe(1);
+    expect(res.todayCounts.SUCCEEDED).toBe(1);
+  });
+
   it("返回封面/进度/checkpoint 投影，mediaType 按封面与 taskType 推断，createdAt 倒序", async () => {
     seedTask(tdb, {
       id: "task-img",

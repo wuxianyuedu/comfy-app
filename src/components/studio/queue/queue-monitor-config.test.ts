@@ -13,6 +13,7 @@ import {
   offlineRunningCardNote,
   filterRowsByModelSelection,
   queueStats,
+  queueStatsFromCounts,
   queuedWithPosition,
   recentWithin,
   remainingText,
@@ -213,6 +214,24 @@ describe("queueStats", () => {
       running: 0,
       succeededToday: 0,
     });
+  });
+});
+
+describe("queueStatsFromCounts（#5073 全量口径，不受 take=200 截断）", () => {
+  it("服务端计数存在时四格直接取全量，窗口版只作兜底", () => {
+    const fallback = { failedToday: 0, queued: 200, running: 0, succeededToday: 0 };
+    expect(
+      queueStatsFromCounts(
+        { QUEUED: 737, RUNNING: 1, SUCCEEDED: 12, FAILED: 3 },
+        { SUCCEEDED: 4, FAILED: 2 },
+        fallback,
+      ),
+    ).toEqual({ failedToday: 2, queued: 737, running: 1, succeededToday: 4 });
+  });
+
+  it("计数缺席（首帧）退回窗口版，不编数", () => {
+    const fallback = { failedToday: 1, queued: 20, running: 2, succeededToday: 3 };
+    expect(queueStatsFromCounts(undefined, undefined, fallback)).toEqual(fallback);
   });
 });
 

@@ -55,9 +55,8 @@ export function bucketQueueRows(rows: ReadonlyArray<QueueRow>): QueueBuckets {
 }
 
 /** 顶部指标带的四格读数（纯派生，视图只渲染）。
- * running / queued 即三桶计数；完成与失败只数**创建于今天**的终态行 ——
- * task.list 没有完成时刻，创建日是能拿到的最近口径（窗口为最近 200 条，
- * 日常远不到上限，越界时读数偏保守而非虚高）。 */
+ * 窗口版只作首帧兜底：task.list 的 take 上限会把窗口塞满排队行，越界时这版
+ * 读数偏小。正式口径走 {@link queueStatsFromCounts} 的服务端全量计数。 */
 export type QueueStats = {
   failedToday: number;
   queued: number;
@@ -84,6 +83,24 @@ export function queueStats(buckets: QueueBuckets, now: Date): QueueStats {
     queued: buckets.queued.length,
     running: buckets.running.length,
     succeededToday,
+  };
+}
+
+/**
+ * 指标带的**全量口径**（#5073）：优先读服务端 `task.list` 已带的按状态分组计数
+ * （SQL GROUP BY，与 take 无关），今日完成 / 失败读同一口径的时间过滤版。
+ * 首帧拿不到计数时才退回窗口版 —— 宁可短暂偏小，也不拿 200 行切片冒充全量。
+ */
+export function queueStatsFromCounts(
+  statusCounts: Record<string, number> | null | undefined,
+  todayCounts: Record<string, number> | null | undefined,
+  fallback: QueueStats,
+): QueueStats {
+  return {
+    failedToday: todayCounts?.FAILED ?? fallback.failedToday,
+    queued: statusCounts?.QUEUED ?? fallback.queued,
+    running: statusCounts?.RUNNING ?? fallback.running,
+    succeededToday: todayCounts?.SUCCEEDED ?? fallback.succeededToday,
   };
 }
 
