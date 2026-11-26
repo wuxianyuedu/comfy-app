@@ -9,7 +9,7 @@
 
 ## 1. 工作区与导航（FR-WS）
 
-#### FR-WS-01 工作区容器与 17 视图注册表
+#### FR-WS-01 工作区容器与 25 视图注册表
 
 - 状态：已上线
 - 需求：产品主体是一个全屏工作区容器；所有主界面以「视图」在其中切换，
@@ -145,7 +145,7 @@
   **共享标签页**（切走即关，不在页签条上留位置），按项配置；配置落在 JSON 里，
   并可在设置中修改（ISSUE #3623 / #3798）。非侧栏的常驻界面（设置、UI 控件总览）
   同样受这一份配置管 —— 入口在顶栏菜单 / 命令面板，不改变「行为该能配」这件事。
-- 行为与验收：配置面 = `configurableTabViews()`，即首页以外的**全部 11 个全局视图**
+- 行为与验收：配置面 = `configurableTabViews()`，即首页以外的**全部 17 个全局视图**
   （首页是固定页签，不在配置面内）；判据 `isTransientView()` 只认配置面，项目默认
   为每一屏都显式写了档位：`uiKit` 出厂 `shared`（切走即关；#5003 起反转 #3798
   的 `independent` 档，结论记录见 ISSUE #5024）、`settings` 出厂
@@ -2200,3 +2200,65 @@
   `src/components/studio/hooks/library-image-task.ts`（SSE 退订与取消落定）、
   `src/components/ui/use-copy-feedback.ts`（复制唯一出口）、
   `src/lib/workshop/generation-client.ts` + `generation-api-client.ts`（既有生成链路）。
+
+## 20. 服饰库（FR-CO）
+
+#### FR-CO-01 侧栏服饰库与可搜索的服饰列表
+
+- 状态：已上线（#5125）
+- 需求：侧栏「服饰库」进入；服饰提示词可搜索、可多选（全选 / 清空）后批量入队。
+- 行为与验收：① 侧栏有「服饰库」入口且可点开（与脸库同族的全局视图，默认独立标签页）；
+  ② 列表按名字 / 说明 / 提示词 / 标签模糊搜索，空词回全部；③ 每条显示名字、中文说明与标签；
+  ④ 数据来自内置预设数组，不在本页再抄一份服饰词表；⑤ 默认选中第一条。
+- 落点：`src/components/studio/NavItems.tsx`、`LazyViews.tsx`、`WorkspaceViewStack.tsx`、
+  `src/components/studio/costumes/CostumeLibrary.tsx`（视图与配置）。
+
+#### FR-CO-02 数据驱动服饰提示词拼接
+
+- 状态：已上线（#5125）
+- 需求：每条服饰有一条完整正向提示词，可直接复制。
+- 行为与验收：① 内置 108 条服饰预设（中式 / 日韩 / 西式历史 / 现代休闲 / 职业功能 / 奇幻科幻，
+  每类 18 条），按分类拆成 6 个静态数据文件汇总，避免单文件超 900 行；
+  ② 正向 = 全身立绘前缀 + 预设词 + 立绘唯一「无文字」正向约束；负向复用立绘唯一口径；
+  ③ 预设 id 跨文件唯一、字段非空；用例钉住形状、数量与拼接口径。
+- 落点：`src/components/studio/costumes/costume-presets.ts` 与 `costume-presets-*.ts`、
+  `src/components/studio/research/research-prompt.ts`（正负词与搜索的唯一口径）。
+
+#### FR-CO-03 一键复制、批量生图与入库
+
+- 状态：已上线（#5125）
+- 需求：复制走平台唯一出口；选支持 T2I 的模型批量生图，逐条可取消；成品可加入资产库。
+- 行为与验收：① 模型候选经 `useModelCatalog("image","T2I")` 收窄；本地通道走既有工作流 +
+  SSE 观察，远端通道走 `apiGenerateImage`，有界并发 2；② 本地通道逐条结果留 taskId，
+  「取消生成」打 `cancelTask` 后退订 SSE、落已取消；远端无任务行，按钮禁用并说明；
+  ③ 结果卡「加入资产库」复用 `AddToAssetLibraryDialog`：本地带 taskId 走 `asset.createFromTask`，
+  远端带 URL + 提示词走 `asset.createFromUrl`；④ 失败有逐条可读出口。
+- 落点：`src/components/studio/research/hooks/use-research-library.ts`（四页共用编排）、
+  `ResearchLibraryView.tsx`（共用视图）、`assets/ResearchResultCard.tsx`（共用结果卡）。
+
+## 21. 装饰库（FR-AC）
+
+#### FR-AC-01 侧栏装饰库与可搜索的装饰列表
+
+- 状态：已上线（#5126）
+- 需求：侧栏「装饰库」进入；装饰提示词可搜索、可多选（全选 / 清空）后批量入队。
+- 行为与验收：① 侧栏有「装饰库」入口且可点开（默认独立标签页）；② 列表按名字 / 说明 /
+  提示词 / 标签模糊搜索，空词回全部；③ 每条显示名字、中文说明与标签；④ 数据来自内置预设数组。
+- 落点：`src/components/studio/accessories/AccessoryLibrary.tsx` 与侧栏注册链（同 #5125）。
+
+#### FR-AC-02 数据驱动装饰提示词拼接
+
+- 状态：已上线（#5126）
+- 需求：每条装饰有一条完整正向提示词，可直接复制。
+- 行为与验收：① 内置 108 条装饰预设（头饰发饰 / 面饰耳饰 / 颈饰胸饰 / 手饰臂饰 / 腰饰挂件 /
+  道具特殊，每类 18 条），按分类拆成 6 个静态数据文件汇总；② 正向 = 半身特写前缀 + 预设词 +
+  立绘唯一「无文字」正向约束；负向复用立绘唯一口径；③ 预设 id 跨文件唯一、字段非空。
+- 落点：`src/components/studio/accessories/accessory-presets.ts` 与 `accessory-presets-*.ts`。
+
+#### FR-AC-03 一键复制、批量生图与入库
+
+- 状态：已上线（#5126）
+- 需求：与服饰库完全同构的复制 / 批量生图 / 单条取消 / 成品入库。
+- 行为与验收：与 FR-CO-03 逐条一致；两页共用 `useResearchLibrary` + `ResearchLibraryView`
+  + `ResearchResultCard`，不新造第二套（规范 12 §12.12 / 硬规则 20）。
+- 落点：`src/components/studio/accessories/AccessoryLibrary.tsx`、`src/components/studio/research/**`。
