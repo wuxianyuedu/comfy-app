@@ -4,6 +4,7 @@
 // 「unknown 形状 → 可渲染的键值行」，不发请求、不碰 React。
 
 import { asRecord } from "~/lib/is-record";
+import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import type { RouterOutputs } from "~/trpc/react";
 
 /** task.detail 的返回形状（含 params JSON 列与 modelName 派生列）。 */
@@ -134,4 +135,27 @@ export function queueTaskParamRows(detail: QueueTaskParamsSource): Array<QueueTa
     push(paramLabel(key), value);
   }
   return rows;
+}
+
+/**
+ * 运行中任务的请求读数（#5075）：本地工作流任务没有 REST 响应摘要，语义等价的
+ * 「请求信息」就是提交时落库的统一输入 + 工作流 id。用 `local-task` 档接入
+ * 测试模型页同款 `RequestDetailSection`，徽标为「本地任务 / 已发送」。
+ * 「实际请求」（模型适配器翻译后的上游请求）没有随任务落库，面板另用一行文字
+ * 如实说明，不猜一个不可验证的形状。
+ */
+export function runningRequestRow(detail: {
+  params: unknown;
+  workflowName?: string | null;
+}): ApiCallDebugRow {
+  const params = asRecord(detail.params) ?? {};
+  return {
+    body: { workflow: params.workflow ?? detail.workflowName, ...params },
+    durationMs: null,
+    endpoint: `本地 ComfyUI · ${detail.workflowName}`,
+    excerpt: null,
+    ok: true,
+    phase: "local-task",
+    status: null,
+  };
 }

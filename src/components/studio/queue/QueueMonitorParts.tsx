@@ -1,18 +1,21 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Activity, ChevronDown, Copy, FileText, FolderOpen, X } from "lucide-react";
 
+import { RequestDetailSection } from "~/components/workshop/ModelTestRequestDetail";
 import { Button } from "~/components/ui/button";
+import { SectionLabel } from "~/components/ui/section-label";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { TimeAgo } from "~/components/ui/time-ago";
 import { displayValue } from "~/lib/display-value";
 import { isTerminalTaskStatus, taskStatusLabel } from "~/lib/task-state";
+import type { RouterOutputs } from "~/trpc/react";
 
-import type { QueueTaskParamRow } from "./queue-task-params";
 import type { QueueRow } from "./queue-monitor-config";
+import { runningRequestRow, type QueueTaskParamRow } from "./queue-task-params";
 
 /** 分区标题（h2）。图标是装饰，读屏靠文字本身。 */
 export function SectionHeading({ id, children }: { children: ReactNode; id: string }) {
@@ -215,6 +218,55 @@ export function QueueRowLine({
           <QueueParamTable detailLoading={paramsLoading} paramRows={paramRows} />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * 运行中任务的「统一输入 + 请求信息」（#5075）：与测试模型页同款请求面板，
+ * 行取任务提交时落库的统一输入。真实的上游请求是实时 dry-run、没有随任务
+ * 落库，这里如实标注，不猜一个不可验证的形状。
+ */
+export function RunningDetails({
+  detail,
+  detailLoading,
+  paramRows,
+}: {
+  detail: Pick<
+    NonNullable<RouterOutputs["task"]["detail"]>,
+    "id" | "modelName" | "params" | "prompt" | "status" | "workflowName"
+  > | null;
+  detailLoading: boolean;
+  paramRows: Array<QueueTaskParamRow>;
+}) {
+  const [excerptPretty, setExcerptPretty] = useState(true);
+  return (
+    <div className="border-border-subtle bg-canvas-deep mt-2 flex flex-col gap-3 rounded-lg border p-3">
+      <div>
+        <SectionLabel>统一输入（提交时的参数）</SectionLabel>
+        <QueueParamTable detailLoading={detailLoading} paramRows={paramRows} />
+      </div>
+      <div>
+        <SectionLabel>请求信息</SectionLabel>
+        {detail === null ? (
+          <p className="text-ink-fainter text-xs">
+            {detailLoading ? "正在读取任务详情…" : "没有读取到这条任务的请求信息。"}
+          </p>
+        ) : (
+          <RequestDetailSection
+            excerptPretty={excerptPretty}
+            generating={false}
+            generatingSince={null}
+            onExcerptPretty={setExcerptPretty}
+            rows={[runningRequestRow(detail)]}
+            sent
+            variant="request"
+          />
+        )}
+        <p className="text-muted-foreground text-2xs mt-2">
+          实际请求（模型适配器翻译后发往上游的读数）是实时预览，没有随任务落库；这里显示的是提交时落库的统一输入。
+        </p>
+      </div>
     </div>
   );
 }
