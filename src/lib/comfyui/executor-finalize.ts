@@ -31,7 +31,7 @@ import path from "node:path";
 import {
   collectOutputs,
   extractRuntimeParams,
-  internalPreviewNodeIds,
+  selectedOutputNodeIds,
   type RuntimeParams,
 } from "./executor-outputs";
 import { describeZeroOutputFailure } from "./zero-output-reason";
@@ -190,13 +190,11 @@ function beijingIso(value: Date | string | null | undefined): string | null {
  *  manifest 是归档件——查不到（宿主未注入该仓储且 dynamic import 失败）就给
  *  null，绝不阻塞收口。 */
 /** 产物三级目录的取值：媒体类型取产物首项，模型 / 模式取工作流标签（缺则回落任务行）。 */
-async function resolveTaxonomy(
+function resolveTaxonomy(
   mediaType: string,
   taskRow: { type?: string | null; userId: string; workflowName: string } | null,
-  taskParams: Record<string, unknown>,
-): Promise<ArtifactTaxonomy> {
-  const templateId = typeof taskParams.workflow === "string" ? taskParams.workflow : null;
-  const meta = await loadWorkshopMeta(taskRow?.userId ?? null, templateId);
+  meta: Awaited<ReturnType<typeof loadWorkshopMeta>>,
+): ArtifactTaxonomy {
   return taxonomyFrom({
     mediaType,
     modelName: meta?.modelName ?? taskRow?.workflowName ?? null,
@@ -213,6 +211,8 @@ async function loadWorkshopMeta(
   modelName: string | null;
   modeName: string | null;
   modes: Array<string>;
+  /** 工作流 IO 勾选（编辑 IO / App Mode 都写这一列），用来判哪些节点算产物。 */
+  workflowIO: unknown;
 } | null> {
   if (userId === null || templateId === null || templateId === "") {
     return null;
@@ -231,6 +231,7 @@ async function loadWorkshopMeta(
       modelName: tagRows[0]?.name ?? null,
       modeName: modeCode === null ? null : (getWorkflowType(modeCode)?.label ?? null),
       modes: parseModesJson(tpl.modes),
+      workflowIO: tpl.workflowIO,
     };
   } catch {
     return null;
@@ -362,6 +363,11 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   const projectId: string | null = taskRow?.projectId ?? null;
   const paramsRaw: unknown = taskRow?.params;
   const taskParams: Record<string, unknown> = isRecord(paramsRaw) ? paramsRaw : {};
+  /* 工坊元数据（含 IO 勾选）只取一次：目录分类与「哪些节点算产物」都吃它。
+   * 查不到就给 null，下面按旧行为收全部输出，不阻塞收口。 */
+  const templateId = typeof taskParams.workflow === "string" ? taskParams.workflow : null;
+  const workshopMeta = await loadWorkshopMeta(taskRow?.userId ?? null, templateId);
+  const onlyNodeIds = selectedOutputNodeIds(workshopMeta?.workflowIO ?? null);
   const reqSeed =
     typeof taskParams.seed === "number" || typeof taskParams.seed === "string"
       ? String(taskParams.seed)
@@ -442,18 +448,18 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     return;
   }
 
-  /* 内部预览节点（PreviewAny 等）在 history 里也留 text 键，那是扩写链路的
-   * 中间结果，不算交付物；按节点 id 排除，避免多落一条 txt_0.txt（#5109）。 */
-  const skipTextNodeIds = internalPreviewNodeIds(entry);
+  /* 只认编辑 IO / App Mode 勾选为输出的节点：没勾选的节点整格不算产物，
+   * 连它留下的 images / text 都不下载落库（#5109）。IO 列查不到时 onlyNodeIds
+   * 为 null，维持旧行为，避免在没有事实的时候把产物全丢掉。 */
   const { images, videos, audios, others, texts } = collectOutputs(entry.outputs ?? {}, {
-    skipTextNodeIds,
+    onlyNodeIds,
   });
   const deliverableCount =
     images.length + videos.length + audios.length + others.length + texts.length;
   log(
     taskId,
     "info",
-    `可下载产物 ${deliverableCount} 份（有输出的节点 ${outputsCount} 个；内部预览节点不计产物）`,
+    `可下载产物 ${deliverableCount} 份（有输出的节点 ${outputsCount} 个；只认 IO 勾选的输出节点）`,
   );
   /* 三级目录的取值要等产物收集完才知道媒体类型：首图优先，其次视频 / 音频 / 文本。
    * 地址与磁盘目录同出一份布局，这一句写进 TaskImage.localPath；删除 / 打开侧
@@ -468,7 +474,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
           : texts.length > 0
             ? "text"
             : "other";
-  const taxonomy = await resolveTaxonomy(primaryMediaType, taskRow ?? null, taskParams);
+  const taxonomy = resolveTaxonomy(primaryMediaType, taskRow ?? null, workshopMeta);
   const publicBase = taskOutputUrl(taxonomy, taskId);
   const hasOutput =
     images.length || videos.length || audios.length || texts.length || others.length;
