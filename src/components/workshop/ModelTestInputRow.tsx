@@ -162,7 +162,9 @@ export function InputRow({
             <Textarea
               {...a11y}
               className={cn(
-                "border-border bg-surface-1 focus:border-primary w-full flex-1 resize-y rounded-lg border px-3 py-2 text-sm outline-none",
+                /* #5091：field-sizing-content 会跟随长提示词无限增高，把整页
+                 * 撑出滚动条。给上限后超出部分在框内滚动，短文本仍自适应。 */
+                "border-border bg-surface-1 focus:border-primary max-h-64 w-full flex-1 resize-y overflow-y-auto rounded-lg border px-3 py-2 text-sm outline-none",
                 disabled && "opacity-50",
               )}
               disabled={disabled}

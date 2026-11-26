@@ -110,17 +110,29 @@ describe("ModelTestTree", () => {
     expect(screen.getByRole("radio", { name: /z-image · 工作流A/ })).toBeInTheDocument();
   });
 
-  it("按来源布局：本地 / 远端两组，多模式候选只列一次，选中按当前模式解析", async () => {
-    const { onSelect } = renderTree({ currentMode: "I2I" });
+  it("按来源布局：本地 / 远端 → 用途 → 模式 → 模型，叶子回填自己的三态", async () => {
+    const { onSelect } = renderTree({ currentMode: "T2I" });
     await userEvent.setup().click(screen.getByRole("radio", { name: "按来源" }));
 
     expect(screen.getByText("本地模型")).toBeInTheDocument();
     expect(screen.getByText("远端模型")).toBeInTheDocument();
-    /* dual 在 T2I / I2I 各有一条目，来源布局只列一次。 */
-    expect(screen.getAllByRole("radio", { name: /dual-model/ })).toHaveLength(1);
+    /* 与按用途同构的层级锚点：来源前缀 + 用途 + 模式；视频也在层级里。 */
+    expect(document.querySelector('[data-tree-key="source:local:kind:image"]')).not.toBeNull();
+    expect(document.querySelector('[data-tree-key="source:remote:kind:video"]')).not.toBeNull();
+    expect(document.querySelector('[data-tree-key="source:remote:kind:image:I2I"]')).not.toBeNull();
 
-    /* 当前模式是 I2I：来源布局选中 dual 落 I2I 格，不落第一条（T2I）。 */
-    await userEvent.setup().click(screen.getAllByRole("radio", { name: /dual-model/ })[0]!);
+    /* dual 配了 T2I / I2I：每个模式组各列一次，同组内同取值不重复。 */
+    expect(screen.getAllByRole("radio", { name: /dual-model/ })).toHaveLength(2);
+    expect(document.querySelectorAll('[data-tree-key^="leaf:source:remote:image:"]')).toHaveLength(
+      3,
+    );
+
+    /* 点图像编辑组里的 dual，回填叶子自己的模式，不受当前页 T2I 影响。 */
+    const i2iLeaf = document.querySelector('[data-tree-key="leaf:source:remote:image:I2I:dual"]');
+    if (i2iLeaf === null) {
+      throw new Error("来源布局里找不到图像编辑模式下的 dual 叶子");
+    }
+    await userEvent.setup().click(i2iLeaf);
     expect(onSelect).toHaveBeenCalledWith("image", "I2I", "dual");
   });
 
@@ -175,7 +187,7 @@ describe("ModelTestTree", () => {
     cleanup();
     renderTree();
     expect(screen.getByText("本地模型")).toBeInTheDocument();
-    expect(screen.queryByText("文生图")).toBeNull();
+    expect(document.querySelector('[data-tree-key="source:local:kind:image"]')).not.toBeNull();
   });
 
   it("取数中显示骨架屏", () => {

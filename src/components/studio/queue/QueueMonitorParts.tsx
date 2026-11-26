@@ -4,13 +4,16 @@ import { useState, type ReactNode } from "react";
 import { Activity, ChevronDown, Copy, FileText, FolderOpen, X } from "lucide-react";
 
 import { RequestDetailSection } from "~/components/workshop/ModelTestRequestDetail";
+import { TaskLogTimeline } from "~/components/studio/logs/TaskLogTimeline";
 import { Button } from "~/components/ui/button";
 import { SectionLabel } from "~/components/ui/section-label";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
+import { ProgressBar } from "~/components/ui/progress-bar";
 import { StatusBadge } from "~/components/ui/status-badge";
 import { TruncatedText } from "~/components/ui/truncated-text";
 import { TimeAgo } from "~/components/ui/time-ago";
 import { displayValue } from "~/lib/display-value";
+import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import { isTerminalTaskStatus, taskStatusLabel } from "~/lib/task-state";
 import type { RouterOutputs } from "~/trpc/react";
 
@@ -223,13 +226,16 @@ export function QueueRowLine({
 }
 
 /**
- * 运行中任务的「统一输入 + 请求信息」（#5075）：与测试模型页同款请求面板，
- * 行取任务提交时落库的统一输入。真实的上游请求是实时 dry-run、没有随任务
- * 落库，这里如实标注，不猜一个不可验证的形状。
+ * 运行中任务的四块读数（#5075 / #5093）：统一输入 / 请求信息 / 生成进度 /
+ * 执行日志 / 请求返回。与测试模型页同款部件，日志只在展开时由 hook 订阅。
+ * 真实的上游请求是实时 dry-run、没有随任务落库，这里如实标注。
  */
 export function RunningDetails({
   detail,
   detailLoading,
+  logs,
+  progressPct,
+  settled,
   paramRows,
 }: {
   detail: Pick<
@@ -237,7 +243,10 @@ export function RunningDetails({
     "id" | "modelName" | "params" | "prompt" | "status" | "workflowName"
   > | null;
   detailLoading: boolean;
+  logs: Array<TaskLogEntry>;
   paramRows: Array<QueueTaskParamRow>;
+  progressPct: number;
+  settled: { message?: string; ok: boolean } | null;
 }) {
   const [excerptPretty, setExcerptPretty] = useState(true);
   return (
@@ -266,6 +275,38 @@ export function RunningDetails({
         <p className="text-muted-foreground text-2xs mt-2">
           实际请求（模型适配器翻译后发往上游的读数）是实时预览，没有随任务落库；这里显示的是提交时落库的统一输入。
         </p>
+      </div>
+      <div>
+        <SectionLabel>生成进度</SectionLabel>
+        <ProgressBar label="采样进度" value={progressPct} />
+      </div>
+      <div>
+        <SectionLabel>执行日志</SectionLabel>
+        <div className="custom-scrollbar max-h-64 overflow-y-auto">
+          <TaskLogTimeline
+            emptySlot={<p className="text-ink-fainter text-xs">等待日志…</p>}
+            listClassName="bg-canvas rounded-lg"
+            logs={logs}
+          />
+        </div>
+      </div>
+      <div>
+        <SectionLabel>请求返回</SectionLabel>
+        <KeyValueRows
+          className="border-border-subtle overflow-hidden rounded-lg border"
+          items={[
+            {
+              id: "status",
+              key: "状态",
+              raw: settled === null ? "执行中" : settled.ok ? "已完成" : "失败",
+            },
+            { id: "summary", key: "返回摘要", raw: settled?.message ?? "尚未落定" },
+            { id: "logs", key: "日志行数", raw: String(logs.length) },
+          ]}
+          keyWrap
+          layout="table"
+          mono={false}
+        />
       </div>
     </div>
   );
