@@ -214,18 +214,14 @@ export function refreshComfyQueue(): Promise<void> {
     }
   });
   refreshInFlight = pending;
-  void pending.then(
-    () => {
-      if (refreshInFlight === pending) {
-        refreshInFlight = null;
-      }
-    },
-    () => {
-      if (refreshInFlight === pending) {
-        refreshInFlight = null;
-      }
-    },
-  );
+  const clearInFlight = (): void => {
+    if (refreshInFlight === pending) {
+      refreshInFlight = null;
+    }
+  };
+  /* 清标记的两个分支都已吞掉自身结果（请求本体仍由调用方 await ⇒ 错误不外泄），
+   * 这条悬空 Promise 走统一出口 fireAndForget，不用裸 void（§18 / void-floats）。 */
+  fireAndForget(pending.then(clearInFlight, clearInFlight), ignorePollError);
   return pending;
 }
 
