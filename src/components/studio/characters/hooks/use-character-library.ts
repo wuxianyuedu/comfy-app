@@ -7,11 +7,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
+import { useLibrarySelection } from "~/components/studio/hooks/use-library-selection";
 import { useInterval } from "~/components/ui/use-interval";
-import { runAsyncAction } from "~/lib/async-action";
+import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import type { RouterOutputs } from "~/trpc/react";
 
 import { useToast } from "../../ToastProvider";
+import { useCharacterCancel } from "./use-character-cancel";
 import { useTRPC } from "~/trpc/react";
 import type { CharacterStatusFilter } from "../character-status";
 
@@ -39,6 +41,8 @@ export type CharacterHistoryRow = RouterOutputs["characterLibrary"]["history"][n
 const SYNC_INTERVAL_MS = 5000;
 
 export type CharacterLibraryController = {
+  /** 单条取消正在生成的角色任务（只对有 taskId 的生成中行生效）。 */
+  cancelOne: (id: string) => Promise<void>;
   /** 取消删除（ConfirmDialog 的关闭侧）。 */
   cancelRemove: () => void;
   /** 清空角色多选。 */
@@ -83,6 +87,8 @@ export type CharacterLibraryController = {
   history: Array<CharacterHistoryRow> | null;
   /** 生成历史在取数中。 */
   historyLoading: boolean;
+  /** 当前角色是否正在取消任务（防连点判据，视图不自己记 id）。 */
+  isCancelBusy: (id: string) => boolean;
   /** 角色行（列表接口的形状）。 */
   items: Array<CharacterListItem>;
   loading: boolean;
@@ -145,36 +151,16 @@ export type CharacterLibraryController = {
 
 /** 角色卡多选 + 详情候选勾选的状态与切换（从主 controller 拆出，守住函数长度硬闸）。 */
 function useCharacterSelections() {
-  const [selectedCharacterIds, setSelectedCharacterIds] = useState<Array<string>>([]);
-  const [selectedPortraitUrls, setSelectedPortraitUrls] = useState<Array<string>>([]);
-
-  const toggleCharacterSelection = useCallback((id: string) => {
-    setSelectedCharacterIds((prev) =>
-      prev.includes(id) ? prev.filter((entry) => entry !== id) : [...prev, id],
-    );
-  }, []);
-
-  const clearCharacterSelection = useCallback(() => {
-    setSelectedCharacterIds([]);
-  }, []);
-
-  const togglePortraitSelection = useCallback((url: string) => {
-    setSelectedPortraitUrls((prev) =>
-      prev.includes(url) ? prev.filter((entry) => entry !== url) : [...prev, url],
-    );
-  }, []);
-
-  const clearPortraitSelection = useCallback(() => {
-    setSelectedPortraitUrls([]);
-  }, []);
+  const characters = useLibrarySelection<string>();
+  const portraits = useLibrarySelection<string>();
 
   return {
-    clearCharacterSelection,
-    clearPortraitSelection,
-    selectedCharacterIds,
-    selectedPortraitUrls,
-    toggleCharacterSelection,
-    togglePortraitSelection,
+    clearCharacterSelection: characters.clear,
+    clearPortraitSelection: portraits.clear,
+    selectedCharacterIds: characters.selected,
+    selectedPortraitUrls: portraits.selected,
+    toggleCharacterSelection: characters.toggle,
+    togglePortraitSelection: portraits.toggle,
   };
 }
 
@@ -441,6 +427,13 @@ export function useCharacterLibrary(): CharacterLibraryController {
     }
   }, [invalidateList, syncMut]);
 
+  /* 单条取消与队列页同口径：防连点走 useItemAction，成败文案走 runAsyncAction。 */
+  const report = useCallback<ActionReport>(
+    (kind, detail) => (kind === "ok" ? toast.info(detail) : toast.error(detail)),
+    [toast],
+  );
+  const cancelControl = useCharacterCancel({ items, report, syncNow });
+
   const confirmRemove = useCallback(async (): Promise<void> => {
     if (removeTarget === null) {
       return;
@@ -573,6 +566,7 @@ export function useCharacterLibrary(): CharacterLibraryController {
   }, [q, selectedTags.length, status]);
 
   return {
+    cancelOne: cancelControl.cancelOne,
     cancelRemove: () => {
       setRemoveTarget(null);
     },
@@ -597,6 +591,7 @@ export function useCharacterLibrary(): CharacterLibraryController {
     generating,
     history: detailExtras.history,
     historyLoading: detailExtras.historyLoading,
+    isCancelBusy: cancelControl.isCancelBusy,
     items,
     loading: listQ.isPending,
     openDetail: (id: string) => {

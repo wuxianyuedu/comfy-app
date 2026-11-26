@@ -58,6 +58,7 @@ function queuedRow(id: string, workflowName: string): QueueRow {
 }
 
 const refetch = vi.fn();
+const reorderMutate = vi.fn<(input: { id: string }) => Promise<unknown>>();
 const toast = { info: vi.fn(), error: vi.fn() };
 const copyResult = vi.fn<(text: string) => Promise<boolean>>();
 let listTasks: Array<QueueRow> = [];
@@ -73,6 +74,7 @@ vi.mock("~/trpc/react", () => ({
       /* 展开看参数（#5019）会挂 detail 查询：这里给一个能对上 queryKey 的
        * 工厂即可，数据态由上面替掉的 useQuery 统一给。 */
       detail: { queryOptions: () => ({ queryKey: ["task", "detail"] }) },
+      reorder: { mutationOptions: () => ({ mutationKey: ["task", "reorder"] }) },
     },
     /* 生图暂停（ISSUE #5055）：同样只给能对上 queryKey / mutationKey 的工厂，
      * 数据态由替掉的 useQuery / useMutation 统一给。 */
@@ -94,8 +96,14 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
       refetch,
     }),
     /* 暂停切换的 mutation 不在本文件题目里（读写逻辑由路由 / 仓储用例覆盖）：
-     * 给一个惰性桩，让挂载期不要求 QueryClient 上下文。 */
-    useMutation: () => ({ mutateAsync: vi.fn(() => Promise.resolve(undefined)), isPending: false }),
+     * 给一个惰性桩，让挂载期不要求 QueryClient 上下文；提前执行那一路单独给
+     * 可断言句柄，验它打到 task.reorder 且把服务端信封照实报出来。 */
+    useMutation: (options: { mutationKey?: Array<string> }) => ({
+      mutateAsync: options?.mutationKey?.includes("reorder")
+        ? reorderMutate
+        : vi.fn(() => Promise.resolve(undefined)),
+      isPending: false,
+    }),
   };
 });
 
@@ -232,6 +240,29 @@ describe("useQueueMonitor", () => {
       await result.current.cancel("early", "先提交的工作流");
     });
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("先提交的工作流"));
+  });
+
+  it("提前：打到 task.reorder，按服务端信封报成功并刷新列表", async () => {
+    reorderMutate.mockResolvedValue({ ok: true, detail: "已提前到队首，下一轮就轮到它" });
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.moveUp(queuedRow("late", "后提交的工作流"));
+    });
+    expect(reorderMutate).toHaveBeenCalledWith({ id: "late" });
+    expect(refetch).toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalledWith("已提前到队首，下一轮就轮到它");
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("提前：行已被领走时服务端回 ok:false，原因照实报、列表也刷新", async () => {
+    reorderMutate.mockResolvedValue({ ok: false, detail: "这条已开跑或已结束，无法调整顺序" });
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.moveUp(queuedRow("late", "后提交的工作流"));
+    });
+    expect(refetch).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("这条已开跑或已结束，无法调整顺序");
+    expect(toast.info).not.toHaveBeenCalled();
   });
 
   it("取消全部：确认后打到一个出口、关弹窗、刷新，并如实报出取消条数", async () => {

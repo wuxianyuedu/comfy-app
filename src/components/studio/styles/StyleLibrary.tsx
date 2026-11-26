@@ -66,7 +66,18 @@ function StyleRow({
   );
 }
 
-function ResultCard({ name, result }: { name: string; result?: StyleResult }) {
+function ResultCard({
+  name,
+  onCancel,
+  result,
+  slug,
+}: {
+  name: string;
+  onCancel: (slug: string) => void;
+  result?: StyleResult;
+  slug: string;
+}) {
+  const running = result?.status === "pending" || result?.status === "cancelling";
   return (
     <div className="border-border bg-subtle/40 flex min-w-0 flex-col gap-2 rounded-xl border p-3">
       <div className="flex items-center justify-between gap-2">
@@ -74,9 +85,33 @@ function ResultCard({ name, result }: { name: string; result?: StyleResult }) {
         {result?.status === "pending" && (
           <span className="text-muted-foreground text-xs">生成中…</span>
         )}
+        {result?.status === "cancelling" && (
+          <span className="text-muted-foreground text-xs">取消中…</span>
+        )}
+        {result?.status === "cancelled" && (
+          <span className="text-muted-foreground text-xs">已取消</span>
+        )}
         {result?.status === "done" && <span className="text-success-strong text-xs">已完成</span>}
         {result?.status === "failed" && <span className="text-destructive text-xs">失败</span>}
       </div>
+      {running ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            aria-label={`取消生成：${name}`}
+            disabled={result.taskId === undefined || result.status === "cancelling"}
+            onClick={() => {
+              onCancel(slug);
+            }}
+            size="xs"
+            variant="outline"
+          >
+            取消生成
+          </Button>
+          {result.taskId === undefined ? (
+            <span className="text-muted-foreground text-2xs">远端通道不可取消</span>
+          ) : null}
+        </div>
+      ) : null}
       {result?.status === "done" && result.url ? (
         <ViewableImage
           alt={`${name} 画风生成结果`}
@@ -401,7 +436,15 @@ export function StyleLibrary() {
           {chosen.length > 0 && (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {chosen.map((style) => (
-                <ResultCard key={style.slug} name={style.name} result={c.results[style.slug]} />
+                <ResultCard
+                  key={style.slug}
+                  name={style.name}
+                  onCancel={(slug) => {
+                    void c.cancelOne(slug);
+                  }}
+                  result={c.results[style.slug]}
+                  slug={style.slug}
+                />
               ))}
             </div>
           )}

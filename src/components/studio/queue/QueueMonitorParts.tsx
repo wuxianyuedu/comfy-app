@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState, type ReactNode } from "react";
-import { Activity, ChevronDown, Copy, FileText, FolderOpen, X } from "lucide-react";
+import { Activity, ArrowUp, ChevronDown, Copy, FileText, FolderOpen, X } from "lucide-react";
 
 import { RequestDetailSection } from "~/components/workshop/ModelTestRequestDetail";
 import { TaskLogTimeline } from "~/components/studio/logs/TaskLogTimeline";
@@ -105,6 +105,7 @@ export const QueueRowLine = memo(function QueueRowLine({
   isBusy,
   onCancel,
   onCopy,
+  onMoveUp,
   onOpenFolder,
   onOpenLog,
   onToggleParams,
@@ -116,6 +117,7 @@ export const QueueRowLine = memo(function QueueRowLine({
   leading?: string;
   onCancel: (row: QueueRow) => void;
   onCopy: (row: QueueRow) => void;
+  onMoveUp: (row: QueueRow) => void;
   onOpenFolder: (row: QueueRow) => void;
   onOpenLog: (row: QueueRow) => void;
   onToggleParams?: (id: string) => void;
@@ -185,6 +187,23 @@ export const QueueRowLine = memo(function QueueRowLine({
             >
               <FileText aria-hidden className="size-3" data-icon="inline-start" />
               日志
+            </Button>
+          ) : null}
+          {/* 只有真正排队中的行能调顺序：运行中 / 终态没有这个按钮，服务端也
+              只认 QUEUED —— 两侧同判，不会因为竞态把「提前」当成成功。 */}
+          {row.status === "QUEUED" ? (
+            <Button
+              aria-label="把这一条提前到队首"
+              className="text-ink-faint hover:text-primary-strong h-auto gap-1"
+              disabled={busy}
+              onClick={() => {
+                onMoveUp(row);
+              }}
+              size="xs"
+              variant="ghost"
+            >
+              <ArrowUp aria-hidden className="size-3" data-icon="inline-start" />
+              {busy ? "处理中" : "提前"}
             </Button>
           ) : null}
           {terminal ? (

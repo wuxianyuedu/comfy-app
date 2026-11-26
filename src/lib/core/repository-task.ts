@@ -55,6 +55,7 @@ const taskCardColumns = {
   referenceImages: task.referenceImages,
   parentId: task.parentId,
   status: task.status,
+  sortOrder: task.sortOrder,
   promptId: task.promptId,
   progress: task.progress,
   resultImages: task.resultImages,
@@ -348,20 +349,22 @@ export class TaskRepository extends DrizzleRepository<Task> {
       // offset 一并传下去——此前 offset 被静默丢弃，第二页会重复返回第一页。
       if (opts.skip !== undefined && opts.take === undefined) {
         const page = await limitAll(
-          /* 排序带 id tiebreaker（#4044）：同毫秒批量入队的行序稳定，skip 翻页不重不漏。
+          /* 排序是领取侧的镜像：sortOrder 降序，同值再按 createdAt / id 降序。
+           * 列表末尾即领取侧队首，队列页反转位次的口径不用跟着改；id tiebreaker
+           *（#4044）让同毫秒批量入队的行序稳定，skip 翻页不重不漏。
            * 列集走 taskCardColumns（四个重列不拉，#4411）——与下方 findMany 的
            * columns 排除集同口径。 */
           db
             .select(taskCardColumns)
             .from(task)
             .where(where)
-            .orderBy(desc(task.createdAt), desc(task.id)),
+            .orderBy(desc(task.sortOrder), desc(task.createdAt), desc(task.id)),
         ).offset(opts.skip);
         return withImages(page);
       }
       const rows = await db.query.task.findMany({
         where,
-        orderBy: [desc(task.createdAt), desc(task.id)],
+        orderBy: [desc(task.sortOrder), desc(task.createdAt), desc(task.id)],
         ...(opts.take === undefined ? {} : { limit: opts.take }),
         ...(opts.skip === undefined ? {} : { offset: opts.skip }),
         /* 列表卡只要十来个字段：四个重列（workflowSnapshot / logs / execPayload /
@@ -376,7 +379,11 @@ export class TaskRepository extends DrizzleRepository<Task> {
       });
       return rows;
     }
-    const q = db.select().from(task).where(where).orderBy(desc(task.createdAt), desc(task.id));
+    const q = db
+      .select()
+      .from(task)
+      .where(where)
+      .orderBy(desc(task.sortOrder), desc(task.createdAt), desc(task.id));
     if (opts?.skip === undefined) {
       return opts?.take === undefined ? q : q.limit(opts.take);
     }
@@ -408,6 +415,48 @@ export class TaskRepository extends DrizzleRepository<Task> {
       .where(and(eq(task.userId, userId), notInArray(task.status, [...TERMINAL_TASK_STATUSES])))
       .orderBy(asc(task.createdAt), asc(task.id));
     return rows.map((row) => row.id);
+  }
+
+  /**
+   * 把一条排队任务提前到队首：只改 sortOrder，不动 createdAt（提交时刻是历史事实）。
+   *
+   * 守卫只认 userId + QUEUED，刻意不叠 owner —— 重排是 Next 侧的**用户动作**，
+   * host 片的行照样要能排。先读队首与目标两条小查询，再发**单条条件 UPDATE**：
+   * 若读与写之间该行已被领取循环领走，条件更新影响 0 行，如实回 not-queued，
+   * 上层据此告诉用户「这条已开跑，无法调整」。不 renumber 其余行，避开读改写
+   * 竞态；写入队首 sortOrder - 1 保证它独占队首，同值仍由 createdAt / id 决胜。
+   */
+  async reorderQueuedToFrontForUser(
+    userId: string,
+    id: string,
+  ): Promise<"moved" | "already-first" | "not-queued"> {
+    const targets = await db
+      .select({ id: task.id })
+      .from(task)
+      .where(and(eq(task.id, id), eq(task.userId, userId), eq(task.status, "QUEUED")))
+      .limit(1);
+    if (targets.length === 0) {
+      return "not-queued";
+    }
+    const heads = await db
+      .select({ id: task.id, sortOrder: task.sortOrder })
+      .from(task)
+      .where(and(eq(task.userId, userId), eq(task.status, "QUEUED")))
+      .orderBy(asc(task.sortOrder), asc(task.createdAt), asc(task.id))
+      .limit(1);
+    const head = heads[0];
+    if (head === undefined) {
+      return "not-queued";
+    }
+    if (head.id === id) {
+      return "already-first";
+    }
+    const updated = await db
+      .update(task)
+      .set({ sortOrder: head.sortOrder - 1 })
+      .where(and(eq(task.id, id), eq(task.userId, userId), eq(task.status, "QUEUED")))
+      .returning({ id: task.id });
+    return updated.length > 0 ? "moved" : "not-queued";
   }
 
   async updateStatusForUser(
@@ -471,7 +520,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
   async findByProjectIdWithImages(projectId: string, opts?: { take?: number }) {
     return db.query.task.findMany({
       where: eq(task.projectId, projectId),
-      orderBy: [desc(task.createdAt)],
+      /* 与 listByUser 同一队列口径：被提前的行在产物页也靠前。 */
+      orderBy: [desc(task.sortOrder), desc(task.createdAt)],
       /* 产物页只映射卡片字段（project.outputs）：四个重列整批拉回只为 slice 后
        * 丢弃（#4411）。take 顺带下推到 SQL —— 调用方本来就要 slice 到同一数。 */
       ...(opts?.take === undefined ? {} : { limit: opts.take }),

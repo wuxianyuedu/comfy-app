@@ -29,6 +29,7 @@ const TASK_DETAIL_BASE: TaskDetail = {
   referenceImages: null,
   parentId: null,
   status: "SUCCEEDED",
+  sortOrder: 0,
   promptId: null,
   progress: 0,
   resultImages: null,

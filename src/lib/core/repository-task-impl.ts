@@ -123,20 +123,24 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
   return {
     /** 排队行的只读窥视（P3 §5 ADR §14 D1 的第二刀）：领取循环在「本进程现在还
      *  跑不动」时需要告诉用户它在等什么，而**不能**为此就把行领走（领了不跑正是
-     *  这一刀要消灭的形态）。只取 id、按提交序、不改任何状态。 */
+     *  这一刀要消灭的形态）。只取 id、按队列序、不改任何状态。
+     *  队列序 = sortOrder 升序，同值用 createdAt / id 决胜——与领取、窥视同一口径。 */
     async listQueuedIds(owner: TaskClaimMode, take: number): Promise<Array<string>> {
       const rows = await db
         .select({ id: task.id })
         .from(task)
         .where(and(eq(task.status, "QUEUED"), ownedBy(owner)))
-        .orderBy(task.createdAt)
+        .orderBy(task.sortOrder, task.createdAt, task.id)
         .limit(take);
       return rows.map((row) => row.id);
     },
 
     /**
      * 队列领取（P3 §5 ADR §6/§7 Phase 3-A）：单语句
-     * `UPDATE ... WHERE id IN (SELECT ... ORDER BY createdAt LIMIT ?) RETURNING id`。
+     * `UPDATE ... WHERE id IN (SELECT ... ORDER BY sortOrder, createdAt, id LIMIT ?) RETURNING id`。
+     *
+     * 排序口径只有这一处真相：sortOrder 升序（「提前执行」把值改小），同值仍按
+     * createdAt / id 决胜——提交时刻不因重排而被篡改。
      *
      * 原子性由 SQLite「单写语句内子查询同语句求值」保证：inline/host 两个领取方
      * 各自最多领走互不重叠的行。刻意不用 `db.transaction` + 先 SELECT 后 UPDATE：
@@ -153,7 +157,7 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
         .select({ id: task.id })
         .from(task)
         .where(and(eq(task.status, "QUEUED"), ownedBy(mode)))
-        .orderBy(task.createdAt)
+        .orderBy(task.sortOrder, task.createdAt, task.id)
         .limit(take);
       const claimed = await db
         .update(task)
@@ -171,13 +175,13 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
 
     /** 看一眼队首（**不领取**）：生图暂停闸（ISSUE #5055）用它判断「下一条
      *  是不是生图任务」再决定这一拍领不领。与 `claimNextQueued` 同一归属谓词、
-     *  同一排序（createdAt），只是不写 RUNNING。 */
+     *  同一队列序（sortOrder / createdAt / id），只是不写 RUNNING。 */
     async peekNextQueued(mode: TaskClaimMode): Promise<{ id: string; type: string } | null> {
       const rows = await db
         .select({ id: task.id, type: task.type })
         .from(task)
         .where(and(eq(task.status, "QUEUED"), ownedBy(mode)))
-        .orderBy(task.createdAt)
+        .orderBy(task.sortOrder, task.createdAt, task.id)
         .limit(1);
       return rows[0] ?? null;
     },

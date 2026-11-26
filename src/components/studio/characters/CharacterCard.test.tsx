@@ -2,8 +2,8 @@
 
 /* 角色卡展示回归：全标签（无 +N 截断）、原型与名字同行、状态徽标保留。 */
 
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { TooltipProvider } from "~/components/ui/tooltip";
 
@@ -26,6 +26,7 @@ const character: CharacterListItem = {
   qualityScore: 88,
   source: "seed",
   status: "ready",
+  taskId: null,
   tags: ["标签一", "标签二", "标签三", "标签四", "标签五"],
   width: 768,
 };
@@ -66,5 +67,21 @@ describe("CharacterCard 卡片信息（ISSUE #5009 后续）", () => {
     renderCard();
     expect(screen.getByText("已就绪")).toBeTruthy();
     expect(screen.getByText("质量 88")).toBeTruthy();
+  });
+
+  it("生成中的卡给出单条取消入口，点击把角色 id 上报给 controller", () => {
+    const onCancelGeneration = vi.fn();
+    render(
+      <TooltipProvider delay={0}>
+        <CharacterCard
+          character={{ ...character, status: "generating", taskId: "task-1" }}
+          onCancelGeneration={onCancelGeneration}
+          onOpenDetail={() => undefined}
+          onRemove={() => undefined}
+        />
+      </TooltipProvider>,
+    );
+    fireEvent.click(screen.getByLabelText(`取消生成 ${character.name}`));
+    expect(onCancelGeneration).toHaveBeenCalledWith(character.id);
   });
 });
