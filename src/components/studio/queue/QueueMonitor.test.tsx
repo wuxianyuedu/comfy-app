@@ -40,6 +40,8 @@ function row(over: Partial<QueueRow> & Pick<QueueRow, "id" | "status">): QueueRo
     modelName: null,
     prompt: `提示词 ${over.id}`,
     createdAt: new Date("2026-01-01T00:00:00Z"),
+    finishedAt: null,
+    claimedAt: null,
     cover: null,
     checkpoint: null,
     videoPath: null,

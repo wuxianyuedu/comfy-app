@@ -236,7 +236,20 @@ export function HistoryList({
           ))}
         </div>
       ) : c.filteredCount === 0 ? (
-        <EmptyState description={c.empty.hint} minHeightClass="min-h-75" title={c.empty.title} />
+        <EmptyState
+          action={
+            /* 角标说有、当前页却没有时（#5076）：给一个显式加载入口，别把
+             * 唯一能推进 cursor 的按钮随空态一起卸载，用户卡在「暂无失败任务」。 */
+            c.canLoadMore && (c.counts[c.filter] ?? 0) > 0 ? (
+              <Button disabled={c.loadingMore} onClick={c.loadMore} size="sm" type="button">
+                {c.loadingMore ? "加载中…" : "继续加载"}
+              </Button>
+            ) : undefined
+          }
+          description={c.empty.hint}
+          minHeightClass="min-h-75"
+          title={c.empty.title}
+        />
       ) : (
         <div className="flex-col gap-6">
           {c.visibleGroups.map((group) => (

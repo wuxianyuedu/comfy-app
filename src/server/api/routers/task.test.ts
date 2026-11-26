@@ -101,6 +101,31 @@ describe("task.list", () => {
     expect(res.todayCounts.SUCCEEDED).toBe(1);
   });
 
+  it("投影带回 finishedAt / claimedAt；countStatus 与行 status 解耦（#5076）", async () => {
+    seedTask(tdb, {
+      id: "old-failed",
+      userId: "user-a",
+      status: "FAILED",
+      createdAt: new Date("2020-01-01T00:00:00Z"),
+      finishedAt: new Date(),
+    });
+    seedTask(tdb, {
+      id: "new-ok",
+      userId: "user-a",
+      status: "SUCCEEDED",
+      createdAt: new Date(),
+    });
+    const res = await createCaller(makeCtx()).list({
+      take: 10,
+      status: "FAILED",
+      countStatus: "SUCCEEDED,FAILED,CANCELLED",
+    });
+    expect(res.tasks.map((t) => t.id)).toEqual(["old-failed"]);
+    expect(res.tasks[0]?.finishedAt).toBeInstanceOf(Date);
+    expect(res.statusCounts.FAILED).toBe(1);
+    expect(res.statusCounts.SUCCEEDED).toBe(1);
+  });
+
   it("返回封面/进度/checkpoint 投影，mediaType 按封面与 taskType 推断，createdAt 倒序", async () => {
     seedTask(tdb, {
       id: "task-img",
