@@ -48,9 +48,13 @@ export type StyleItem = {
   tags: Array<string>;
 };
 
-/** 一格对比结果。taskId 只在本地工作流通道产生，远端通道没有可取消的任务行。 */
+/** 一格对比结果。taskId 只在本地工作流通道产生，远端通道没有可取消的任务行；
+ *  远端通道把 url / 提示词 / 模型名留在结果里，供「加入资产库」复用（#5114）。 */
 export type StyleResult = {
   error?: string;
+  modelName?: string;
+  negativePrompt?: string;
+  prompt?: string;
   status: "pending" | "cancelling" | "cancelled" | "done" | "failed";
   taskId?: string;
   url?: string;
@@ -276,6 +280,7 @@ export function useStyleLibrary() {
           const prompt = applyStyleTemplate(preview, style.promptTemplate);
           const negative = composeNegativePrompt(BASE_NEGATIVE, style.negativePrompt);
           let url: string;
+          let taskId: string | undefined;
           if (workflowId === "") {
             url = await apiGenerateImage({
               mode: "T2I",
@@ -288,7 +293,7 @@ export function useStyleLibrary() {
               negativePrompt: negative,
               prompt,
             });
-            const taskId = await startLocalGenerate(built.input);
+            taskId = await startLocalGenerate(built.input);
             if (cancelled.current.has(style.slug)) {
               return;
             }
@@ -300,7 +305,13 @@ export function useStyleLibrary() {
           if (cancelled.current.has(style.slug)) {
             return;
           }
-          patchResult(style.slug, { status: "done", url });
+          patchResult(style.slug, {
+            ...(taskId === undefined
+              ? { modelName: candidate.name, negativePrompt: negative, prompt }
+              : { taskId }),
+            status: "done",
+            url,
+          });
         } catch (error) {
           if (cancelled.current.has(style.slug) || error instanceof LibraryTaskCancelledError) {
             return;

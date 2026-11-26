@@ -7,15 +7,21 @@
  * 右栏：勾选脸的完整提示词（一键复制）与支持 T2I 的模型，结果并排展示。
  * 取数 / 复制 / 生成都在 `hooks/use-face-library`，本文件只做组合（规范 17 §17.2 第④层）。
  */
+import { useState } from "react";
 import { Copy, Search, Sparkles } from "lucide-react";
 
+import { AddToAssetLibraryDialog } from "~/components/studio/assets/AddToAssetLibraryDialog";
+import {
+  buildResearchLibraryTarget,
+  ResearchResultCard,
+  type ResearchLibraryTarget,
+} from "~/components/studio/assets/ResearchResultCard";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ModelCascadeSelect } from "~/components/workshop/ModelCascadeSelect";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
-import { ViewableImage } from "~/components/ui/image-viewer";
 import { Input } from "~/components/ui/input";
 import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { PageHeader } from "~/components/ui/page-header";
@@ -56,74 +62,13 @@ function FaceRow({
   );
 }
 
-function ResultCard({
-  name,
-  onCancel,
-  presetId,
-  result,
-}: {
-  name: string;
-  onCancel: (id: string) => void;
-  presetId: string;
-  result?: FaceResult;
-}) {
-  const running = result?.status === "pending" || result?.status === "cancelling";
-  return (
-    <div className="border-border bg-subtle/40 flex min-w-0 flex-col gap-2 rounded-xl border p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-sm font-medium">{name}</span>
-        {result?.status === "pending" && (
-          <span className="text-muted-foreground text-xs">生成中…</span>
-        )}
-        {result?.status === "cancelling" && (
-          <span className="text-muted-foreground text-xs">取消中…</span>
-        )}
-        {result?.status === "cancelled" && (
-          <span className="text-muted-foreground text-xs">已取消</span>
-        )}
-        {result?.status === "done" && <span className="text-success-strong text-xs">已完成</span>}
-        {result?.status === "failed" && <span className="text-destructive text-xs">失败</span>}
-      </div>
-      {running ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            aria-label={`取消生成：${name}`}
-            disabled={result.taskId === undefined || result.status === "cancelling"}
-            onClick={() => {
-              onCancel(presetId);
-            }}
-            size="xs"
-            variant="outline"
-          >
-            取消生成
-          </Button>
-          {result.taskId === undefined ? (
-            <span className="text-muted-foreground text-2xs">远端通道不可取消</span>
-          ) : null}
-        </div>
-      ) : null}
-      {result?.status === "done" && result.url ? (
-        <ViewableImage
-          alt={`${name} 生成结果`}
-          className="max-h-96 w-full object-contain"
-          label={`${name} 脸图`}
-          src={result.url}
-        />
-      ) : result?.status === "failed" ? (
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          {result.error ?? "生成失败"}
-        </p>
-      ) : (
-        <div className="bg-muted/60 flex h-48 items-center justify-center rounded-lg">
-          <Sparkles aria-hidden="true" className="text-muted-foreground size-6" />
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function FaceLibrary() {
   const c = useFaceLibrary();
+  const [libraryTarget, setLibraryTarget] = useState<ResearchLibraryTarget>(null);
+
+  const addToLibrary = (result: FaceResult) => {
+    setLibraryTarget(buildResearchLibraryTarget(result, "character"));
+  };
 
   return (
     <DocumentFrame
@@ -248,13 +193,15 @@ export function FaceLibrary() {
           {c.selectedPresets.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {c.selectedPresets.map((preset) => (
-                <ResultCard
+                <ResearchResultCard
+                  id={preset.id}
+                  imageLabel={`${preset.name} 脸图`}
                   key={preset.id}
                   name={preset.name}
+                  onAddToLibrary={addToLibrary}
                   onCancel={(id) => {
                     void c.cancelOne(id);
                   }}
-                  presetId={preset.id}
                   result={c.results[preset.id]}
                 />
               ))}
@@ -267,6 +214,16 @@ export function FaceLibrary() {
           </p>
         </section>
       </div>
+
+      <AddToAssetLibraryDialog
+        candidate={
+          libraryTarget !== null && "candidate" in libraryTarget ? libraryTarget.candidate : null
+        }
+        onClose={() => {
+          setLibraryTarget(null);
+        }}
+        taskId={libraryTarget !== null && "taskId" in libraryTarget ? libraryTarget.taskId : null}
+      />
     </DocumentFrame>
   );
 }

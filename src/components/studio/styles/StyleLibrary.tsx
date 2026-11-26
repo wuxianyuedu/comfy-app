@@ -9,15 +9,21 @@
  * 一条数据、不改代码。取数与生成编排都在 `hooks/use-style-library`，本文件
  * 只做组合与弹层（规范 17 §17.2 第④层）。
  */
-import { Plus, Search, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { Plus, Search } from "lucide-react";
 
+import { AddToAssetLibraryDialog } from "~/components/studio/assets/AddToAssetLibraryDialog";
+import {
+  buildResearchLibraryTarget,
+  ResearchResultCard,
+  type ResearchLibraryTarget,
+} from "~/components/studio/assets/ResearchResultCard";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ModelCascadeSelect } from "~/components/workshop/ModelCascadeSelect";
 import { AuroraBackground } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
-import { ViewableImage } from "~/components/ui/image-viewer";
 import { Input } from "~/components/ui/input";
 import { EMBEDDED_SCROLL_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { PageHeader } from "~/components/ui/page-header";
@@ -63,72 +69,6 @@ function StyleRow({
         </span>
       )}
     </Toggle>
-  );
-}
-
-function ResultCard({
-  name,
-  onCancel,
-  result,
-  slug,
-}: {
-  name: string;
-  onCancel: (slug: string) => void;
-  result?: StyleResult;
-  slug: string;
-}) {
-  const running = result?.status === "pending" || result?.status === "cancelling";
-  return (
-    <div className="border-border bg-subtle/40 flex min-w-0 flex-col gap-2 rounded-xl border p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-sm font-medium">{name}</span>
-        {result?.status === "pending" && (
-          <span className="text-muted-foreground text-xs">生成中…</span>
-        )}
-        {result?.status === "cancelling" && (
-          <span className="text-muted-foreground text-xs">取消中…</span>
-        )}
-        {result?.status === "cancelled" && (
-          <span className="text-muted-foreground text-xs">已取消</span>
-        )}
-        {result?.status === "done" && <span className="text-success-strong text-xs">已完成</span>}
-        {result?.status === "failed" && <span className="text-destructive text-xs">失败</span>}
-      </div>
-      {running ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            aria-label={`取消生成：${name}`}
-            disabled={result.taskId === undefined || result.status === "cancelling"}
-            onClick={() => {
-              onCancel(slug);
-            }}
-            size="xs"
-            variant="outline"
-          >
-            取消生成
-          </Button>
-          {result.taskId === undefined ? (
-            <span className="text-muted-foreground text-2xs">远端通道不可取消</span>
-          ) : null}
-        </div>
-      ) : null}
-      {result?.status === "done" && result.url ? (
-        <ViewableImage
-          alt={`${name} 画风生成结果`}
-          className="max-h-96 w-full object-contain"
-          label={`${name} 画风`}
-          src={result.url}
-        />
-      ) : result?.status === "failed" ? (
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          {result.error ?? "生成失败"}
-        </p>
-      ) : (
-        <div className="bg-muted/60 flex h-48 items-center justify-center rounded-lg">
-          <Sparkles aria-hidden="true" className="text-muted-foreground size-6" />
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -253,6 +193,11 @@ function NewStyleForm({
 export function StyleLibrary() {
   const c = useStyleLibrary();
   const chosen = c.styles.filter((style) => c.selectedSlugs.includes(style.slug));
+  const [libraryTarget, setLibraryTarget] = useState<ResearchLibraryTarget>(null);
+
+  const addToLibrary = (result: StyleResult) => {
+    setLibraryTarget(buildResearchLibraryTarget(result, "style"));
+  };
 
   return (
     <DocumentFrame
@@ -436,20 +381,32 @@ export function StyleLibrary() {
           {chosen.length > 0 && (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {chosen.map((style) => (
-                <ResultCard
+                <ResearchResultCard
+                  id={style.slug}
+                  imageLabel={`${style.name} 画风`}
                   key={style.slug}
                   name={style.name}
+                  onAddToLibrary={addToLibrary}
                   onCancel={(slug) => {
                     void c.cancelOne(slug);
                   }}
                   result={c.results[style.slug]}
-                  slug={style.slug}
                 />
               ))}
             </div>
           )}
         </section>
       </div>
+
+      <AddToAssetLibraryDialog
+        candidate={
+          libraryTarget !== null && "candidate" in libraryTarget ? libraryTarget.candidate : null
+        }
+        onClose={() => {
+          setLibraryTarget(null);
+        }}
+        taskId={libraryTarget !== null && "taskId" in libraryTarget ? libraryTarget.taskId : null}
+      />
     </DocumentFrame>
   );
 }
