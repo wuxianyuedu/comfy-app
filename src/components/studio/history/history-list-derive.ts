@@ -43,11 +43,20 @@ export function filterTasks(tasks: Array<TaskItem>, filter: FilterKey): Array<Ta
   return filter === "ALL" ? tasks : tasks.filter((task) => task.status === filter);
 }
 
+/**
+ * 最近活动时刻（#5076）：终态任务以完成时刻为准 —— 用户持续生图时，卡片
+ * 不该停在「提交 6 小时前」。老行没有 finishedAt 时回落 claimedAt，再回落
+ * createdAt。返回 ISO 字符串，与 TaskItem 的其它时间字段同形。
+ */
+export function activityAtOf(task: TaskItem): string {
+  return task.finishedAt ?? task.claimedAt ?? task.createdAt;
+}
+
 /** 排序：newest 时间倒序，oldest 时间正序。返回新数组，不改入参。 */
 export function sortTasks(tasks: Array<TaskItem>, sort: SortKey): Array<TaskItem> {
   return [...tasks].sort((taskA, taskB) => {
-    const da = new Date(taskA.createdAt).getTime();
-    const db = new Date(taskB.createdAt).getTime();
+    const da = new Date(activityAtOf(taskA)).getTime();
+    const db = new Date(activityAtOf(taskB)).getTime();
     return sort === "newest" ? db - da : da - db;
   });
 }
@@ -65,7 +74,7 @@ export function countByStatus(tasks: Array<TaskItem>): Record<string, number> {
 export function groupByDate(tasks: Array<TaskItem>): Array<TaskGroup> {
   const bucketMap = new Map<string, Array<TaskItem>>();
   for (const task of tasks) {
-    getOrCreate(bucketMap, dateBucket(task.createdAt), () => []).push(task);
+    getOrCreate(bucketMap, dateBucket(activityAtOf(task)), () => []).push(task);
   }
   return [...bucketMap.entries()].map(([key, items]) => ({
     key,

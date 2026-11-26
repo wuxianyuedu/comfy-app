@@ -45,6 +45,8 @@ function queuedRow(id: string, workflowName: string): QueueRow {
     status: "QUEUED",
     prompt: `提示词 ${id}`,
     createdAt: new Date("2026-01-01T00:00:00Z"),
+    finishedAt: null,
+    claimedAt: null,
     cover: null,
     checkpoint: null,
     videoPath: null,

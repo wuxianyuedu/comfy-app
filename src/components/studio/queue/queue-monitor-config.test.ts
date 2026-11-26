@@ -33,6 +33,8 @@ function row(over: Partial<QueueRow> & Pick<QueueRow, "status">): QueueRow {
     status: over.status,
     prompt: over.prompt ?? "一句提示词",
     createdAt: over.createdAt ?? new Date("2026-01-01T00:00:00Z"),
+    finishedAt: null,
+    claimedAt: null,
     cover: null,
     checkpoint: null,
     videoPath: null,

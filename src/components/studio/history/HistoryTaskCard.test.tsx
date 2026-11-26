@@ -26,6 +26,17 @@ const task: TaskItem = {
   cover: null,
 };
 
+it("相对时间取最近活动时刻：提交在几小时前、刚完成也显示「刚刚」（#5076）", () => {
+  renderCard({
+    task: {
+      ...task,
+      createdAt: new Date(Date.now() - 6 * 3_600_000).toISOString(),
+      finishedAt: new Date().toISOString(),
+    },
+  });
+  expect(screen.getByText("刚刚")).toBeTruthy();
+});
+
 function renderCard(overrides: Partial<Parameters<typeof HistoryTaskCard>[0]> = {}) {
   const onOpenDetail = vi.fn();
   render(

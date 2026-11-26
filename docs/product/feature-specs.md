@@ -783,7 +783,7 @@
   按任务模式切模式页签、契约口值预填进统一输入表单、等工作流清单 settle 后
   补选同款工作流；用户确认后点「生成」才真正重跑。预填是表单值的**兜底层**：
   换模型不丢（重试换模型再跑是常态），用户改任意输入 / 贴 JSON / 选文件即退场。
-  原直复投端点（`task.retry`）随唯一的消费方（历史页直调）一并退役。
+  原直复投端点（`task.retry`）随唯一的消费方（历史页直调）一并退役。卡片相对时间、排序与日期分组一律按**最近活动时刻**（finishedAt → claimedAt → createdAt），不再停在提交时刻；页签活跃时按固定节奏重问，持续生图时新完成的任务会自己出现。状态筛选下推服务端（按该状态取行与 cursor），角标仍取终态全集计数；「计数有、当前页没有」时空态保留「继续加载」入口，不再卡死（ISSUE #5076）。
 - 落点：`src/components/studio/history/HistoryList.tsx`、
   `src/components/studio/history/hooks/use-history-list.ts`、
   `src/components/studio/history/history-detail-derive.ts`（`buildReprintPayload` /
