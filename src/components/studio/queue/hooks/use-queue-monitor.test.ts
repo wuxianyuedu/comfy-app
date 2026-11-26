@@ -137,9 +137,11 @@ describe("useQueueMonitor", () => {
     ]);
   });
 
-  it("进度还是 0 ⇒ 剩余写「估算中」，不给百分比推算", () => {
+  it("跑动卡把秒表起点与进度原值交给富卡（文案由 RunningTiming 本地计时）", () => {
     const { result } = renderHook(() => useQueueMonitor());
-    expect(result.current.running?.remainingText).toBe("估算中");
+    expect(result.current.running?.progressPct).toBe(0);
+    expect(result.current.running?.progressValue).toBe(553);
+    expect(typeof result.current.running?.startedAt).toBe("number");
   });
 
   it("进度回来之后才给剩余时间", () => {
@@ -156,7 +158,9 @@ describe("useQueueMonitor", () => {
       },
     });
     const { result } = renderHook(() => useQueueMonitor());
-    expect(result.current.running?.remainingText).toBe("约 01:30");
+    expect(result.current.running?.progressPct).toBe(25);
+    expect(result.current.running?.progressValue).toBe(2049);
+    expect(result.current.running?.startedAt).toBe(0);
   });
 
   it("跑动卡带步数与平均速度（progressNode 的 value/max + 已耗时）", () => {
@@ -175,7 +179,8 @@ describe("useQueueMonitor", () => {
     });
     const { result } = renderHook(() => useQueueMonitor());
     expect(result.current.running?.stepsText).toBe("553/8196");
-    expect(result.current.running?.rateText).toBe("13.17 it/s");
+    expect(result.current.running?.progressValue).toBe(553);
+    expect(result.current.running?.startedAt).toBe(0);
   });
 
   it("步数帧没带（comfy-cli 事件源）时写「—」，不编数", () => {
@@ -193,7 +198,7 @@ describe("useQueueMonitor", () => {
     });
     const { result } = renderHook(() => useQueueMonitor());
     expect(result.current.running?.stepsText).toBe("—");
-    expect(result.current.running?.rateText).toBe("—");
+    expect(result.current.running?.progressValue).toBeNull();
   });
 
   it("取消：打到 cancelTask，并刷新列表", async () => {

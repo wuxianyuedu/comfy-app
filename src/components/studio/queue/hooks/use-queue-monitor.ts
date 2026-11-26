@@ -15,7 +15,7 @@ import { useItemAction } from "~/components/ui/use-item-action";
 import { useViewTabActive } from "~/components/ui/view-tab-active";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { revealTaskFolder } from "~/lib/history-detail-actions";
-import { formatSampleRateText, formatStepsText } from "~/lib/progress";
+import { formatStepsText } from "~/lib/progress";
 import { cancelAllTasks, cancelTask } from "~/lib/task-cancel-client";
 import { useTRPC, type RouterOutputs } from "~/trpc/react";
 
@@ -24,14 +24,11 @@ import type { QueueTaskLogTarget } from "../QueueTaskLogModal";
 import { useTaskLogStream } from "./use-task-log-stream";
 import {
   bucketQueueRows,
-  estimateRemainingMs,
   queuedWithPosition,
   queueStats,
   queueStatsFromCounts,
   recentWithin,
-  remainingText,
   reprintText,
-  runningElapsedText,
   type QueueRow,
   type QueueStats,
 } from "../queue-monitor-config";
@@ -39,14 +36,13 @@ import { queueTaskParamRows } from "../queue-task-params";
 
 /** 正在跑那条的展示卡（数值都已算成字符串或百分比，视图只渲染）。 */
 export type RunningCardView = {
-  elapsedText: string;
   id: string;
   modelText: string;
   nodeText: string;
+  /** 耗时相关的文案由富卡内的 RunningTiming 自己按秒表算，避免整页陪跑。 */
   progressPct: number;
-  /** 平均速度（`12.58 it/s`）；步数或耗时拿不到时「—」。 */
-  rateText: string;
-  remainingText: string;
+  progressValue: number | null;
+  startedAt: number;
   /** 采样步数（`553/8196`）；progressNode 没带时「—」。 */
   stepsText: string;
   workflowName: string;
@@ -167,16 +163,15 @@ export function useQueueMonitor(): QueueMonitorController {
 
   const buckets = useMemo(() => bucketQueueRows(listQ.data?.tasks ?? []), [listQ.data?.tasks]);
   const queued = useMemo(() => queuedWithPosition(buckets.queued), [buckets.queued]);
+  const recent = useMemo(() => recentWithin(buckets.recent), [buckets.recent]);
   /* 指标带四格：服务端全量计数优先（不受 take=200 截断），首帧缺计数时退回窗口版。
-   * 日期跨天时 todayCounts 由服务端按本机零点重算，无需前端记忆。 */
+   * 「今天」按日键派生（原来 new Date() 藏在 useMemo 体里，跨零点后口径陈旧）：
+   * 日键变了才重算兜底值，秒级秒表不会让它换引用。 */
+  const todayKey = new Date().toDateString();
+  const fallbackStats = useMemo(() => queueStats(buckets, new Date(todayKey)), [buckets, todayKey]);
   const stats = useMemo(
-    () =>
-      queueStatsFromCounts(
-        listQ.data?.statusCounts,
-        listQ.data?.todayCounts,
-        queueStats(buckets, new Date()),
-      ),
-    [buckets, listQ.data?.statusCounts, listQ.data?.todayCounts],
+    () => queueStatsFromCounts(listQ.data?.statusCounts, listQ.data?.todayCounts, fallbackStats),
+    [fallbackStats, listQ.data?.statusCounts, listQ.data?.todayCounts],
   );
 
   /* 「同一条不能重复点」与忙标记的落 / 清走全库唯一出口（规范 16 §16.2.4.40）。
@@ -197,24 +192,25 @@ export function useQueueMonitor(): QueueMonitorController {
     [toast],
   );
 
+  /* 不依赖每秒变化的 elapsedMs：它只在富卡的 RunningTiming 里本地计时。
+   * queue.running 的快照身份由 store 的 publish() 逐字段守住，秒表 tick 不会
+   * 换掉它，于是整页 controller 在 1s tick 上保持同一份引用。 */
   const running = useMemo<RunningCardView | null>(() => {
     const task = queue.running;
     if (task === null) {
       return null;
     }
-    const remainingMs = estimateRemainingMs(queue.elapsedMs ?? 0, task.progress);
     return {
       id: task.taskId,
       workflowName: task.workflowName ?? "（未知工作流）",
       modelText: task.model ?? "未能从本次工作流里识别",
       nodeText: task.nodeType ?? "尚未回报节点",
-      elapsedText: runningElapsedText(queue.elapsedMs),
-      remainingText: remainingText(remainingMs),
       progressPct: task.progress,
+      progressValue: task.progressValue,
+      startedAt: task.startedAt,
       stepsText: formatStepsText(task.progressValue, task.progressMax) ?? "—",
-      rateText: formatSampleRateText(task.progressValue, queue.elapsedMs) ?? "—",
     };
-  }, [queue.elapsedMs, queue.running]);
+  }, [queue.running]);
 
   /* 运行中那条的详情只在展开它时才取（#5075）：与排队行共用同一个 detail 门控，
    * 同一时刻只展开一条，避免多开查询。 */
@@ -335,48 +331,103 @@ export function useQueueMonitor(): QueueMonitorController {
     [action, copyText, report],
   );
 
-  return {
-    online: queue.online,
-    running,
-    runningRows: buckets.running,
-    queued,
-    stats,
-    recent: recentWithin(buckets.recent),
-    /* 离线时 `/api/comfy/queue` 读不到、两个计数恒为 0，而列表明明排着队 ——
-     * 退回「库里在跑 + 排队」的行数，别让「待执行 0」和下面的列表自相矛盾。 */
-    waitingCount: queue.online
-      ? queue.queued + queue.comfy.pending
-      : buckets.running.length + queued.length,
-    loading: listQ.isPending,
-    loadError: listQ.isError ? "读不到任务记录，后端可能刚重启" : null,
-    logRow,
-    expandedId,
-    runningDetail,
-    runningLogs: runningLogStream.logs,
-    runningSettled: runningLogStream.settled,
-    toggleExpanded,
-    detailLoading: detailQ.isFetching,
-    paramRows,
-    isBusy: (id: string) => action.isBusy(id),
-    refresh: () => {
-      void listQ.refetch();
-    },
-    cancel,
-    cancelAllOpen,
-    cancelAllBusy: action.isBusy(null),
-    confirmCancelAll,
-    requestCancelAll,
-    closeCancelAll,
-    openFolder,
-    copyForReprint,
-    paused: pauseQ.data?.paused ?? false,
-    pauseBusy: setPausedM.isPending,
-    togglePause,
-    openLog: (task) => {
-      setLogRow(task);
-    },
-    closeLog: () => {
-      setLogRow(null);
-    },
-  };
+  /* 稳定 handler（规范 04 §4.8）：此前每行闭包在视图里现造，memo 的行组件
+   * 每次都白跑；这里只暴露按参数取值的函数，逐行闭包下行到行组件自己。 */
+  const isBusy = useCallback((id: string) => action.isBusy(id), [action]);
+  const refetchList = listQ.refetch;
+  const refresh = useCallback(() => {
+    void refetchList();
+  }, [refetchList]);
+  const openLog = useCallback((task: QueueTaskLogTarget) => {
+    setLogRow(task);
+  }, []);
+  const closeLog = useCallback(() => {
+    setLogRow(null);
+  }, []);
+
+  /* 离线时 `/api/comfy/queue` 读不到、两个计数恒为 0，而列表明明排着队 ——
+   * 退回「库里在跑 + 排队」的行数，别让「待执行 0」和下面的列表自相矛盾。 */
+  const online = queue.online;
+  const waitingCount = online
+    ? queue.queued + queue.comfy.pending
+    : buckets.running.length + queued.length;
+  const cancelAllBusy = action.isBusy(null);
+  const paused = pauseQ.data?.paused ?? false;
+  const pauseBusy = setPausedM.isPending;
+  const loading = listQ.isPending;
+  const loadError = listQ.isError ? "读不到任务记录，后端可能刚重启" : null;
+  const detailLoading = detailQ.isFetching;
+
+  /* 秒表 tick 只换 queue.elapsedMs，上面的读数与回调都不变 ⇒ controller 引用
+   * 在 1s tick 上保持稳定，memo 的视图与 50 行列表不再整树重渲染。 */
+  return useMemo(
+    () => ({
+      online,
+      running,
+      runningRows: buckets.running,
+      queued,
+      stats,
+      recent,
+      waitingCount,
+      loading,
+      loadError,
+      logRow,
+      expandedId,
+      runningDetail,
+      runningLogs: runningLogStream.logs,
+      runningSettled: runningLogStream.settled,
+      toggleExpanded,
+      detailLoading,
+      paramRows,
+      isBusy,
+      refresh,
+      cancel,
+      cancelAllOpen,
+      cancelAllBusy,
+      confirmCancelAll,
+      requestCancelAll,
+      closeCancelAll,
+      openFolder,
+      copyForReprint,
+      paused,
+      pauseBusy,
+      togglePause,
+      openLog,
+      closeLog,
+    }),
+    [
+      online,
+      running,
+      buckets.running,
+      queued,
+      stats,
+      recent,
+      waitingCount,
+      loading,
+      loadError,
+      logRow,
+      expandedId,
+      runningDetail,
+      runningLogStream.logs,
+      runningLogStream.settled,
+      toggleExpanded,
+      detailLoading,
+      paramRows,
+      isBusy,
+      refresh,
+      cancel,
+      cancelAllOpen,
+      cancelAllBusy,
+      confirmCancelAll,
+      requestCancelAll,
+      closeCancelAll,
+      openFolder,
+      copyForReprint,
+      paused,
+      pauseBusy,
+      togglePause,
+      openLog,
+      closeLog,
+    ],
+  );
 }

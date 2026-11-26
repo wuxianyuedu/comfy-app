@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { memo, useState, type ReactNode } from "react";
 import { Activity, ChevronDown, Copy, FileText, FolderOpen, X } from "lucide-react";
 
 import { RequestDetailSection } from "~/components/workshop/ModelTestRequestDetail";
@@ -84,6 +84,9 @@ export function QueueParamTable({
   );
 }
 
+/** 参数表未展开时的稳定空数组：父级不再为每行现造 `[]`（规范 04 §4.8）。 */
+const EMPTY_PARAM_ROWS: Array<QueueTaskParamRow> = [];
+
 /**
  * 一行任务。排队行给 `leading`（位次），最近结果行不给（由状态徽标说话）。
  * 状态走 StatusBadge 语义色档、视图不出现颜色档（换主题不用改这里，规范 03 §3.6.2）；
@@ -91,32 +94,38 @@ export function QueueParamTable({
  * 模型徽标（ISSUE #5019）：`modelName` 来自工作流上挂的模型标签 —— 一眼看出
  * 这条队列任务是哪个模型的。`onToggleParams` 在场时给「参数」展开按钮，
  * 展开后参数表就地铺开（数据 = task.detail 的纯派生）。
+ *
+ * memo + 稳定回调：父级的轮询每秒都换一批 props 身份，行级闭包若由父级现造，
+ * memo 形同虚设。回调统一收成 `(row|id) => void`，
+ * 每行的 `onClick` 闭包在本组件自己的 render 里生成。
  */
-export function QueueRowLine({
+export const QueueRowLine = memo(function QueueRowLine({
   row,
   leading,
-  busy,
+  isBusy,
   onCancel,
   onCopy,
   onOpenFolder,
   onOpenLog,
   onToggleParams,
-  paramRows = [],
-  paramsExpanded = false,
-  paramsLoading = false,
+  paramRows,
+  paramsExpanded,
+  paramsLoading,
 }: {
-  busy: boolean;
+  isBusy: (id: string) => boolean;
   leading?: string;
-  onCancel: () => void;
-  onCopy: () => void;
-  onOpenFolder: () => void;
-  onOpenLog: () => void;
-  onToggleParams?: () => void;
-  paramRows?: Array<QueueTaskParamRow>;
-  paramsExpanded?: boolean;
-  paramsLoading?: boolean;
+  onCancel: (row: QueueRow) => void;
+  onCopy: (row: QueueRow) => void;
+  onOpenFolder: (row: QueueRow) => void;
+  onOpenLog: (row: QueueRow) => void;
+  onToggleParams?: (id: string) => void;
+  paramRows: Array<QueueTaskParamRow>;
+  paramsExpanded: boolean;
+  paramsLoading: boolean;
   row: QueueRow;
 }) {
+  const busy = isBusy(row.id);
+  const shownParamRows = paramsExpanded ? paramRows : EMPTY_PARAM_ROWS;
   const terminal = isTerminalTaskStatus(row.status);
   return (
     <div className="flex flex-col gap-1 py-0.5">
@@ -149,7 +158,9 @@ export function QueueRowLine({
               aria-expanded={paramsExpanded}
               aria-label="查看这一条的输入参数"
               className="text-ink-faint hover:text-primary-strong h-auto gap-1"
-              onClick={onToggleParams}
+              onClick={() => {
+                onToggleParams?.(row.id);
+              }}
               size="xs"
               variant="ghost"
             >
@@ -166,7 +177,9 @@ export function QueueRowLine({
             <Button
               aria-label="查看这一条的执行日志"
               className="text-ink-faint hover:text-primary-strong h-auto gap-1"
-              onClick={onOpenLog}
+              onClick={() => {
+                onOpenLog(row);
+              }}
               size="xs"
               variant="ghost"
             >
@@ -180,7 +193,9 @@ export function QueueRowLine({
                 aria-label="打开这一条的输出目录"
                 className="text-ink-faint hover:text-primary-strong h-auto gap-1"
                 disabled={busy}
-                onClick={onOpenFolder}
+                onClick={() => {
+                  onOpenFolder(row);
+                }}
                 size="xs"
                 variant="ghost"
               >
@@ -191,7 +206,9 @@ export function QueueRowLine({
                 aria-label="复制这一条的提交内容，回画布改完再投一次"
                 className="text-ink-faint hover:text-primary-strong h-auto gap-1"
                 disabled={busy}
-                onClick={onCopy}
+                onClick={() => {
+                  onCopy(row);
+                }}
                 size="xs"
                 variant="ghost"
               >
@@ -204,7 +221,9 @@ export function QueueRowLine({
               aria-label="取消这一条"
               className="text-ink-faint hover:text-primary-strong h-auto gap-1"
               disabled={busy}
-              onClick={onCancel}
+              onClick={() => {
+                onCancel(row);
+              }}
               size="xs"
               variant="ghost"
             >
@@ -218,12 +237,12 @@ export function QueueRowLine({
         /* 展开区铺满整行：此前 pl-[4.5rem] 留出一块空白只为对齐行头，
          * 反而让参数表变窄、标签挤成竖排（#5074）。 */
         <div className="min-w-0">
-          <QueueParamTable detailLoading={paramsLoading} paramRows={paramRows} />
+          <QueueParamTable detailLoading={paramsLoading} paramRows={shownParamRows} />
         </div>
       ) : null}
     </div>
   );
-}
+});
 
 /**
  * 运行中任务的四块读数（#5075 / #5093）：统一输入 / 请求信息 / 生成进度 /
