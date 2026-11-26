@@ -11,16 +11,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { vanillaApi } from "~/trpc/vanilla";
 import {
   buildLibraryWorkflowInput,
-  LOCAL_TASK_TIMEOUT_MS,
-  observeTaskUntilSettled,
   startLocalGenerate,
   WORKSHOP_BATCH_CONCURRENCY,
 } from "~/lib/workshop/generation-client";
 import { apiGenerateImage } from "~/lib/workshop/generation-api-client";
-import { isWantedOutput } from "~/lib/workshop/output-filter";
+import { runAsyncAction } from "~/lib/async-action";
 import { runWithConcurrency } from "~/lib/async-pool";
 import { isRecord } from "~/lib/is-record";
+import { cancelTask } from "~/lib/task-cancel-client";
 
+import {
+  LibraryTaskCancelledError,
+  observeLibraryImageTask,
+} from "~/components/studio/hooks/library-image-task";
+import { useLibrarySelection } from "~/components/studio/hooks/use-library-selection";
 import type { ModelSelection } from "~/components/workshop/ModelCascadeSelect";
 import { useModelCatalog } from "~/components/workshop/hooks/use-model-catalog";
 import { workflowIdFromCandidateValue } from "~/components/workshop/model-test-config";
@@ -44,10 +48,11 @@ export type StyleItem = {
   tags: Array<string>;
 };
 
-/** 一格对比结果。 */
+/** 一格对比结果。taskId 只在本地工作流通道产生，远端通道没有可取消的任务行。 */
 export type StyleResult = {
   error?: string;
-  status: "pending" | "done" | "failed";
+  status: "pending" | "cancelling" | "cancelled" | "done" | "failed";
+  taskId?: string;
   url?: string;
 };
 
@@ -111,50 +116,12 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** 等本地任务出图：SSE 落定后收图片产物；未读到图片按失败处理，不假装成功。 */
-function observeImageTask(
-  taskId: string,
-  registerDisposer: (dispose: () => void) => void,
-): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    let stop: () => void = () => undefined;
-    let url = "";
-    stop = observeTaskUntilSettled({
-      onIdleTimeout: (snapshot) => {
-        stop();
-        const found = snapshot?.outputs.find((out) => isWantedOutput("image", out));
-        if (found) {
-          resolve(found.url);
-        } else {
-          reject(new Error("任务超时未产出图片"));
-        }
-      },
-      onOutput: (out) => {
-        if (isWantedOutput("image", out)) {
-          url = out.url;
-        }
-      },
-      onSettled: (result) => {
-        stop();
-        if (result.ok && url !== "") {
-          resolve(url);
-        } else {
-          reject(new Error(result.message ?? "生成失败"));
-        }
-      },
-      taskId,
-      timeoutMs: LOCAL_TASK_TIMEOUT_MS,
-    });
-    registerDisposer(stop);
-  });
-}
-
 export function useStyleLibrary() {
   const [search, setSearch] = useState("");
   const [styles, setStyles] = useState<Array<StyleItem>>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [selectedSlugs, setSelectedSlugs] = useState<Array<string>>([]);
+  const selection = useLibrarySelection<string>();
   const [userPrompt, setUserPrompt] = useState("");
   const [characterId, setCharacterId] = useState<string>("silver-mage");
   const [sceneId, setSceneId] = useState<string>("sakura-tree");
@@ -166,7 +133,10 @@ export function useStyleLibrary() {
   const [draft, setDraft] = useState<NewStyleDraft>(EMPTY_DRAFT);
   const [createError, setCreateError] = useState("");
   const [creating, setCreating] = useState(false);
-  const disposers = useRef<Array<() => void>>([]);
+  /** 退订口按 taskId 登记，单条取消只需退订对应那一条 SSE。 */
+  const disposers = useRef<Map<string, () => void>>(new Map());
+  /** 已发起取消的画风：在途观察即便回报失败也不许把「已取消」改写掉。 */
+  const cancelled = useRef<Set<string>>(new Set());
 
   const catalog = useModelCatalog("image", "T2I");
 
@@ -202,10 +172,10 @@ export function useStyleLibrary() {
   /* 卸载时退订仍挂着的 SSE（有界：只收这一页起的观察器）。 */
   useEffect(
     () => () => {
-      for (const dispose of disposers.current) {
+      for (const dispose of disposers.current.values()) {
         dispose();
       }
-      disposers.current = [];
+      disposers.current.clear();
     },
     [],
   );
@@ -224,11 +194,11 @@ export function useStyleLibrary() {
     setResults((prev) => ({ ...prev, [slug]: next }));
   }, []);
 
-  const toggleStyle = useCallback((slug: string) => {
-    setSelectedSlugs((prev) =>
-      prev.includes(slug) ? prev.filter((item) => item !== slug) : [...prev, slug],
-    );
-  }, []);
+  const toggleStyle = selection.toggle;
+  const clearAll = selection.clear;
+  const selectAll = useCallback(() => {
+    selection.selectAll(styles.map((style) => style.slug));
+  }, [selection, styles]);
 
   const createStyle = useCallback(async (): Promise<boolean> => {
     const name = draft.name.trim();
@@ -261,7 +231,7 @@ export function useStyleLibrary() {
       setDraft(EMPTY_DRAFT);
       setDraftOpen(false);
       setSearch("");
-      setSelectedSlugs((prev) => [...prev, slug]);
+      selection.add(slug);
       return true;
     } catch (error) {
       setCreateError(errorMessage(error));
@@ -269,7 +239,7 @@ export function useStyleLibrary() {
     } finally {
       setCreating(false);
     }
-  }, [draft]);
+  }, [draft, selection]);
 
   /** 生成多画风对比：每格独立失败，不影响其他画风；有界并发沿用工坊档位。 */
   const generate = useCallback(async (): Promise<void> => {
@@ -277,7 +247,7 @@ export function useStyleLibrary() {
       setNotice("先写提示词，或选一个角色 / 场景");
       return;
     }
-    const chosen = styles.filter((style) => selectedSlugs.includes(style.slug));
+    const chosen = styles.filter((style) => selection.selected.includes(style.slug));
     if (chosen.length === 0) {
       setNotice("先勾选至少一个画风");
       return;
@@ -289,6 +259,11 @@ export function useStyleLibrary() {
     }
     setNotice("");
     setGenerating(true);
+    cancelled.current.clear();
+    for (const dispose of disposers.current.values()) {
+      dispose();
+    }
+    disposers.current.clear();
     const workflowId = workflowIdFromCandidateValue(modelSelection.model);
     const nextResults: Record<string, StyleResult> = {};
     for (const style of chosen) {
@@ -314,12 +289,22 @@ export function useStyleLibrary() {
               prompt,
             });
             const taskId = await startLocalGenerate(built.input);
-            url = await observeImageTask(taskId, (dispose) => {
-              disposers.current.push(dispose);
+            if (cancelled.current.has(style.slug)) {
+              return;
+            }
+            patchResult(style.slug, { status: "pending", taskId });
+            url = await observeLibraryImageTask(taskId, (id, dispose) => {
+              disposers.current.set(id, dispose);
             });
+          }
+          if (cancelled.current.has(style.slug)) {
+            return;
           }
           patchResult(style.slug, { status: "done", url });
         } catch (error) {
+          if (cancelled.current.has(style.slug) || error instanceof LibraryTaskCancelledError) {
+            return;
+          }
           patchResult(style.slug, { error: errorMessage(error), status: "failed" });
         }
       });
@@ -328,17 +313,42 @@ export function useStyleLibrary() {
     } finally {
       setGenerating(false);
     }
-  }, [catalog, modelSelection.model, patchResult, preview, selectedSlugs, styles]);
+  }, [catalog, modelSelection.model, patchResult, preview, selection, styles]);
 
-  const selectAll = useCallback(() => {
-    setSelectedSlugs(styles.map((style) => style.slug));
-  }, [styles]);
-
-  const clearAll = useCallback(() => {
-    setSelectedSlugs([]);
-  }, []);
+  /** 单条取消：只对本地工作流通道生效（远端通道没有 task 行）。 */
+  const cancelOne = useCallback(
+    async (slug: string): Promise<void> => {
+      const current = results[slug];
+      if (current?.status !== "pending" || current.taskId === undefined || current.taskId === "") {
+        return;
+      }
+      const taskId = current.taskId;
+      const name = styles.find((style) => style.slug === slug)?.name ?? slug;
+      cancelled.current.add(slug);
+      patchResult(slug, { status: "cancelling", taskId });
+      const outcome = await runAsyncAction(() => cancelTask(taskId), {
+        report: (kind, detail) => {
+          if (kind === "err") {
+            setNotice(detail);
+          }
+        },
+        failureText: `取消「${name}」失败，请稍后重试`,
+        successText: `已取消「${name}」的生成`,
+      });
+      if (outcome.ok) {
+        disposers.current.get(taskId)?.();
+        disposers.current.delete(taskId);
+        patchResult(slug, { status: "cancelled", taskId });
+        return;
+      }
+      cancelled.current.delete(slug);
+      patchResult(slug, { status: "pending", taskId });
+    },
+    [patchResult, results, styles],
+  );
 
   return {
+    cancelOne,
     catalog,
     characterId,
     clearAll,
@@ -358,7 +368,7 @@ export function useStyleLibrary() {
     sceneId,
     search,
     selectAll,
-    selectedSlugs,
+    selectedSlugs: selection.selected,
     setCharacterId,
     setDraft,
     setDraftOpen,

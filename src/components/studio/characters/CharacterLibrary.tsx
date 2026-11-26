@@ -66,6 +66,34 @@ function PortraitDeleteConfirm({
   );
 }
 
+/** 批量打分后发现低分立绘的提示条（从页面拆出，守住函数长度硬闸）。 */
+function QualityWarning({
+  count,
+  onRegenerate,
+  regenerating,
+}: {
+  count: number;
+  onRegenerate: () => void;
+  regenerating: boolean;
+}) {
+  return (
+    <div className="border-warning-strong/30 bg-warning-soft mb-3 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2">
+      <span className="text-ink-strong text-xs">
+        {count} 张立绘质量有问题（纯色 / 空白 / 低分辨率等），建议重新生成。
+      </span>
+      <Button
+        disabled={regenerating}
+        onClick={onRegenerate}
+        size="xs"
+        type="button"
+        variant="outline"
+      >
+        {regenerating ? "重新生成中…" : "重生成问题立绘"}
+      </Button>
+    </div>
+  );
+}
+
 /** 生图弹窗的显式目标：详情重跑发该角色，选择模式发勾选项，否则空（全部待生成）。 */
 function resolveGenerateTargetIds(
   regenerateTargetId: string | null,
@@ -269,22 +297,13 @@ export function CharacterLibrary() {
 
       {/* ── 质量问题提示条：批量打分后发现低分立绘 ── */}
       {c.flaggedCount !== null && c.flaggedCount > 0 ? (
-        <div className="border-warning-strong/30 bg-warning-soft mb-3 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2">
-          <span className="text-ink-strong text-xs">
-            {c.flaggedCount} 张立绘质量有问题（纯色 / 空白 / 低分辨率等），建议重新生成。
-          </span>
-          <Button
-            disabled={c.regenerating}
-            onClick={() => {
-              void c.regenerateFlagged();
-            }}
-            size="xs"
-            type="button"
-            variant="outline"
-          >
-            {c.regenerating ? "重新生成中…" : "重生成问题立绘"}
-          </Button>
-        </div>
+        <QualityWarning
+          count={c.flaggedCount}
+          onRegenerate={() => {
+            void c.regenerateFlagged();
+          }}
+          regenerating={c.regenerating}
+        />
       ) : null}
 
       {/* ── 标签筛选行（多选 AND；空态不占位）── */}
@@ -346,8 +365,12 @@ export function CharacterLibrary() {
         <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {c.items.map((item) => (
             <CharacterCard
+              cancellingGeneration={c.isCancelBusy(item.id)}
               character={item}
               key={item.id}
+              onCancelGeneration={(id) => {
+                void c.cancelOne(id);
+              }}
               onOpenDetail={c.openDetail}
               onRemove={(target) => {
                 c.openRemove(target.id);
@@ -400,10 +423,14 @@ export function CharacterLibrary() {
 
       {/* ── 角色详情弹窗（完整描述 + 全部标签 + 候选立绘）── */}
       <CharacterDetailModal
+        cancellingGeneration={c.isCancelBusy(c.detailId ?? "")}
         character={c.detail}
         deletingPortraits={c.deletingPortraits}
         history={c.history}
         historyLoading={c.historyLoading}
+        onCancelGeneration={(id) => {
+          void c.cancelOne(id);
+        }}
         onClose={() => {
           c.closeDetail();
           setPortraitDeleteOpen(false);

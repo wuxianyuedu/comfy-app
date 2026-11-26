@@ -279,6 +279,26 @@ export const taskRouter = createTRPCRouter({
     return { cancelled, failed, total: ids.length };
   }),
 
+  /**
+   * 把一条排队任务提前到队首：只认归属用户 + QUEUED，不叠 owner（host 片的行
+   * 也要能排）。单条条件 UPDATE 与领取语句在 SQLite 上原子互斥，行若在请求
+   * 期间已被领走则影响 0 行 —— 如实回 ok:false + 人话原因，不假装调整成功。
+   * 运行中 / 终态一律不动。
+   */
+  reorder: authedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const outcome = await taskRepository.reorderQueuedToFrontForUser(ctx.user.id, input.id);
+    if (outcome === "moved") {
+      return { ok: true, detail: "已提前到队首，下一轮就轮到它" };
+    }
+    if (outcome === "already-first") {
+      return { ok: true, detail: "这条已经在队首了" };
+    }
+    logger.warn(
+      `[task.reorder] 未能调整顺序（已开跑 / 不属于当前用户 / 不存在）：taskId=${input.id}`,
+    );
+    return { ok: false, detail: "这条已开跑或已结束，无法调整顺序" };
+  }),
+
   /** 打开产物目录：返回 comfyapp:// 深链（协议未注册时的引导见 openTaskFolder）。 */
   openFolder: authedProcedure
     .input(z.object({ id: z.string() }))

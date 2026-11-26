@@ -8,7 +8,7 @@
  * 纯展示组件：数据与回调由 CharacterLibrary 注入（规范 17 §17.2 第③层）。
  */
 import { useState } from "react";
-import { Gauge, RefreshCw, SquarePen, Trash2 } from "lucide-react";
+import { Gauge, RefreshCw, SquarePen, Trash2, X } from "lucide-react";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -29,12 +29,15 @@ import { characterStatusClass, CHARACTER_STATUS_LABELS } from "./character-statu
 import type { CharacterDetail, CharacterHistoryRow } from "./hooks/use-character-library";
 
 export type CharacterDetailModalProps = {
+  /** 该角色的取消动作进行中（按钮禁用，防连点）。 */
+  cancellingGeneration?: boolean;
   character: CharacterDetail | null;
   /** 删除勾选候选进行中（按钮禁用）。 */
   deletingPortraits: boolean;
   /** 当前角色的全部生成历史（null = 未取到）。 */
   history: Array<CharacterHistoryRow> | null;
   historyLoading: boolean;
+  onCancelGeneration?: (id: string) => void;
   onClose: () => void;
   /** 视图只上报「用户确认删」，请求由 controller 收口。 */
   onDeleteSelectedPortraits: () => void;
@@ -57,10 +60,12 @@ function historyTime(createdAt: number): string {
 }
 
 export function CharacterDetailModal({
+  cancellingGeneration = false,
   character,
   deletingPortraits,
   history,
   historyLoading,
+  onCancelGeneration,
   onClose,
   onDeleteSelectedPortraits,
   onEdit,
@@ -280,6 +285,21 @@ export function CharacterDetailModal({
               </div>
 
               <div className="mt-auto flex flex-wrap items-center gap-2">
+                {character.status === "generating" && character.taskId ? (
+                  <Button
+                    aria-label="取消生成"
+                    disabled={cancellingGeneration}
+                    onClick={() => {
+                      onCancelGeneration?.(character.id);
+                    }}
+                    size="sm"
+                    type="button"
+                    variant="destructive"
+                  >
+                    <X aria-hidden className="size-3.5" data-icon="inline-start" />
+                    取消生成
+                  </Button>
+                ) : null}
                 <Button
                   onClick={() => {
                     onRegenerate(character.id);

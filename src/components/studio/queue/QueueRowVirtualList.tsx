@@ -27,6 +27,7 @@ type QueueRowVirtualListProps = {
   isBusy: (id: string) => boolean;
   onCancel: (row: QueueRow) => void;
   onCopy: (row: QueueRow) => void;
+  onMoveUp: (row: QueueRow) => void;
   onOpenFolder: (row: QueueRow) => void;
   onOpenLog: (row: QueueRow) => void;
   onToggleParams: (id: string) => void;
@@ -40,6 +41,7 @@ export const QueueRowVirtualList = memo(function QueueRowVirtualList({
   isBusy,
   onCancel,
   onCopy,
+  onMoveUp,
   onOpenFolder,
   onOpenLog,
   onToggleParams,
@@ -73,6 +75,7 @@ export const QueueRowVirtualList = memo(function QueueRowVirtualList({
       leading={item.leading}
       onCancel={onCancel}
       onCopy={onCopy}
+      onMoveUp={onMoveUp}
       onOpenFolder={onOpenFolder}
       onOpenLog={onOpenLog}
       onToggleParams={onToggleParams}
