@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Folder, X } from "lucide-react";
 
 import { Hint } from "~/components/ui/hint";
@@ -105,29 +106,42 @@ export function HistoryDetailModal({
     fetchWorkflow: fetchTaskWorkflow,
   });
 
+  /* 派生按依赖 memo 化（#5124）：`deriveWorkflowParams` 对每个 IO 线性查表、
+   * 无提交值时扫整份 workflow 快照，`deriveWorkshopParams` 还会再算一遍参考图。
+   * 父级每次重渲都重算这整套，detail / workflowIO 不变时纯属白干。 */
+  const origin = useMemo(() => deriveTaskOrigin(detail), [detail]);
+  /* 参考图（ISSUE #4855 / #4910）：派生层统一并集任务行 `referenceImages` 列、
+   * `params.inputImage` / `params.referenceImages` 与 workflowInputs 反推
+   * （存量任务行没落列，靠反推补），去重保序后逐张展示，用户不必再回列表
+   * 猜「参考图是哪张」。 */
+  const referenceImages = useMemo(() => deriveReferenceImages(detail), [detail]);
+  /* 按来源分块：工坊发起的任务多摆一块「工坊参数」（工坊对外值），工作流直接
+   * 发起的任务只有「工作流参数」—— 判据见`deriveTaskOrigin`。 */
+  const workshopParams = useMemo(
+    () =>
+      origin === "workshop"
+        ? deriveWorkshopParams(
+            detail,
+            detail?.type ?? null,
+            modeContracts,
+            workflowIO,
+            referenceImages,
+          )
+        : [],
+    [detail, modeContracts, origin, referenceImages, workflowIO],
+  );
+  const workflowParams = useMemo(
+    () => deriveWorkflowParams(detail, workflowIO, detail?.type ?? null),
+    [detail, workflowIO],
+  );
+  const firstImage = Array.isArray(detail?.images) ? detail.images[0] : undefined;
+
   if (detailId === null || detailId === "") {
     return null;
   }
   // 局部 const 让闭包 / IIFE 内的空值窄化在 TS 中稳定成立。
   const current = detail;
-  /* 按来源分块：工坊发起的任务多摆一块「工坊参数」（工坊对外值），工作流直接
-   * 发起的任务只有「工作流参数」—— 判据见`deriveTaskOrigin`。 */
-  const origin = deriveTaskOrigin(current);
-  const workshopParams =
-    origin === "workshop"
-      ? deriveWorkshopParams(current, current?.type ?? null, modeContracts, workflowIO)
-      : [];
-  const {
-    rows: paramRows,
-    topLevelEntries,
-    hasAny: hasParams,
-  } = deriveWorkflowParams(current, workflowIO, current?.type ?? null);
-  const firstImage = Array.isArray(current?.images) ? current.images[0] : undefined;
-  /* 参考图（ISSUE #4855 / #4910）：派生层统一并集任务行 `referenceImages` 列、
-   * `params.inputImage` / `params.referenceImages` 与 workflowInputs 反推
-   * （存量任务行没落列，靠反推补），去重保序后逐张展示，用户不必再回列表
-   * 猜「参考图是哪张」。 */
-  const referenceImages = deriveReferenceImages(current);
+  const { rows: paramRows, topLevelEntries, hasAny: hasParams } = workflowParams;
   /* 快照是 DB 的 JSON 列（unknown）：先确认它是对象、`source` 是字符串再读，
    *  其余（null / 旧数据 / 非字符串）都按「磁盘回退快照」显示。 */
   const snapshot = current?.workflowSnapshot;

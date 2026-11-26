@@ -34,7 +34,6 @@ vi.mock("fs/promises", async (importOriginal) => ({
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { taskRouter } from "~/server/api/routers/task";
-import { taskRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
 import { generatedRoot } from "~/lib/media/output-paths";
 import {
@@ -742,16 +741,17 @@ describe("task.workflow", () => {
     });
   });
 
-  it("两次查询之间那一行没了 → 仍回 NOT_FOUND（防御分支不是死码）", async () => {
-    // `workflow` 先按 `findByIdWithImages` 判归属、再按 `findSnapshotById` 取快照。
-    // 两查之间被删（并发删除 / 库被换）时，第二条查不到必须走**同一个 404**，
-    // 而不是把 undefined 往下传成一次 500。
-    seedTask(tdb, { id: "task-1", userId: "user-a" });
-    const snap = vi.spyOn(taskRepository, "findSnapshotById").mockResolvedValue(null);
+  it("归属与快照同查：查不到 / 他人任务都走同一个 NOT_FOUND", async () => {
+    /* #5124：workflow 此前先 `findByIdWithImages` 判归属（整行重列）再
+     * `findSnapshotById` 读快照，同一 MB 列读两遍。现在一条窄投影同时取
+     * userId 与快照；查不到与越权必须仍不可区分。 */
+    seedTask(tdb, { id: "task-1", userId: "user-b" });
     await expect(createCaller(makeCtx()).workflow({ id: "task-1" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    snap.mockRestore();
+    await expect(createCaller(makeCtx()).workflow({ id: "nope" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 
   it("快照为 null → 全 null；任务不存在 → 抛错", async () => {

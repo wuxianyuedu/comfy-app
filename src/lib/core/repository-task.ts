@@ -199,6 +199,44 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return Object.fromEntries(rows.map((row) => [row.status, Number(row.count)]));
   }
 
+  /** 一次 GROUP BY 同时取总数、按状态计数、今日按状态计数（#5124）。
+   *
+   *  此前调用方并行发三条 COUNT 查询：总数与状态计数的 WHERE 完全相同，
+   *  今日计数只是多一个 createdAt 下界；三条扫的是同一张表，白付两遍聚合。
+   *  返回的 `total` 由分组求和得到，与单独的 count(*) 逐字等价。 */
+  async countStatusesWithToday(
+    userId: string,
+    opts: { projectId?: string; statusList?: Array<string> },
+    todayStart: Date,
+  ): Promise<{
+    statusCounts: Record<string, number>;
+    todayCounts: Record<string, number>;
+    total: number;
+  }> {
+    const rows = await db
+      .select({
+        status: task.status,
+        count: sql<number>`count(*)`,
+        todayCount: sql<number>`count(*) filter (where ${task.createdAt} >= ${todayStart.toISOString()})`,
+      })
+      .from(task)
+      .where(taskListWhere(userId, opts))
+      .groupBy(task.status);
+    const statusCounts: Record<string, number> = {};
+    const todayCounts: Record<string, number> = {};
+    let total = 0;
+    for (const row of rows) {
+      const count = Number(row.count);
+      statusCounts[row.status] = count;
+      total += count;
+      const todayCount = Number(row.todayCount);
+      if (todayCount > 0) {
+        todayCounts[row.status] = todayCount;
+      }
+    }
+    return { statusCounts, todayCounts, total };
+  }
+
   /** 完整排队队列的提交顺序；位次不依赖列表当前加载到第几页。 */
   async queuedPositionsByUser(userId: string): Promise<Map<string, number>> {
     const rows = await db
@@ -537,11 +575,14 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return rows[0] ?? null;
   }
 
+  /** 只取 workflow 快照那一列（外加归属 / 项目两枚小列）。归属也在这里一起读，
+   *  调用方不必再为判权限把整行重列拉回来（#5124）。 */
   async findSnapshotById(
     id: string,
-  ): Promise<{ projectId: string | null; workflowSnapshot: unknown } | null> {
+  ): Promise<{ projectId: string | null; userId: string; workflowSnapshot: unknown } | null> {
     const rows = await db
       .select({
+        userId: task.userId,
         workflowSnapshot: task.workflowSnapshot,
         projectId: task.projectId,
       })

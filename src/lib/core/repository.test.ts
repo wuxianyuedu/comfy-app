@@ -735,6 +735,25 @@ describe("TaskRepository", () => {
     seedUser(tdb, { id: "u2", email: "u2@test.dev" });
   });
 
+  it("countStatusesWithToday 与三次独立 count 等价（#5124 合并重复聚合）", async () => {
+    const a = await taskRepository.createQueued({ ...queued });
+    const b = await taskRepository.createQueued({ ...queued, projectId: "p1" });
+    await taskRepository.finalizeSuccess(a.id, { resultImages: [], params: {} });
+    expect(b.projectId).toBe("p1");
+
+    const filter = { projectId: undefined, statusList: undefined };
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const combined = await taskRepository.countStatusesWithToday("u1", filter, todayStart);
+    const [total, statusCounts, todayCounts] = await Promise.all([
+      taskRepository.countByUser("u1", filter),
+      taskRepository.countByStatusByUser("u1", filter),
+      taskRepository.countByStatusByUser("u1", filter, todayStart),
+    ]);
+    expect(combined).toEqual({ total, statusCounts, todayCounts });
+    expect(combined.total).toBe(2);
+  });
+
   it("createQueued 落 QUEUED 且可带 projectId / snapshot；listByUser 支持分页与状态过滤", async () => {
     const t1 = await taskRepository.createQueued({
       ...queued,
@@ -912,6 +931,7 @@ describe("TaskRepository", () => {
     });
     expect(await taskRepository.findStatusById("nope")).toBeNull();
     expect(await taskRepository.findSnapshotById(t.id)).toEqual({
+      userId: "u1",
       workflowSnapshot: { nodes: [1] },
       projectId: "p1",
     });

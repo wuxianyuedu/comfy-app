@@ -166,11 +166,13 @@ export const taskRouter = createTRPCRouter({
        * 「今天」同一口径。按状态分组的服务端计数不受 take 截断影响。 */
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
-      const [total, statusCounts, todayCounts] = await Promise.all([
-        taskRepository.countByUser(ctx.user.id, countFilter),
-        taskRepository.countByStatusByUser(ctx.user.id, countFilter),
-        taskRepository.countByStatusByUser(ctx.user.id, countFilter, todayStart),
-      ]);
+      /* 三次 COUNT 合成一次 GROUP BY（#5124）：total 与按状态 / 今日计数
+       * 同一套 WHERE，此前三条查询重复扫表。 */
+      const { total, statusCounts, todayCounts } = await taskRepository.countStatusesWithToday(
+        ctx.user.id,
+        countFilter,
+        todayStart,
+      );
       if (!input.media) {
         /* 多取一行判 hasMore（#4594）：请求 PAGE+1 行，返回行数超过 PAGE = 还有下一页。
          * 此前 scanOnce 只取 PAGE 行，`rows.length > PAGE` 恒假 ⇒ hasMore 恒 false，
@@ -352,12 +354,10 @@ export const taskRouter = createTRPCRouter({
 
   /* GET /api/tasks/[id]/workflow —— 读：returns the workflow snapshot */
   workflow: authedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    const owner = await taskRepository.findByIdWithImages(input.id);
-    if (owner?.userId !== ctx.user.id) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
-    }
+    /* 归属与快照同一条窄投影查询取回：此前先 `findByIdWithImages` 判归属
+     * （把 MB 级重列全反序列化一遍），再 `findSnapshotById` 读同一列两次。 */
     const task = await taskRepository.findSnapshotById(input.id);
-    if (!task) {
+    if (!task || task.userId !== ctx.user.id) {
       throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
     }
     /* 快照列是外来 JSON：只判「是对象」这一层，字符串字段带 typeof 收口

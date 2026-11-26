@@ -6,7 +6,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRefreshTicket } from "~/components/ui/use-refresh-ticket";
 
 import { useInterval } from "~/components/ui/use-interval";
@@ -26,6 +26,45 @@ import {
 const TAKE = 80;
 /** 有任务在跑时的轮询间隔。 */
 const POLL_MS = 4000;
+
+/** 逐字段判等：4s 轮询回来的行内容往往一字未变，只是新 JSON 对象。 */
+function sameHistoryRow(a: HistoryTaskRow, b: HistoryTaskRow): boolean {
+  return (
+    a.id === b.id &&
+    a.type === b.type &&
+    a.workflowName === b.workflowName &&
+    a.status === b.status &&
+    a.prompt === b.prompt &&
+    a.createdAt === b.createdAt &&
+    (a.cover ?? null) === (b.cover ?? null) &&
+    a.mediaType === b.mediaType &&
+    (a.projectId ?? null) === (b.projectId ?? null) &&
+    a.progress === b.progress &&
+    (a.error ?? null) === (b.error ?? null)
+  );
+}
+
+/** 值不变就沿用上一次的数组引用（#5124）：否则每 4s 80 行全部重渲，
+ *  即便任务在跑、界面上什么都没变。与历史页 `useStableHistoryTasks` 同口径。 */
+function sameRows(
+  prev: ReadonlyArray<HistoryTaskRow>,
+  next: ReadonlyArray<HistoryTaskRow>,
+): boolean {
+  if (prev === next) {
+    return true;
+  }
+  if (prev.length !== next.length) {
+    return false;
+  }
+  for (let i = 0; i < prev.length; i += 1) {
+    const before = prev[i];
+    const after = next[i];
+    if (before === undefined || after === undefined || !sameHistoryRow(before, after)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export type UseHistoryPanelArgs = {
   /** 当前画布项目 id；有值时默认只看本项目记录。 */
@@ -57,6 +96,14 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
   const [display, setDisplay] = useState<DisplayMode>("list");
 
   const [tasks, setTasks] = useState<Array<HistoryTaskRow>>([]);
+  const lastRows = useRef<ReadonlyArray<HistoryTaskRow>>([]);
+  const stableSetTasks = useCallback((rows: Array<HistoryTaskRow>) => {
+    if (sameRows(lastRows.current, rows)) {
+      return;
+    }
+    lastRows.current = rows;
+    setTasks(rows);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /* 「按需求重跑一遍取数」走唯一出口（规范 16 §16.2.4.70）。 */
@@ -94,12 +141,13 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
       try {
         const rows = await fetchHistoryTasks(params);
         guard.commit(() => {
-          setTasks(rows);
+          stableSetTasks(rows);
         });
       } catch (error_) {
         /* 错误文案与清空列表都属于「这一轮的结论」，一起过守卫。 */
         guard.commit(() => {
           setError(errorMessage(error_, "读取历史记录失败"));
+          lastRows.current = [];
           setTasks([]);
         });
       } finally {
@@ -112,7 +160,7 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
     return () => {
       guard.dispose();
     };
-  }, [projectId, scope, filter, reloadKey]);
+  }, [projectId, scope, filter, reloadKey, stableSetTasks]);
 
   /* ── 本项目为空时探一次全局，以便给出「查看全部」引导 ── */
   useEffect(() => {
