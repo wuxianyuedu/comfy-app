@@ -75,6 +75,11 @@ const DOMAINS = [
    * **面向用户的入口**（谁点了什么、输出给谁看、什么时候回收）。 */
   "console",
   "core",
+  /* DOM 布局量测域（ISSUE #5131）：共享 ResizeObserver 与按批 rAF 的调度，
+   * 消费方横跨 components/ui（TruncatedText / useElementBox）与未来的布局读数点，
+   * 放进任何一侧都会让另一侧反向依赖。它是「何时读 DOM 尺寸」这一件事的地基，
+   * 与 media（媒体编解码）、project-canvas（画布业务）都不同族。 */
+  "dom",
   /* 「数据存在哪儿」的登记（ISSUE #3625）：每种数据 × 它的存放位置 → 类别 /
      图标 / 落点 / 迁移办法。它**不属于 `core`** —— `core` 是仓储层（SQL 出口），
      本域是**跨域的元数据**（讲的是「谁存在哪」，不碰任何一张表）；也不属于
