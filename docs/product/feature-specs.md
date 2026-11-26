@@ -836,12 +836,31 @@
   的模型标签），当前在队列中的是哪些模型一眼可见。排队 / 最近行可**就地展开
   看输入参数**（展开才拉 `task.detail`，经 `queue-task-params` 纯派生成
   中文标签键值行；内部键剔除、长值截断）。
+  任务列表按服务端游标分页；offset 游标不随队列增删自动重取已加载页，只在翻页与
+  手动整表刷新时取数，手动刷新从第一页重建，避免队首变化造成跳行或重复。
+  「全部 / 进行中 / 已结束」走服务端状态筛选，
+  搜索覆盖已加载任务的工作流名、提示词、模型、编号与错误，并明示匹配数；
+  未加载范围不会被搜索伪装成空结果。顶部四格来自全局统计，今日完成 / 失败按
+  `finishedAt` 归属本地当天；排队位次来自完整提交顺序，不按当前页子集重编号，
+  快照未命中时显示「排队中」。手动刷新同时重读任务、全局统计与 ComfyUI 真值，
+  顶部显示三者最近一次成功同步时刻；任一来源失败时保留上一次成功快照、明确提示
+  「不代表实时队尾」并给成功 / 失败反馈，不把部分回包冒充完整同步；ComfyUI 的
+  过期回包只丢弃、不更新同步时刻，主动刷新不得把被后续请求取代的旧回包报成成功。终态行展示实际耗时；
+  窄屏下动作组换行，分页与筛选状态保留在当前视图内。
+  验收：`queue-monitor-config.test.ts`、`use-queue-monitor.test.ts`、
+  `QueueMonitor.test.tsx` 与 `task.test.ts` 覆盖分页合并、状态参数、完成时间、
+  完整队列位次、空位次降级和三源刷新。
   顶部操作区还有生图**暂停 / 恢复**（播放 / 暂停图标随状态切换，暂停后当前任务
   跑完即不再领生图任务，状态落库重启不丢）与**取消全部**（危险色按钮 + 二次
   确认，一键取消当前用户所有非终态任务，含正在生成的那一条；他人任务与终态
   任务不动，部分失败如实报数）。顶部四张统计卡（运行中 / 排队中 / 今日完成 / 失败）一律取**服务端按状态分组的全量计数**，不受列表 `take` 上限截断，与「还有 N 个在排队」的操作条 / 横幅同一口径；列表仍限量展示，挤满排队行时统计卡不得偏小（ISSUE #5073）。跑动中卡片可展开「统一输入 / 请求信息」：统一输入与测试模型页同源（完整可读），请求面板复用同款读数组件显示提交时落库的本地任务输入；模型适配器翻译后的上游请求是实时预览、未随任务落库，面板如实标注不编造（ISSUE #5075）。展开区同时给出生成进度条、就地执行日志与请求返回读数，不另跳弹窗才能看（ISSUE #5093）。排队行可**提前执行**：行上「提前」按钮把该条挪到队首，只改排序值、不改提交时刻；运行中 / 终态没有该动作，行在这期间被领走时如实回报「已开跑无法调整」，不假装成功。
 - 落点：`src/components/studio/queue/QueueMonitor.tsx`、
+  `src/components/studio/queue/QueueMonitorView.tsx`、
+  `src/components/studio/queue/hooks/use-queue-monitor.ts`（查询与动作编排）、
   `src/components/studio/queue/hooks/use-queue-model-tree.ts`（左树与过滤）、
+  `src/components/studio/queue/queue-monitor-config.ts`（纯派生）、
+  `src/components/studio/queue/queue-task-params.ts`（参数派生）、
+  `src/server/api/routers/task.ts`（全局统计与队列位次）
   `src/components/studio/queue/queue-task-params.ts`（参数派生）、
   `src/server/api/routers/task.ts`（`reorder`）、
   `src/lib/core/repository-task-impl.ts`（领取顺序）
@@ -1347,9 +1366,19 @@
   排队位次列表（带模型名徽标）+ 最近结果（含失败原因）。任意一条可**就地
   展开**查看输入参数（`task.detail` 的 `workflowInputs` / 顶层参数派生，
   长值截断）；取消与执行日志大屏（同 FR-LM-08 那份弹窗）就地可用。排队 /
-  最近各铺前 5 / 4 条，尾数指回「队列」页；「队列」页本身不改动。组件
-  测试：`src/components/workshop/ModelTestQueuePanel.test.tsx`；参数派生
+  最近各铺前 5 / 4 条，尾数指回「队列」页；队列详表的分页与全局统计见 FR-QE-01。
+  组件测试：`src/components/workshop/ModelTestQueuePanel.test.tsx`；参数派生
   纯函数测试：`src/components/studio/queue/queue-task-params.test.ts`。
+  每次测试生成结束都留下**有界运行记录**（每个 sessionKey 各保留最近 30 次，
+  其他模型的历史不得逐出当前格记录），记录成功 / 失败 / 取消、耗时、端点、错误分类、
+  当次参数与参考图快照；可清空、按历史参数与参考图重跑，不读取重跑前被修改的表单；勾选任意两次逐项比较参数与
+  参考图组差异，长参数按原始值判断、展示时再截断，内嵌文件只显示体积摘要。
+  对话、图片与视频的取消信号都会传到上游请求；即使上游忽略取消并迟到返回成功，
+  写结果前仍检查取消状态，不得回写当前模型格。单会话执行日志
+  最多保留 300 条，避免长跑无界增长。结果失败是明确状态，并显示端点、耗时与
+  HTTP 状态摘要；取消与失败分别显示「已取消」/「执行失败」和不同状态色。
+  验收：`ModelTestRunHistory.test.tsx`、`use-model-test.test.ts`、`llm.test.ts`
+  覆盖参数差异、重跑、取消传播、迟到结果隔离与运行记录。
 - 按名解析的连接参数（#3778）：远端模型按名直连时，Base URL / 密钥按
   「条目自己的 → 所属供应商的」折算（#3501 起两者以供应商为单位，模型行
   两格为空是常态）—— 模型在但两处都没填地址时给**定向**报错（点名模型），
@@ -1359,6 +1388,8 @@
   `src/components/workshop/model-test-config.ts`、
   `src/components/workshop/ModelAdaptersView.tsx`（固定值编辑器）、
   `src/components/workshop/ModelTestQueuePanel.tsx`（生成队列总览卡）、
+  `src/components/workshop/ModelTestRunHistory.tsx`（运行记录与参数对比）、
+  `src/components/workshop/model-test-runs.ts`（有界记录与错误分类）、
   `src/components/workshop/hooks/use-model-test-queue.ts`、
   `src/components/studio/queue/queue-task-params.ts`（参数派生）、
   `src/lib/workshop/model-mode-contract.ts`（constants）
@@ -1387,6 +1418,10 @@
     最新事件 − 开始），文案走 `formatDurationMs`（`42s` / `2m17s` / `1h02m`）。
     解析唯一实现：`src/lib/workshop/task-log-progress.ts`（同目录单测覆盖
     minimax-h3-image 真实事件形状、时间维度与缓存节点登记）。
+  - 每个用途 / 模式 / 模型格的执行日志最多保留最近 300 条；运行失败时日志卡与
+    运行摘要同时给出端点、耗时与 HTTP 状态。取消显示独立的「已取消」状态与警告色，
+    不冒充红色「执行失败」；大屏查看仍复用
+    `QueueTaskLogModal`，不另写第二份日志查看器，也不把请求头或密钥写入摘要。
 - 落点：`src/components/workshop/ModelTestView.tsx`、
   `src/components/workshop/TaskProgressPanel.tsx`、
   `src/components/workshop/ModelTestResultPanel.tsx`、

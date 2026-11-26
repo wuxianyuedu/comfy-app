@@ -2,7 +2,7 @@ import { afterEach, beforeAll, afterAll, describe, expect, it, vi } from "vitest
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import type { TaskLogEntry } from "~/lib/workshop/generation-client";
-import { LogsCard } from "./ModelTestResultPanel";
+import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
 
 const line = (msg: string, t: number): TaskLogEntry => ({ level: "info", msg, t });
 
@@ -27,6 +27,39 @@ afterAll(() => {
 afterEach(() => {
   cleanup();
   scrollToMock.mockClear();
+});
+
+describe("ModelTestResultPanel 的运行状态", () => {
+  function renderState(error: string | null) {
+    const controller = {
+      error,
+      generating: false,
+      generatingSince: null,
+      openBusy: false,
+      openResultInBrowser: vi.fn(),
+      requestRows: [],
+      responseRows: [],
+      result: null,
+      taskLogs: [],
+      workflowProgress: null,
+    };
+    return render(
+      <ModelTestResultPanel c={controller} excerptPretty={false} onExcerptPretty={vi.fn()} />,
+    );
+  }
+
+  it("取消显示独立的已取消状态，不冒充执行失败", () => {
+    renderState("已取消生成");
+    expect(screen.getByText("已取消", { exact: true })).toBeTruthy();
+    expect(screen.queryByText("执行失败", { exact: true })).toBeNull();
+  });
+
+  it("真实失败仍显示执行失败和错误原因", () => {
+    renderState("连接失败");
+    expect(screen.getByText("执行失败", { exact: true })).toBeTruthy();
+    expect(screen.getByText("连接失败", { exact: true })).toBeTruthy();
+    expect(screen.queryByText("已取消", { exact: true })).toBeNull();
+  });
 });
 
 describe("LogsCard 的自动滚动开关（#4743）", () => {

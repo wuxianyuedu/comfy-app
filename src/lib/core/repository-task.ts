@@ -199,6 +199,40 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return Object.fromEntries(rows.map((row) => [row.status, Number(row.count)]));
   }
 
+  /** 完整排队队列的提交顺序；位次不依赖列表当前加载到第几页。 */
+  async queuedPositionsByUser(userId: string): Promise<Map<string, number>> {
+    const rows = await db
+      .select({ id: task.id })
+      .from(task)
+      .where(and(eq(task.userId, userId), eq(task.status, "QUEUED")))
+      .orderBy(asc(task.sortOrder), asc(task.createdAt), asc(task.id));
+    return new Map(rows.map((row, index) => [row.id, index + 1]));
+  }
+
+  /** 队列概览：进行中数量与按真实结束时刻统计的今日终态数量。 */
+  async summaryByUser(
+    userId: string,
+    todayStartedAt: Date,
+  ): Promise<{ failedToday: number; queued: number; running: number; succeededToday: number }> {
+    const today = todayStartedAt.toISOString();
+    const rows = await db
+      .select({
+        failedToday: sql<number>`count(*) filter (where ${task.status} = 'FAILED' and ${task.finishedAt} >= ${today})`,
+        queued: sql<number>`count(*) filter (where ${task.status} not in ('RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED'))`,
+        running: sql<number>`count(*) filter (where ${task.status} = 'RUNNING')`,
+        succeededToday: sql<number>`count(*) filter (where ${task.status} = 'SUCCEEDED' and ${task.finishedAt} >= ${today})`,
+      })
+      .from(task)
+      .where(eq(task.userId, userId));
+    const row = rows[0];
+    return {
+      failedToday: Number(row?.failedToday ?? 0),
+      queued: Number(row?.queued ?? 0),
+      running: Number(row?.running ?? 0),
+      succeededToday: Number(row?.succeededToday ?? 0),
+    };
+  }
+
   async createQueued(input: {
     /** 执行归属（P3 §5 ADR §6）：提交侧按 `resolveExecutorClaim()` 显式传
      *  `'inline'|'host'`；缺省 null 只服务「调用方尚未接入灰度」的兼容路径

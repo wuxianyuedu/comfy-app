@@ -658,13 +658,13 @@ export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateIn
 }
 
 export type SeedTaskInput = {
-  claimedAt?: Date;
+  claimedAt?: Date | null;
   createdAt?: Date;
   error?: string | null;
   /** 提交时刻的 RAW 执行载荷（task.retry 用例要区分「有载荷可原样重跑」与
    *  「execPayload 为空的历史遗留行」两态）。 */
   execPayload?: unknown;
-  finishedAt?: Date;
+  finishedAt?: Date | null;
   id?: string;
   images?: Array<Row>;
   negativePrompt?: string | null;

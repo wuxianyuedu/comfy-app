@@ -17,6 +17,7 @@ function row(id: string): QueueRow {
     createdAt: new Date("2026-01-01T00:00:00Z"),
     finishedAt: null,
     claimedAt: null,
+    queuePosition: null,
     cover: null,
     checkpoint: null,
     videoPath: null,

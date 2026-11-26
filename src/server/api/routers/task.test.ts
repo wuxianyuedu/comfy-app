@@ -67,6 +67,130 @@ beforeEach(() => {
   seedUser(tdb, { id: "user-b", email: "b@test.dev" });
 });
 
+// ─────────────────────────────────── summary ───────────────────────────────────
+
+describe("task.summary", () => {
+  const todayStartedAt = new Date("2026-11-19T00:00:00.000Z");
+  const yesterday = new Date("2026-11-18T23:59:59.999Z");
+  const today = new Date("2026-11-19T12:00:00.000Z");
+
+  it("昨天创建、今天完成计今日完成；今天创建、昨天完成不计", async () => {
+    seedTask(tdb, {
+      id: "finished-today",
+      userId: "user-a",
+      status: "SUCCEEDED",
+      createdAt: yesterday,
+      finishedAt: today,
+    });
+    seedTask(tdb, {
+      id: "created-today-finished-yesterday",
+      userId: "user-a",
+      status: "SUCCEEDED",
+      createdAt: today,
+      finishedAt: yesterday,
+    });
+
+    const res = await createCaller(makeCtx()).summary({
+      todayStartedAt: todayStartedAt.toISOString(),
+    });
+
+    expect(res).toEqual({ failedToday: 0, queued: 0, running: 0, succeededToday: 1 });
+  });
+
+  it("今日 FAILED 计失败；历史失败与今日 CANCELLED 不计完成或失败", async () => {
+    seedTask(tdb, {
+      id: "failed-today",
+      userId: "user-a",
+      status: "FAILED",
+      createdAt: yesterday,
+      finishedAt: today,
+    });
+    seedTask(tdb, {
+      id: "failed-before-today",
+      userId: "user-a",
+      status: "FAILED",
+      createdAt: yesterday,
+      finishedAt: yesterday,
+    });
+    seedTask(tdb, {
+      id: "cancelled-today",
+      userId: "user-a",
+      status: "CANCELLED",
+      createdAt: today,
+      finishedAt: today,
+    });
+
+    const res = await createCaller(makeCtx()).summary({
+      todayStartedAt: todayStartedAt.toISOString(),
+    });
+
+    expect(res).toEqual({ failedToday: 1, queued: 0, running: 0, succeededToday: 0 });
+  });
+
+  it("QUEUED/RUNNING 跨日期与项目计数，且其他用户不计入", async () => {
+    seedTask(tdb, {
+      id: "queued-yesterday",
+      userId: "user-a",
+      status: "QUEUED",
+      createdAt: yesterday,
+    });
+    seedTask(tdb, {
+      id: "queued-today",
+      userId: "user-a",
+      status: "QUEUED",
+      projectId: "project-a",
+      createdAt: today,
+    });
+    seedTask(tdb, {
+      id: "paused",
+      userId: "user-a",
+      status: "PAUSED_BY_HUMAN",
+      createdAt: yesterday,
+    });
+    seedTask(tdb, {
+      id: "running-today",
+      userId: "user-a",
+      status: "RUNNING",
+      projectId: "project-a",
+      claimedAt: today,
+      createdAt: yesterday,
+    });
+    seedTask(tdb, {
+      id: "other-queued",
+      userId: "user-b",
+      status: "QUEUED",
+      createdAt: today,
+    });
+    seedTask(tdb, {
+      id: "other-running",
+      userId: "user-b",
+      status: "RUNNING",
+      claimedAt: today,
+      createdAt: today,
+    });
+    seedTask(tdb, {
+      id: "other-finished",
+      userId: "user-b",
+      status: "SUCCEEDED",
+      finishedAt: today,
+      createdAt: today,
+    });
+    seedTask(tdb, {
+      id: "other-failed",
+      userId: "user-b",
+      status: "FAILED",
+      finishedAt: today,
+      createdAt: today,
+    });
+
+    const res = await createCaller(makeCtx()).summary({
+      todayStartedAt: todayStartedAt.toISOString(),
+    });
+
+    expect(res).toEqual({ failedToday: 0, queued: 3, running: 1, succeededToday: 0 });
+  });
+});
+
 // ───────────────────────────────────── list ─────────────────────────────────────
 
 describe("task.list", () => {
@@ -278,6 +402,118 @@ describe("task.list", () => {
     /* 3 条视频（task-1/3/5）按新到旧一页不重不漏；前沿推进到表尾 6。 */
     expect(seen).toEqual(["task-1", "task-3", "task-5"]);
     expect(cursor).toBe(6);
+  });
+
+  it("超过 60 条仍按完整队列定位：新到旧分页不改变提交序", async () => {
+    for (let i = 0; i < 65; i += 1) {
+      seedTask(tdb, {
+        id: `queued-${String(i + 1).padStart(2, "0")}`,
+        userId: "user-a",
+        status: "QUEUED",
+        createdAt: new Date(Date.UTC(2026, 10, 19, 0, 0, i)),
+      });
+    }
+    const caller = createCaller(makeCtx());
+    const first = await caller.list({ take: 60, status: "QUEUED" });
+    const second = await caller.list({
+      take: 60,
+      cursor: first.nextScanCursor,
+      status: "QUEUED",
+    });
+
+    expect(first.tasks).toHaveLength(60);
+    expect(first.hasMore).toBe(true);
+    expect(first.nextScanCursor).toBe(60);
+    expect(second.tasks).toHaveLength(5);
+    expect(second.hasMore).toBe(false);
+    expect(new Set([...first.tasks, ...second.tasks].map((task) => task.id)).size).toBe(65);
+    const positions = [...first.tasks, ...second.tasks].map((task) => task.queuePosition);
+    expect(positions).toHaveLength(65);
+    expect([...positions].sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual(
+      Array.from({ length: 65 }, (_unused, index) => index + 1),
+    );
+    expect(first.tasks[0]?.queuePosition).toBe(65);
+    expect(first.tasks.at(-1)?.queuePosition).toBe(6);
+    expect(second.tasks[0]?.queuePosition).toBe(5);
+    expect(second.tasks.at(-1)?.queuePosition).toBe(1);
+  });
+
+  it("非 QUEUED 的 queuePosition 为 null，并保留 RUNNING 的 claimedAt", async () => {
+    const claimedAt = new Date("2026-11-19T12:00:00.000Z");
+    seedTask(tdb, { id: "queued", userId: "user-a", status: "QUEUED" });
+    seedTask(tdb, {
+      id: "running",
+      userId: "user-a",
+      status: "RUNNING",
+      claimedAt,
+    });
+    seedTask(tdb, { id: "succeeded", userId: "user-a", status: "SUCCEEDED" });
+    seedTask(tdb, { id: "failed", userId: "user-a", status: "FAILED" });
+    seedTask(tdb, { id: "cancelled", userId: "user-a", status: "CANCELLED" });
+
+    const res = await createCaller(makeCtx()).list({});
+    const byId = new Map(res.tasks.map((task) => [task.id, task]));
+
+    expect(byId.get("queued")?.queuePosition).toBe(1);
+    for (const id of ["running", "succeeded", "failed", "cancelled"]) {
+      expect(byId.get(id)?.queuePosition).toBeNull();
+    }
+    expect(byId.get("running")?.claimedAt).toEqual(claimedAt);
+  });
+
+  it("其他用户的队列不改变当前用户的位次", async () => {
+    seedTask(tdb, {
+      id: "other-before",
+      userId: "user-b",
+      status: "QUEUED",
+      createdAt: new Date("2026-11-19T09:00:00.000Z"),
+    });
+    seedTask(tdb, {
+      id: "mine-earlier",
+      userId: "user-a",
+      status: "QUEUED",
+      createdAt: new Date("2026-11-19T10:00:00.000Z"),
+    });
+    seedTask(tdb, {
+      id: "other-between",
+      userId: "user-b",
+      status: "QUEUED",
+      createdAt: new Date("2026-11-19T11:00:00.000Z"),
+    });
+    seedTask(tdb, {
+      id: "mine-later",
+      userId: "user-a",
+      status: "QUEUED",
+      createdAt: new Date("2026-11-19T12:00:00.000Z"),
+    });
+    seedTask(tdb, {
+      id: "other-after",
+      userId: "user-b",
+      status: "QUEUED",
+      createdAt: new Date("2026-11-19T13:00:00.000Z"),
+    });
+
+    const res = await createCaller(makeCtx()).list({ status: "QUEUED" });
+
+    expect(res.tasks.map(({ id, queuePosition }) => ({ id, queuePosition }))).toEqual([
+      { id: "mine-later", queuePosition: 2 },
+      { id: "mine-earlier", queuePosition: 1 },
+    ]);
+  });
+
+  it("createdAt 相同时按 id 稳定排序并分配队列位次", async () => {
+    const createdAt = new Date("2026-11-19T12:00:00.000Z");
+    for (const id of ["queue-c", "queue-a", "queue-b"]) {
+      seedTask(tdb, { id, userId: "user-a", status: "QUEUED", createdAt });
+    }
+
+    const res = await createCaller(makeCtx()).list({ status: "QUEUED" });
+
+    expect(res.tasks.map(({ id, queuePosition }) => ({ id, queuePosition }))).toEqual([
+      { id: "queue-c", queuePosition: 3 },
+      { id: "queue-b", queuePosition: 2 },
+      { id: "queue-a", queuePosition: 1 },
+    ]);
   });
 
   it("Zod 校验：take 越界 / 非法 media → BAD_REQUEST", async () => {

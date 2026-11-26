@@ -81,8 +81,9 @@ async function seed(extra: Partial<typeof task.$inferInsert> = {}): Promise<stri
     workflowName: "w",
     status: "QUEUED",
   };
-  await repoDb.insert(task).values(Object.assign(row, extra));
-  return id;
+  const resolvedId = extra.id ?? id;
+  await repoDb.insert(task).values({ ...row, ...extra, id: resolvedId });
+  return resolvedId;
 }
 
 function readRow(id: string): Record<string, unknown> | undefined {
@@ -510,6 +511,15 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
       claimedBy: "inline",
     });
     expect(readRow(hostId)?.status).toBe("QUEUED");
+  });
+
+  it("同一提交毫秒按 id 排序，与队列展示位次一致", async () => {
+    const createdAt = new Date("2026-11-25T12:00:00.000Z");
+    const second = await seed({ createdAt, id: "tie-b" });
+    const first = await seed({ createdAt, id: "tie-a" });
+
+    expect(await impl.claimNextQueued("inline", 1)).toEqual([first]);
+    expect(await impl.claimNextQueued("inline", 1)).toEqual([second]);
   });
 
   it("take 截断：只领最早的 N 行，剩下的留给下一轮", async () => {
