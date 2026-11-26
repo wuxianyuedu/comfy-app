@@ -57,6 +57,9 @@ export const taskRouter = createTRPCRouter({
           projectId: z.string().optional(),
           media: z.enum(["image", "video", "audio"]).optional(),
           status: z.string().optional(),
+          /** 计数口径（#5076）：与行过滤解耦。历史页按状态筛选时行只取该状态，
+           *  角标仍需各档全量 —— 传终态全集；不传则与 `status` 同口径（既有调用方不变）。 */
+          countStatus: z.string().optional(),
         })
         .default({ take: 60, cursor: 0 }),
     )
@@ -68,6 +71,14 @@ export const taskRouter = createTRPCRouter({
               .map((status) => upperToken(status))
               .filter(Boolean)
           : undefined;
+
+      const countStatusList =
+        input.countStatus !== undefined && input.countStatus !== ""
+          ? input.countStatus
+              .split(",")
+              .map((status) => upperToken(status))
+              .filter(Boolean)
+          : statusList;
 
       const PAGE = input.take;
       /* media 过滤的判据（`inferMediaType`）依赖首图扩展名等应用层解析，
@@ -116,6 +127,10 @@ export const taskRouter = createTRPCRouter({
             status: task.status,
             prompt: task.prompt,
             createdAt: task.createdAt,
+            /* 最近活动时刻（#5076）：终态任务的 finishedAt 才是「刚跑完」的时间，
+             * 只有提交时刻会停在几小时前。claimedAt 供老行 / 中断行回落。 */
+            finishedAt: task.finishedAt ?? null,
+            claimedAt: task.claimedAt ?? null,
             cover,
             checkpoint,
             mediaType: inferMediaType(cover, coverMediaType, task.type),
@@ -134,7 +149,7 @@ export const taskRouter = createTRPCRouter({
        * 计数）：与列表同一套过滤（状态 / 项目），只数行数不拉行。media 过滤
        * 是内存判据，不进这个 SQL 计数——带 media 筛选时前端的总数显示退回
        * 「已加载」口径。 */
-      const countFilter = { projectId: input.projectId, statusList };
+      const countFilter = { projectId: input.projectId, statusList: countStatusList };
       /* 今日零点按本机时区算，与队列页卡片此前用 `createdAt.toDateString()` 的
        * 「今天」同一口径。按状态分组的服务端计数不受 take 截断影响。 */
       const todayStart = new Date();
