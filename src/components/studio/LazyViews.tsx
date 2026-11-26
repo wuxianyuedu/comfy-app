@@ -111,6 +111,11 @@ export const StyleLibraryView = lazyView("style", () =>
   import("~/components/studio/styles/StyleLibrary").then((mod) => mod.StyleLibrary),
 );
 
+/* 角色脸库（ISSUE #5087）：动漫脸部提示词库 + 一键复制 / 生图，与风格库同族。 */
+export const FaceLibraryView = lazyView("face", () =>
+  import("~/components/studio/faces/FaceLibrary").then((mod) => mod.FaceLibrary),
+);
+
 /* ── 项目内分区（一项目一页签后由项目页容器按需拉起） ── */
 
 /* 资源库：整页素材管理（分类 / 搜索 / 上传 / 删除），与画布那块抽屉同源取数。 */

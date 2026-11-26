@@ -30,6 +30,8 @@ const GLOBAL_IDS: Array<WorkspaceView> = [
   "characters",
   /* 风格库（ISSUE #5069）：与资产库 / 角色库同族的沉淀型全局库，紧跟角色库。 */
   "style",
+  /* 角色脸库（ISSUE #5087）：脸部提示词库，紧跟风格库。 */
+  "face",
   "history",
   "queue",
   /* ComfyUI（ISSUE #1900）：从设置页「创作后端」搬出来的运行态页。排在 queue
@@ -114,6 +116,18 @@ describe("风格库入口（ISSUE #5069）", () => {
     expect(sidebarNavItems().map((i) => i.id)).toContain("style");
     expect(configurableTabViews().map((i) => i.id)).toContain("style");
     expect(isTransientView("style", defaultSidebarTabConfig())).toBe(false);
+  });
+});
+
+describe("角色脸库入口（ISSUE #5087）", () => {
+  it("侧栏与全局清单可见、已启用，且默认独立标签页", () => {
+    const item = globalNavItems().find((i) => i.id === "face");
+    expect(item).toBeDefined();
+    expect(item?.label).toBe("脸库");
+    expect(item?.enabled).toBe(true);
+    expect(sidebarNavItems().map((i) => i.id)).toContain("face");
+    expect(configurableTabViews().map((i) => i.id)).toContain("face");
+    expect(isTransientView("face", defaultSidebarTabConfig())).toBe(false);
   });
 });
 
