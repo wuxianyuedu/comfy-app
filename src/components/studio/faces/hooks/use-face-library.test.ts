@@ -3,7 +3,7 @@
  * 脸库逻辑层的行为契约（规范 11 §11.2）：默认选中一张、可多选批量入选；
  * 本地通道把 taskId 挂到逐脸结果上，单条取消退订并落到已取消；远端通道不产生取消。
  */
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { cancelTask } from "~/lib/task-cancel-client";
@@ -107,10 +107,12 @@ describe("useFaceLibrary 多选与单条取消（ISSUE #5098）", () => {
     act(() => {
       void result.current.generate();
     });
-    await waitFor(() => {
-      expect(result.current.results["silver-mage"]?.taskId).toBe("task-a");
-      expect(result.current.results["black-swordsman"]?.taskId).toBe("task-b");
-    });
+    await expect
+      .poll(() => [
+        result.current.results["silver-mage"]?.taskId,
+        result.current.results["black-swordsman"]?.taskId,
+      ])
+      .toEqual(["task-a", "task-b"]);
 
     await act(async () => {
       await result.current.cancelOne("silver-mage");

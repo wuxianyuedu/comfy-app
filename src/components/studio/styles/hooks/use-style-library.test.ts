@@ -3,7 +3,7 @@
  * 风格库逻辑层的行为契约（规范 11 §11.2）：本地工作流通道把 taskId 挂到结果上、
  * 单条取消真打到 cancelTask 并退订 SSE；远端通道没有 task 行，取消不动。
  */
-import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { cancelTask } from "~/lib/task-cancel-client";
@@ -93,9 +93,7 @@ afterEach(cleanup);
 
 async function setup(model: string) {
   const hook = renderHook(() => useStyleLibrary());
-  await waitFor(() => {
-    expect(hook.result.current.styles.length).toBe(1);
-  });
+  await expect.poll(() => hook.result.current.styles.length).toBe(1);
   act(() => {
     hook.result.current.setUserPrompt("a girl");
     hook.result.current.setModelSelection({ mode: "T2I", model });
@@ -110,9 +108,7 @@ describe("useStyleLibrary 单条取消（ISSUE #5098）", () => {
     act(() => {
       void result.current.generate();
     });
-    await waitFor(() => {
-      expect(result.current.results["anime-illustration"]?.taskId).toBe("task-1");
-    });
+    await expect.poll(() => result.current.results["anime-illustration"]?.taskId).toBe("task-1");
     expect(result.current.results["anime-illustration"]?.status).toBe("pending");
 
     await act(async () => {
