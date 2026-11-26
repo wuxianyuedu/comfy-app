@@ -32,17 +32,54 @@ function isCollectedOutputFile(v: unknown): v is CollectedOutputFile {
   return isRecord(v) && typeof v.filename === "string";
 }
 
+/** 内部预览 / 调试显示节点：它们的 text 只是链路中间结果（如提示词扩写预览），
+ *  不是交付物。#4910 已对未知键里的 temp 文件做了同样的事，text 桶此前漏了。 */
+const INTERNAL_PREVIEW_NODE_TYPES = new Set([
+  "PreviewAny",
+  "PreviewText",
+  "PreviewImage",
+  "PreviewLatent",
+]);
+
+/** 从 history 的执行图里找出内部预览节点 id；图缺失 / 形状不对时返回空集
+ *  （宁可维持旧行为，也不在没有事实的时候丢掉可能是交付物的文本）。 */
+export function internalPreviewNodeIds(entry: unknown): ReadonlySet<string> {
+  const entryObj = isRecord(entry) ? entry : undefined;
+  const promptRaw: unknown = entryObj?.prompt;
+  const graphRaw: unknown = Array.isArray(promptRaw) ? promptRaw[2] : undefined;
+  const ids = new Set<string>();
+  if (!isRecord(graphRaw)) {
+    return ids;
+  }
+  for (const [nodeId, nodeRaw] of Object.entries(graphRaw)) {
+    if (!isRecord(nodeRaw)) {
+      continue;
+    }
+    const classType = nodeRaw.class_type;
+    if (typeof classType === "string" && INTERNAL_PREVIEW_NODE_TYPES.has(classType)) {
+      ids.add(nodeId);
+    }
+  }
+  return ids;
+}
+
 /**
  * 从 ComfyUI history 的 outputs 中收集各类产物。
  * 纯函数，便于单测（P2：补齐 audio/text/3D，避免只认 images/videos 导致的死锁）。
+ *
+ * `skipTextNodeIds` 传内部预览节点 id（见 `internalPreviewNodeIds`）：这些节点的
+ * text 不进产物，与 #4910 的 temp 文件过滤同口径。
  */
-export function collectOutputs(outputs: Record<string, unknown>): CollectedOutputs {
+export function collectOutputs(
+  outputs: Record<string, unknown>,
+  options?: { skipTextNodeIds?: ReadonlySet<string> },
+): CollectedOutputs {
   const images: Array<CollectedOutputFile> = [];
   const videos: Array<CollectedOutputFile> = [];
   const audios: Array<CollectedOutputFile> = [];
   const others: Array<CollectedOutputFile> = [];
   const texts: Array<string> = [];
-  for (const node of Object.values(outputs)) {
+  for (const [nodeId, node] of Object.entries(outputs)) {
     if (!isRecord(node)) {
       continue;
     }
@@ -60,13 +97,16 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
     if (Array.isArray(node.audios)) {
       audios.push(...node.audios.filter(isCollectedOutputFile));
     }
-    // ShowText / 任意文本输出节点：保留渲染文本（无文件）.
-    if (typeof node.text === "string" && node.text.trim()) {
-      texts.push(node.text);
-    } else if (Array.isArray(node.text)) {
-      for (const t of node.text) {
-        if (typeof t === "string" && t.trim()) {
-          texts.push(t);
+    // ShowText / 文本输出节点：保留渲染文本（无文件）。内部预览节点的 text
+    // 是扩写链路的中间结果，不算交付物（#5109）。
+    if (!options?.skipTextNodeIds?.has(nodeId)) {
+      if (typeof node.text === "string" && node.text.trim()) {
+        texts.push(node.text);
+      } else if (Array.isArray(node.text)) {
+        for (const t of node.text) {
+          if (typeof t === "string" && t.trim()) {
+            texts.push(t);
+          }
         }
       }
     }

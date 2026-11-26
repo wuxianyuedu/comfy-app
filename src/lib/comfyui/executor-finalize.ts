@@ -28,7 +28,12 @@
 // Node 里 import 本模块」的承诺。
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { collectOutputs, extractRuntimeParams, type RuntimeParams } from "./executor-outputs";
+import {
+  collectOutputs,
+  extractRuntimeParams,
+  internalPreviewNodeIds,
+  type RuntimeParams,
+} from "./executor-outputs";
 import { describeZeroOutputFailure } from "./zero-output-reason";
 import { friendlyError } from "./executor-errors";
 import { taskOutputDir, taskOutputUrl } from "~/lib/media/output-paths";
@@ -393,7 +398,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     return;
   }
   const outputsCount = Object.keys(entry.outputs ?? {}).length;
-  log(taskId, "info", `✓ history 就绪（${outputsCount} 节点输出）`);
+  log(taskId, "info", `✓ history 就绪（${outputsCount} 个节点有输出）`);
   /* 把 history 的结论摘要打进任务日志：即使后面 outputs 判定为「无输出内容」，
    *  用户也能立刻看到 ComfyUI 自己报的 status（success/error/completed）与
    *  每个节点的输出键，而不是只看到一句收口结论。原文在 trace 文件里。 */
@@ -403,7 +408,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     "info",
     `ComfyUI history 摘要：status=${verdict.statusStr ?? "(无)"} completed=${
       verdict.completed ?? "(无)"
-    } 输出节点=${verdict.outputNodeCount}${
+    } 有输出的节点=${verdict.outputNodeCount}${
       verdict.executionError === undefined ? "" : ` 执行错误=${verdict.executionError}`
     }`,
   );
@@ -437,7 +442,19 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     return;
   }
 
-  const { images, videos, audios, others, texts } = collectOutputs(entry.outputs ?? {});
+  /* 内部预览节点（PreviewAny 等）在 history 里也留 text 键，那是扩写链路的
+   * 中间结果，不算交付物；按节点 id 排除，避免多落一条 txt_0.txt（#5109）。 */
+  const skipTextNodeIds = internalPreviewNodeIds(entry);
+  const { images, videos, audios, others, texts } = collectOutputs(entry.outputs ?? {}, {
+    skipTextNodeIds,
+  });
+  const deliverableCount =
+    images.length + videos.length + audios.length + others.length + texts.length;
+  log(
+    taskId,
+    "info",
+    `可下载产物 ${deliverableCount} 份（有输出的节点 ${outputsCount} 个；内部预览节点不计产物）`,
+  );
   /* 三级目录的取值要等产物收集完才知道媒体类型：首图优先，其次视频 / 音频 / 文本。
    * 地址与磁盘目录同出一份布局，这一句写进 TaskImage.localPath；删除 / 打开侧
    * 改为从 localPath 反推目录，不再各拼一遍。 */

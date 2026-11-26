@@ -956,6 +956,11 @@
     `comfyapp://` 深链是老路（见 FR-MC-02）；读产物经 `/api/generated/...`。
   - 历史平铺目录用 `scripts/db/migrate-artifact-taxonomy.mts` 一次性迁移
     （先备份 db.sqlite，再搬目录 + 同事务改库；留 `--rollback` 出口）。
+  - **交付物识别**（`executor-outputs.ts`）：只把真产物落 `TaskImage` 行；
+    内部预览节点（`PreviewAny` 等）留在 history 里的 `text` 是链路中间结果，
+    不算交付、不落 `txt_0.txt`，与 #4910 的 temp 文件过滤同口径；ShowText
+    等真正的文本交付节点保留。日志分别报「有输出的节点 N 个」与
+    「可下载产物 M 份」，不用节点数冒充产物数。
 - 落点：`src/lib/media/output-paths.ts`、`output-layout.ts`、
   `src/lib/history-detail-actions.ts`
 
