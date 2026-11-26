@@ -6,7 +6,7 @@ import { taskRepository, workflowModelTagRepository } from "~/lib/core/repositor
 import { logger } from "~/lib/core/logger";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { asRecord } from "~/lib/is-record";
-import { taskOutputDir } from "~/lib/media/output-paths";
+import { taskDirFromLocalPath } from "~/lib/media/output-paths";
 import { cancelTask as cancelExecutorTask } from "~/lib/comfyui/enqueue";
 import { isVideo, kindOf } from "~/lib/media/media-kind";
 
@@ -309,11 +309,10 @@ export const taskRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
       const fsPromises = await import("node:fs/promises");
-      /* 目录由 `taskOutputDir()` 一处算：形状会让它落到产物根之外（例如客户端
-       * 生成的 projectId 写成 `../../x`）时返回 null → 这里按越界处置。
-       * 旧写法在本处内联拼路径 + 内联白名单，与 `delete` 那份已经分叉，见
-       * `~/lib/media/output-paths.ts` 的模块注释。 */
-      const dir = taskOutputDir(input.id, task.projectId);
+      /* 目录从库里这条任务的 `localPath` 反推（`taskDirFromLocalPath`）：它正是
+       * 写侧当时落盘的形状，三级分类或迁移前的旧平铺都认得，不必在打开侧再
+       * 拼一遍布局。解析不出 / 越界返回 null → 这里按越界处置。 */
+      const dir = taskDirFromLocalPath(task.images[0]?.localPath);
       if (dir === null) {
         logger.warn(
           `[task.openFolder] 产物目录越界，已拒绝：taskId=${input.id} projectId=${task.projectId}`,
@@ -368,11 +367,11 @@ export const taskRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
       const fsPromises = await import("node:fs/promises");
-      /* 产物目录整体删除，目录与落盘侧共用 `taskOutputDir()`。旧写法两处拼错路径且都被
-       * `.catch(() => undefined)` 吞掉（磁盘在涨、日志空白）：目录只拼 `public/generated/<taskId>`
-       * 漏掉 `projects/<projectId>/<taskId>`；按 `localPath` 逐张 unlink 又把 `/api/generated`
-       * 解析成 `public/api/generated` ⇒ ENOENT。越界时只删库行并记原因，不把根外路径交给 rm。 */
-      const dir = taskOutputDir(input.id, task.projectId);
+      /* 产物目录从库里的 `localPath` 反推，与落盘侧同源（旧写法两处各拼一遍，
+       * 一条漏掉项目子层、一条把 `/api/generated` 解析成 `public/api/generated`，
+       * 都被 `.catch(() => undefined)` 吞掉 → 磁盘只涨不删、日志空白）。解析不出
+       * 或越界时只删库行并记原因，不把根外路径交给 rm。 */
+      const dir = taskDirFromLocalPath(task.images[0]?.localPath);
       /* 先删库行、后清磁盘（ISSUE #3872）：原先先 rm（fire-and-forget）再删行，
        * 一旦删行失败，行还指向已不存在的目录（封面/视频 404 且不可恢复）。
        * 先删行则失败即止、文件保留；行删掉之后磁盘清理失败最多留孤儿文件，可再清。 */

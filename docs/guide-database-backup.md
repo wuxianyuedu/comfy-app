@@ -145,6 +145,22 @@ pnpm db:backup
 - **模型路径**：`model` / `remoteModel` 表中可能存有对方机器的绝对路径。
   导入后在「模型管理」页面检查并修正路径。
 
+### 3.3 产物目录必须一起搬（只搬 DB 会出现「图片不可用」）
+
+上一步只讲 DB，是因为 WAL 不能跨机器带；但**产物不属于 DB**：`TaskImage.localPath`
+存的是根相对地址 `/api/generated/<mediaType>/<模型名>/<modeCode>/<taskId>/<文件>`，
+`/api/generated` 按**当前检出**的 cwd 去 `<cwd>/generated/` 找文件。于是把 A 检出的
+`db.sqlite` 拿来在 B 检出用，历史页的任务行都在、日志也写着下载成功，缩略图却
+渲染「图片不可用」——文件还静静躺在 A 检出的 `generated/` 里。
+
+- 迁移 DB 时**连同对方的 `generated/` 目录一起复制**到本项目根（保持三级分类
+  目录结构），或至少把你关心的任务目录按地址末段搬过来；
+- 产物按 `mediaType / 模型名 / modeCode / taskId` 分目录，可以只挑某一模型、
+  某一模式的子树搬，其它子树不受影响；
+- 旧版本（三级分类之前）的库里是平铺 `generated/<taskId>/`，先用
+  `pnpm exec tsx scripts/db/migrate-artifact-taxonomy.mts` 盘点，再 `--apply`
+  迁移（自动备份 DB + 留 `--rollback` 出口）。
+
 ---
 
 ## 4. 损坏恢复（database disk image is malformed）

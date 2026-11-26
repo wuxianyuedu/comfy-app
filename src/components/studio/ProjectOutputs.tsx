@@ -17,6 +17,7 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { displayValue, EMPTY_PLACEHOLDER } from "~/lib/display-value";
 import { artifactDirDisplay } from "~/lib/media/output-layout";
+import { taxonomyFrom } from "~/lib/media/artifact-taxonomy";
 import { downloadText } from "~/lib/browser-io";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { TimeAgo } from "~/components/ui/time-ago";
@@ -366,13 +367,19 @@ export function ProjectOutputs() {
           height: image.height,
         })),
         /* 相对应用根的落点，形状来自布局那一处（组件里抄字面量 = 搬一次根就说错话）。 */
-        savePath:
-          projectId !== null && projectId !== "" ? artifactDirDisplay(selected.id, projectId) : "",
+        savePath: artifactDirDisplay(
+          taxonomyFrom({
+            mediaType: selected.images[0]?.mediaType,
+            modelName: selected.workflowName,
+            modeCode: selected.type,
+          }),
+          selected.id,
+        ),
       },
       null,
       2,
     );
-  }, [selected, projectId]);
+  }, [selected]);
 
   /* 复制的成败都交给出口（规范 16 §16.2.4.43）：成功亮一下按钮，失败也亮 ——
    * 此前这里`if (!ok) return;` 把失败整个吞掉，按钮一动不动，用户以为成了。 */
@@ -507,7 +514,6 @@ export function ProjectOutputs() {
         }}
         onCopy={handleCopy}
         onExport={handleExport}
-        projectId={projectId}
         selected={selected}
       />
     </DocumentFrame>

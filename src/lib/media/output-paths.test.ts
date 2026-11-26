@@ -29,13 +29,20 @@ import {
   isWithinGeneratedRoot,
   legacyGeneratedRoot,
   materialsRoot,
+  taskDirFromLocalPath,
   taskOutputDir,
   taskOutputSegments,
   taskOutputUrl,
 } from "./output-paths";
+import { taxonomyFrom, type ArtifactTaxonomy } from "./artifact-taxonomy";
 
 /** 与真实 cwd 无关的假根：判据是纯字符串形状，给它什么根都该同判。 */
 const ROOT = path.resolve(`${path.sep}output-root`);
+const TAX: ArtifactTaxonomy = taxonomyFrom({
+  mediaType: "image",
+  modelName: "MiniMax H3 Image",
+  modeCode: "T2I",
+});
 
 describe("generatedRoot", () => {
   it("显式 cwd → `<cwd>/generated`（解析后的绝对路径，不在 public/ 下）", () => {
@@ -79,64 +86,70 @@ describe("isWithinGeneratedRoot", () => {
 });
 
 describe("taskOutputSegments", () => {
-  it("有 projectId → projects/<pid>/<tid>（落盘与 localPath 共用这一形状）", () => {
-    expect(taskOutputSegments("t1", "p1")).toEqual(["projects", "p1", "t1"]);
+  it("一律 mediaType / modelName / modeCode / taskId（项目归属只在库里，不进路径）", () => {
+    expect(taskOutputSegments(TAX, "t1")).toEqual(["image", "MiniMax_H3_Image", "T2I", "t1"]);
   });
 
-  it("无 / 空 projectId → 只 <tid>", () => {
-    expect(taskOutputSegments("t1")).toEqual(["t1"]);
-    expect(taskOutputSegments("t1", null)).toEqual(["t1"]);
-    expect(taskOutputSegments("t1", "")).toEqual(["t1"]);
+  it("模型名里的空格与危险字符被收成合法段，中文保留", () => {
+    const tax = taxonomyFrom({ mediaType: "video", modelName: "模型 /A:B", modeCode: "I2V" });
+    expect(taskOutputSegments(tax, "t2")).toEqual(["video", "模型_A_B", "I2V", "t2"]);
   });
 });
 
 describe("taskOutputUrl", () => {
-  it("项目任务 → /api/generated/projects/<pid>/<tid>", () => {
-    expect(taskOutputUrl("t1", "p1")).toBe("/api/generated/projects/p1/t1");
-  });
-
-  it("普通任务 → /api/generated/<tid>", () => {
-    expect(taskOutputUrl("t1", null)).toBe("/api/generated/t1");
+  it("每段单独 percent-encode，模型名带空格也能原样落回磁盘", () => {
+    expect(taskOutputUrl(TAX, "t1")).toBe("/api/generated/image/MiniMax_H3_Image/T2I/t1");
   });
 });
 
 describe("taskOutputDir", () => {
   it("磁盘与 URL 同源：两条出口都由同一份 segments 派生", () => {
-    expect(taskOutputDir("t1", "p1", ROOT)).toBe(path.resolve(ROOT, "projects", "p1", "t1"));
-    // 改布局时这条会跟着红 —— 历史上「一处认 projects、一处不认」就是这么漏的
-    expect(taskOutputUrl("t1", "p1").split("/").slice(3)).toEqual(taskOutputSegments("t1", "p1"));
+    expect(taskOutputDir(TAX, "t1", ROOT)).toBe(
+      path.resolve(ROOT, "image", "MiniMax_H3_Image", "T2I", "t1"),
+    );
+    expect(taskOutputUrl(TAX, "t1").split("/").slice(3)).toEqual(taskOutputSegments(TAX, "t1"));
   });
 
   it("缺省 root → 落在 process.cwd() 的产物根下", () => {
-    expect(taskOutputDir("t1")).toBe(path.resolve(generatedRoot(), "t1"));
+    expect(taskOutputDir(TAX, "t1")).toBe(
+      path.resolve(generatedRoot(), "image", "MiniMax_H3_Image", "T2I", "t1"),
+    );
   });
 
   it("taskId 穿越 → null（不许把根外的目录交给 fs.rm）", () => {
-    expect(taskOutputDir(path.join("..", "..", "evil"), null, ROOT)).toBeNull();
+    expect(taskOutputDir(TAX, path.join("..", "..", "evil"), ROOT)).toBeNull();
   });
 
-  it("projectId 穿越 → null（projectId 由客户端生成，落盘侧同样在闸内）", () => {
-    expect(taskOutputDir("t1", path.join("..", "..", "evil"), ROOT)).toBeNull();
-  });
-
-  it("解析结果「就是根本身」→ null：空串与 . 都不算一个任务目录", () => {
-    expect(taskOutputDir("", null, ROOT)).toBeNull();
-    expect(taskOutputDir(".", null, ROOT)).toBeNull();
-    // 带上 projects 前缀之后，`.` 落在 projects 之下，是合法子路径而不是根
-    expect(taskOutputDir(".", "p1", ROOT)).toBe(path.resolve(ROOT, "projects", "p1", "."));
+  it("分类维度穿越 → null（模型名等外来值同样在闸内）", () => {
+    const evil = taxonomyFrom({ mediaType: "image", modelName: "ok", modeCode: "T2I" });
+    evil.mediaType = path.join("..", "..", "evil");
+    expect(taskOutputDir(evil, "t1", ROOT)).toBeNull();
   });
 
   it("绝对形态的 taskId（path.resolve 会直接丢掉 root）→ null", () => {
-    expect(taskOutputDir(path.resolve(`${path.sep}elsewhere`), null, ROOT)).toBe(null);
+    expect(taskOutputDir(TAX, path.resolve(`${path.sep}elsewhere`), ROOT)).toBe(null);
+  });
+});
+
+describe("taskDirFromLocalPath", () => {
+  it("新形状与迁移前的旧平铺都反推得到目录", () => {
+    expect(taskDirFromLocalPath(`${taskOutputUrl(TAX, "t1")}/img_0.png`, ROOT)).toBe(
+      path.resolve(ROOT, "image", "MiniMax_H3_Image", "T2I", "t1"),
+    );
+    expect(taskDirFromLocalPath("/api/generated/legacy-task/img_0.png", ROOT)).toBe(
+      path.resolve(ROOT, "legacy-task"),
+    );
+  });
+
+  it("空地址 / 越界地址 → null", () => {
+    expect(taskDirFromLocalPath(null, ROOT)).toBeNull();
+    expect(taskDirFromLocalPath("/api/generated/../../outside/x.png", ROOT)).toBeNull();
   });
 });
 
 describe("artifactUrl", () => {
-  it("前缀只有一份来源：taskOutputUrl 与它同形，且这个形状是对外承诺", () => {
-    expect(taskOutputUrl("t1", null)).toBe(`${ARTIFACT_URL_PREFIX}/t1`);
-    expect(taskOutputUrl("t1", "p1")).toBe(`${ARTIFACT_URL_PREFIX}/projects/p1/t1`);
-    // URL 是写进库里的（TaskImage.localPath / Film.localPath）：磁盘根以后搬到哪，
-    // 这一句都不能变 —— 变了就是老数据全部读不到。
+  it("前缀只有一份来源：taskOutputUrl 与它同形", () => {
+    expect(taskOutputUrl(TAX, "t1")).toBe(`${ARTIFACT_URL_PREFIX}/image/MiniMax_H3_Image/T2I/t1`);
     expect(ARTIFACT_URL_PREFIX).toBe("/api/generated");
   });
 });
@@ -156,17 +169,15 @@ describe("artifactDiskPath —— 写侧与读侧必须落在同一个文件上"
   });
 
   it("执行器落盘的目录里那个文件，用写进库的 localPath 原样取得到", () => {
-    for (const projectId of [null, "proj_1"]) {
-      const dir = taskOutputDir("t-42", projectId, root);
-      expect(dir).not.toBeNull();
-      fs.mkdirSync(dir!, { recursive: true });
-      const file = path.join(dir!, "img_0.png");
-      fs.writeFileSync(file, "png");
-      // 库里的 localPath 就是 executor-finalize 写的那一句
-      const localPath = `${taskOutputUrl("t-42", projectId)}/img_0.png`;
-      expect(artifactDiskPath(localPath, root)).toBe(file);
-      expect(fs.existsSync(artifactDiskPath(localPath, root)!)).toBe(true);
-    }
+    const dir = taskOutputDir(TAX, "t-42", root);
+    expect(dir).not.toBeNull();
+    fs.mkdirSync(dir!, { recursive: true });
+    const file = path.join(dir!, "img_0.png");
+    fs.writeFileSync(file, "png");
+    // 库里的 localPath 就是 executor-finalize 写的那一句
+    const localPath = `${taskOutputUrl(TAX, "t-42")}/img_0.png`;
+    expect(artifactDiskPath(localPath, root)).toBe(file);
+    expect(fs.existsSync(artifactDiskPath(localPath, root)!)).toBe(true);
   });
 
   it("素材那种「每段都 percent-encode」的地址 decode 回同一个磁盘位置", () => {
@@ -200,10 +211,9 @@ describe("子层位置（materials / films / films+bgm）", () => {
 });
 
 describe("artifactDirDisplay（界面向用户说落点时用的那一份形状）", () => {
-  it("项目任务与自由任务各给一种相对落点，且都不带 public 那一段", () => {
-    expect(artifactDirDisplay("t1", "proj_1")).toBe(`generated/projects/proj_1/t1/`);
-    expect(artifactDirDisplay("t1", null)).toBe("generated/t1/");
+  it("给出三级分类下的相对落点，且不带 public 那一段", () => {
+    expect(artifactDirDisplay(TAX, "t1")).toBe(`generated/image/MiniMax_H3_Image/T2I/t1/`);
     // 界面文案只能来自这里：抄一份字面量就不会随搬迁而红（台账 A13 那三处文案的旧形状）
-    expect(artifactDirDisplay("t1", "p1").startsWith("public/")).toBe(false);
+    expect(artifactDirDisplay(TAX, "t1").startsWith("public/")).toBe(false);
   });
 });

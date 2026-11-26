@@ -186,3 +186,28 @@ describe("其余落点 = <任务 id>/… （executor-finalize 的默认形状）
     expect(task.mock.calls.length).toBe(0);
   });
 });
+
+describe("三级分类下的任务产物 = <mediaType>/<模型>/<模式>/<taskId>/…", () => {
+  it("按第四段找任务，不把媒体类型当任务 id", async () => {
+    expect(
+      await isForeignOwnedArtifact(
+        ["image", "MiniMax_H3_Image", "T2I", "task-b", "img_0.png"],
+        "user-a",
+      ),
+    ).toBe(true);
+    expect(
+      await isForeignOwnedArtifact(
+        ["image", "MiniMax_H3_Image", "T2I", "task-a", "img_0.png"],
+        "user-a",
+      ),
+    ).toBe(false);
+  });
+
+  it("分类段不足四级 → 不去查任务表（不是任务产物落点）", async () => {
+    const { task } = countLookups();
+    expect(await isForeignOwnedArtifact(["image", "MiniMax_H3_Image", "T2I"], "user-a")).toBe(
+      false,
+    );
+    expect(task.mock.calls.length).toBe(0);
+  });
+});

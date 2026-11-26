@@ -60,6 +60,12 @@ const COVER = (id: string, localPath: string, mediaType = "image"): Row => ({
   sortIndex: 0,
 });
 
+/** 写侧形状的封面地址：删除 / 打开侧现在从它反推目录。 */
+const coverOf = (taskId: string): Row =>
+  COVER(`img-${taskId}`, `/api/generated/image/TestModel/T2I/${taskId}/img_0.png`);
+const outputDirOf = (taskId: string): string =>
+  path.resolve(generatedRoot(), "image", "TestModel", "T2I", taskId);
+
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
@@ -551,23 +557,27 @@ describe("task.workflow", () => {
 // ─────────────────────────────────── openFolder ───────────────────────────────────
 
 describe("task.openFolder", () => {
-  it("projectId 路径穿越 → FORBIDDEN（目录白名单）", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "../../evil" });
+  it("localPath 路径穿越 → FORBIDDEN（目录白名单）", async () => {
+    seedTask(tdb, {
+      id: "task-1",
+      userId: "user-a",
+      images: [COVER("img-1", "/api/generated/../../outside/x.png")],
+    });
     await expect(createCaller(makeCtx()).openFolder({ id: "task-1" })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });
 
   it("目录不存在 → { opened: false, reason: '该任务尚未生成文件目录' }", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "proj-1" });
+    seedTask(tdb, { id: "task-1", userId: "user-a", images: [coverOf("task-1")] });
     const res = await createCaller(makeCtx()).openFolder({ id: "task-1" });
     expect(res.opened).toBe(false);
     expect(res.reason).toBe("该任务尚未生成文件目录");
-    expect(res.absolutePath).toContain("projects");
+    expect(res.absolutePath).toBe(outputDirOf("task-1"));
   });
 
   it("目录存在（stat mock）→ { opened: true, comfyappUrl }", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "proj-1" });
+    seedTask(tdb, { id: "task-1", userId: "user-a", images: [coverOf("task-1")] });
     statMock.mockResolvedValueOnce({ isDirectory: () => true });
     const res = await createCaller(makeCtx()).openFolder({ id: "task-1" });
     expect(res.opened).toBe(true);
@@ -589,28 +599,30 @@ describe("task.delete（rateLimitedProcedure）", () => {
     seedTask(tdb, {
       id: "task-1",
       userId: "user-a",
-      images: [COVER("img-1", "/api/generated/task-1/1.png")],
+      images: [coverOf("task-1")],
     });
     expect(await createCaller(makeCtx()).delete({ id: "task-1" })).toEqual({
       ok: true,
     });
-    expect(rmMock).toHaveBeenCalledWith(path.resolve(generatedRoot(), "task-1"), {
+    expect(rmMock).toHaveBeenCalledWith(outputDirOf("task-1"), {
       recursive: true,
       force: true,
     });
     expect(tdb.$tables.tasks.find((t) => t.id === "task-1")).toBeUndefined();
   });
 
-  it("项目任务的产物目录按 projects/<pid>/<tid> 删（与落盘侧同一布局，台账 A8）", async () => {
+  it("产物目录从库里的 localPath 反推（与落盘侧同一布局），项目任务同走一条", async () => {
     /* 旧写法在这里只拼 `public/generated/<taskId>`，而 executor-finalize 对
-     * 项目任务落的是 `projects/<pid>/<tid>` —— 「在画布里删任务」于是永远删不到
-     * 目录，磁盘单调增长，且失败被 .catch 吞掉、日志里一个字都没有。 */
-    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "proj-1" });
+     * 项目任务落的是另一层 —— 「在画布里删任务」于是永远删不到目录，磁盘单调
+     * 增长，且失败被 .catch 吞掉、日志里一个字都没有。现在地址就是落盘事实。 */
+    seedTask(tdb, {
+      id: "task-1",
+      userId: "user-a",
+      projectId: "proj-1",
+      images: [coverOf("task-1")],
+    });
     await createCaller(makeCtx()).delete({ id: "task-1" });
-    expect(rmMock).toHaveBeenCalledWith(
-      path.resolve(generatedRoot(), "projects", "proj-1", "task-1"),
-      { recursive: true, force: true },
-    );
+    expect(rmMock).toHaveBeenCalledWith(outputDirOf("task-1"), { recursive: true, force: true });
   });
 
   it("id 形状越界 → 不动磁盘、只删库行，并把原因落日志（台账 A8 的另一半）", async () => {
@@ -618,7 +630,11 @@ describe("task.delete（rateLimitedProcedure）", () => {
      * 判据不许依赖「上游生成不了坏形状」这一条口头保证 —— `fs.rm(..., recursive)`
      * 拿到根外路径就是整目录级别的破坏。 */
     const evil = path.join("..", "..", "outside");
-    seedTask(tdb, { id: evil, userId: "user-a" });
+    seedTask(tdb, {
+      id: evil,
+      userId: "user-a",
+      images: [COVER("img-evil", "/api/generated/../../outside/x.png")],
+    });
     expect(await createCaller(makeCtx()).delete({ id: evil })).toEqual({
       ok: true,
     });
@@ -628,7 +644,7 @@ describe("task.delete（rateLimitedProcedure）", () => {
   });
 
   it("磁盘删不掉不阻塞删库，但失败原因必须可见（硬规则 4）", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a" });
+    seedTask(tdb, { id: "task-1", userId: "user-a", images: [coverOf("task-1")] });
     rmMock.mockRejectedValueOnce(new Error("EBUSY: resource busy"));
     expect(await createCaller(makeCtx()).delete({ id: "task-1" })).toEqual({
       ok: true,
