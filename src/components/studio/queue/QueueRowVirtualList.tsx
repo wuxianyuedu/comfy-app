@@ -50,14 +50,15 @@ export const QueueRowVirtualList = memo(function QueueRowVirtualList({
   rows,
 }: QueueRowVirtualListProps) {
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
   const listRef = useRef<HTMLOListElement | null>(null);
 
   const setListEl = useCallback((el: HTMLOListElement | null) => {
     listRef.current = el;
     setScrollEl(el?.closest<HTMLElement>("[data-document-scroll]") ?? null);
+    /* 布局量测只在 ref 回调（挂载）时做一次；render 期读 offsetTop 会强制回流。 */
+    setScrollMargin(el?.offsetTop ?? 0);
   }, []);
-
-  const scrollMargin = listRef.current?.offsetTop ?? 0;
   // oxlint-disable-next-line react/incompatible-library
   const virtualizer = useVirtualizer({
     count: rows.length,

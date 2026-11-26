@@ -45,6 +45,36 @@ describe("useStableHistoryTasks（轮询引用稳定）", () => {
     expect(result.current[0]?.finishedAt).toBe("2026-01-01T00:02:00Z");
   });
 
+  it("params / validationErrors 是每次轮询新造的等价对象时仍沿用旧引用", () => {
+    const withObjects = (seed: number) => ({
+      tasks: [
+        {
+          id: "a",
+          status: "SUCCEEDED",
+          createdAt: "2026-01-01T00:00:00Z",
+          finishedAt: "2026-01-01T00:01:00Z",
+          prompt: "一只猫",
+          cover: null,
+          workflowName: "t2i",
+          type: "image",
+          params: { workflow: "wf-1", seed },
+          validationErrors: [
+            { classType: "KSampler", field: "prompt", message: "ok", nodeId: "1" },
+          ],
+        },
+      ],
+    });
+    const { result, rerender } = renderHook(({ pages }) => useStableHistoryTasks(pages), {
+      initialProps: { pages: [withObjects(42)] },
+    });
+    const before = result.current;
+    /* 服务端每次 JSON 反序列化都会给新对象；内容一致就不该重建 100 个 TaskItem。 */
+    rerender({ pages: [withObjects(42)] });
+    expect(result.current).toBe(before);
+    rerender({ pages: [withObjects(43)] });
+    expect(result.current).not.toBe(before);
+  });
+
   it("新增一页时重建，且仍按 id 去重保持页序", () => {
     const { result, rerender } = renderHook(({ pages }) => useStableHistoryTasks(pages), {
       initialProps: { pages: [page("a", "2026-01-01T00:01:00Z")] },

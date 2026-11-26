@@ -87,3 +87,20 @@ describe("VirtualLogList 行盒（ISSUE #4618）", () => {
     }
   });
 });
+
+describe("VirtualLogList 滚动收敛（#5121）", () => {
+  it("同一帧内多次 scroll 只排一次下一帧回调", () => {
+    const frames: Array<FrameRequestCallback> = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    renderList(["a", "b", "c"]);
+    const scroller = htmlEl(document.querySelector(".custom-scrollbar"), "滚动容器");
+    scroller.dispatchEvent(new Event("scroll"));
+    scroller.dispatchEvent(new Event("scroll"));
+    scroller.dispatchEvent(new Event("scroll"));
+    expect(frames).toHaveLength(1);
+  });
+});

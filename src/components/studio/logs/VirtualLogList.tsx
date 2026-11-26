@@ -7,6 +7,7 @@
  * 因此内联「跟随底部」的最小语义（阈值复用 `NEAR_BOTTOM_PX`）；量不到视口时走整页渲染。 */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { onNextFrame, type CancelNextFrame } from "~/lib/next-frame";
 import { useElementBox } from "~/components/ui/use-element-box";
 import { NEAR_BOTTOM_PX } from "~/components/ui/use-scroll-follow";
 import {
@@ -153,16 +154,26 @@ export function VirtualLogList<T>({
     [controlled],
   );
 
+  /* 滚动事件一帧可能来好几次；每次都 setState 会让窗口重算多次。经
+   * `onNextFrame` 收敛成一帧一次（唯一出口，带取消句柄），并在卸载时取消。 */
+  const scrollFrame = useRef<CancelNextFrame | null>(null);
+  useEffect(() => () => scrollFrame.current?.(), []);
   const onScroll = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) {
+    if (scrollFrame.current !== null) {
       return;
     }
-    /* 滚动位置是渲染输入（决定窗口取哪一段），因此进 state 而非只留 ref。 */
-    setScrollTop(el.scrollTop);
-    /* 「用户有没有接管滚动」：离底超过阈值就退出跟随，给出可见出口（自动滚动
-       开关会相应取消勾选）。阈值复用 `use-scroll-follow` 的唯一定义。 */
-    setFollowing(el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX);
+    scrollFrame.current = onNextFrame(() => {
+      scrollFrame.current = null;
+      const el = containerRef.current;
+      if (!el) {
+        return;
+      }
+      /* 滚动位置是渲染输入（决定窗口取哪一段），因此进 state 而非只留 ref。 */
+      setScrollTop(el.scrollTop);
+      /* 「用户有没有接管滚动」：离底超过阈值就退出跟随，给出可见出口（自动滚动
+         开关会相应取消勾选）。阈值复用 `use-scroll-follow` 的唯一定义。 */
+      setFollowing(el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX);
+    });
   }, [setFollowing]);
 
   /* 实测校正：行盒只有 minHeight（内容撑开用），所以要量**内容**而不是行盒 ——

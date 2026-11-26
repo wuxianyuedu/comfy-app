@@ -1,0 +1,2 @@
+## Fixed
+- 工作区队列 / 历史 / 日志的残留每帧白干（#5121）：`pnpm perf:trace /workspace` 实测空闲加载 8s 内 0 个 >50ms 长任务，掉帧来自交互 / 轮询期重渲染。队列页三段过滤进 `useMemo`、六个逐行 handler 改用 `useCallback`（controller 方法本就稳定），让已 memo 的 `QueueRowLine` 真生效；历史页 100 行 × 16 字段的 `JSON.stringify` 指纹改成逐字段短路比较，内容不变就沿用旧数组引用；历史 / 队列虚拟列表的 `offsetTop` 量测从 render 期挪到 ref 回调；日志 `onScroll` 经 `onNextFrame` 收敛成一帧最多一次 state 更新并在卸载时取消。文档修正取证动词（`pnpm perf:trace`，不是 pnpm 内建的 `pnpm profile`）与已退役性能审计台账的表述。同批补引用稳定、滚动收敛与稳定 handler 形状的用例。
