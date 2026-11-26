@@ -11,6 +11,7 @@ import {
   FlaskConical,
   Folder,
   FolderOpen,
+  Gem,
   History,
   Home,
   Image as ImageIcon,
@@ -19,6 +20,7 @@ import {
   Puzzle,
   Server,
   Settings,
+  Shirt,
   Smile,
   Terminal,
   Users,
@@ -44,6 +46,8 @@ export type WorkspaceView =
   | "characters"
   | "style"
   | "face"
+  | "costumes"
+  | "accessories"
   | "works"
   | "workshop"
   | "library"
@@ -158,6 +162,20 @@ export const NAV_ITEMS: Array<NavItem> = [
     label: "脸库",
     enabled: true,
     icon: <Smile size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* 服饰库（ISSUE #5125）：动漫服饰设计提示词库，与脸库 / 风格库同族的调研入口。 */
+    id: "costumes",
+    label: "服饰库",
+    enabled: true,
+    icon: <Shirt size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* 装饰库（ISSUE #5126）：角色配饰 / 装饰提示词库，与服饰库共用调研链路。 */
+    id: "accessories",
+    label: "装饰库",
+    enabled: true,
+    icon: <Gem size={22} strokeWidth={1.8} />,
   },
   {
     id: "history",

@@ -32,6 +32,9 @@ const GLOBAL_IDS: Array<WorkspaceView> = [
   "style",
   /* 角色脸库（ISSUE #5087）：脸部提示词库，紧跟风格库。 */
   "face",
+  /* 服饰库（#5125）/ 装饰库（#5126）：同族的调研型提示词库，紧跟脸库。 */
+  "costumes",
+  "accessories",
   "history",
   "queue",
   /* ComfyUI（ISSUE #1900）：从设置页「创作后端」搬出来的运行态页。排在 queue
@@ -128,6 +131,26 @@ describe("角色脸库入口（ISSUE #5087）", () => {
     expect(sidebarNavItems().map((i) => i.id)).toContain("face");
     expect(configurableTabViews().map((i) => i.id)).toContain("face");
     expect(isTransientView("face", defaultSidebarTabConfig())).toBe(false);
+  });
+});
+
+describe("服饰库与装饰库入口（ISSUE #5125 / #5126）", () => {
+  it("服饰库在侧栏与全局清单可见、已启用，且默认独立标签页", () => {
+    const item = globalNavItems().find((i) => i.id === "costumes");
+    expect(item?.label).toBe("服饰库");
+    expect(item?.enabled).toBe(true);
+    expect(sidebarNavItems().map((i) => i.id)).toContain("costumes");
+    expect(configurableTabViews().map((i) => i.id)).toContain("costumes");
+    expect(isTransientView("costumes", defaultSidebarTabConfig())).toBe(false);
+  });
+
+  it("装饰库在侧栏与全局清单可见、已启用，且默认独立标签页", () => {
+    const item = globalNavItems().find((i) => i.id === "accessories");
+    expect(item?.label).toBe("装饰库");
+    expect(item?.enabled).toBe(true);
+    expect(sidebarNavItems().map((i) => i.id)).toContain("accessories");
+    expect(configurableTabViews().map((i) => i.id)).toContain("accessories");
+    expect(isTransientView("accessories", defaultSidebarTabConfig())).toBe(false);
   });
 });
 
