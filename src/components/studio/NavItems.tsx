@@ -19,6 +19,7 @@ import {
   Puzzle,
   Server,
   Settings,
+  Smile,
   Terminal,
   Users,
 } from "lucide-react";
@@ -42,6 +43,7 @@ export type WorkspaceView =
   | "assets"
   | "characters"
   | "style"
+  | "face"
   | "works"
   | "workshop"
   | "library"
@@ -148,6 +150,14 @@ export const NAV_ITEMS: Array<NavItem> = [
     label: "风格库",
     enabled: true,
     icon: <Palette size={22} strokeWidth={1.8} />,
+  },
+  {
+    /* 角色脸库（ISSUE #5087）：动漫脸部形象提示词的可搜索库，支持一键复制
+     * 与复用 T2I 链路直接出脸图；与资产库 / 角色库 / 风格库同族的沉淀型全局库。 */
+    id: "face",
+    label: "脸库",
+    enabled: true,
+    icon: <Smile size={22} strokeWidth={1.8} />,
   },
   {
     id: "history",

@@ -26,6 +26,7 @@ import {
   CharacterLibraryView,
   ComfyuiControl,
   ConsoleView,
+  FaceLibraryView,
   ModeContractView,
   ModelAdaptersView,
   ModelTestView,
@@ -205,6 +206,10 @@ export function WorkspaceViewStack({
 
       case "style": {
         return <StyleLibraryView />;
+      }
+
+      case "face": {
+        return <FaceLibraryView />;
       }
 
       case "comfyui": {

@@ -2076,3 +2076,40 @@
 - 落点：`src/components/studio/styles/hooks/use-style-library.ts`（编排，规范 17 ②）、
   `src/lib/workshop/generation-client.ts` + `generation-api-client.ts`（既有生成链路）、
   `src/lib/async-pool.ts`（有界并发）。
+
+## 19. 角色脸库（FR-FL）
+
+#### FR-FL-01 侧栏脸库与可搜索的脸部形象列表
+
+- 状态：已上线（#5087）
+- 需求：侧栏「脸库」进入；脸部形象提示词可搜索、可选中查看完整描述。
+- 行为与验收：① 侧栏有「脸库」入口且可点开（与资产库 / 角色库 / 风格库同族的全局视图）；
+  ② 列表按名字 / 说明 / 提示词 / 标签模糊搜索，空词回全部；
+  ③ 每条显示名字、中文说明与标签，选中态可见；
+  ④ 数据来自内置预设数组，不在本页再抄一份脸部词表。
+- 落点：`src/components/studio/NavItems.tsx`（入口）、
+  `src/components/studio/LazyViews.tsx` + `WorkspaceViewStack.tsx`（视图注册）、
+  `src/components/studio/faces/FaceLibrary.tsx`（视图）、`face-presets.ts`（数据与纯函数）。
+
+#### FR-FL-02 数据驱动提示词拼接
+
+- 状态：已上线（#5087）
+- 需求：每条脸有一条完整正向提示词，可直接复制。
+- 行为与验收：① 正向 = 脸部特写前缀 + 预设词 + 立绘唯一「无文字」正向约束
+  （不另写第二份约束，避免误禁服饰装饰字）；② 负向复用立绘唯一口径；
+  ③ 预设 id 唯一、名字 / 说明 / 提示词 / 标签非空；用例钉住形状与拼接口径。
+- 落点：`src/components/studio/faces/face-presets.ts`、`face-presets.test.ts`、
+  `src/lib/character/portrait-prompt.ts`（既有约束的唯一出处）。
+
+#### FR-FL-03 一键复制与直接生图
+
+- 状态：已上线（#5087）
+- 需求：复制提示词走平台唯一出口；选支持 T2I 的模型直接用该提示词生成脸图。
+- 行为与验收：① 复制走 `useCopyFeedback`（视图层不碰剪贴板 API）；
+  ② 模型候选经 `useModelCatalog("image","T2I")` 收窄（本地声明 T2I 的工作流 /
+  配了 T2I 适配器的远端模型），其他模式不出现；
+  ③ 本地走工作流封装 + `generate.generate` + SSE 观察取产物，远端走
+  `/api/workshop-api/generate`，两条链路都不新造；④ 失败有按条可读的出口。
+- 落点：`src/components/studio/faces/hooks/use-face-library.ts`（编排，规范 17 ②）、
+  `src/components/ui/use-copy-feedback.ts`（复制唯一出口）、
+  `src/lib/workshop/generation-client.ts` + `generation-api-client.ts`（既有生成链路）。
