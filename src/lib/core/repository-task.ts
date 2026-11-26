@@ -566,6 +566,19 @@ export class TaskRepository extends DrizzleRepository<Task> {
     });
   }
 
+  /** 按 ids 批量取任务卡片行 + images（#5149）：一条 `IN` + 窄投影
+   * `taskCardColumns`，四个 MB 级重列不拉回；images 复用 `attachImages`
+   * 一条装载。消费者按 id 建索引即可代替原来的 N 次 `findByIdWithImages`。
+   * 返回顺序不保证与 ids 一致（SQL 无 ORDER BY），缺行也不补占位。 */
+  async findByIdsWithImages(ids: ReadonlyArray<string>) {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) {
+      return [];
+    }
+    const rows = await db.select(taskCardColumns).from(task).where(inArray(task.id, unique));
+    return attachImages(rows);
+  }
+
   async findStatusById(id: string): Promise<{ status: string } | null> {
     const rows = await db
       .select({ status: task.status })

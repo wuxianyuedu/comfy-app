@@ -735,6 +735,24 @@ describe("TaskRepository", () => {
     seedUser(tdb, { id: "u2", email: "u2@test.dev" });
   });
 
+  it("findByIdsWithImages 与逐条 findByIdWithImages 等价，且去重 / 缺行不补位（#5149）", async () => {
+    const a = await taskRepository.createQueued({ ...queued });
+    const b = await taskRepository.createQueued({ ...queued });
+    const [withImagesA, withImagesB] = await Promise.all([
+      taskRepository.findByIdWithImages(a.id),
+      taskRepository.findByIdWithImages(b.id),
+    ]);
+    const batch = await taskRepository.findByIdsWithImages([a.id, a.id, b.id, "missing-task-id"]);
+    expect(batch).toHaveLength(2);
+    expect(batch.map((row) => row.id).sort()).toEqual([a.id, b.id].sort());
+    const byId = new Map(batch.map((row) => [row.id, row]));
+    expect(byId.get(a.id)?.images).toEqual(withImagesA?.images);
+    expect(byId.get(b.id)?.images).toEqual(withImagesB?.images);
+    /* 窄投影：重列那四个字段根本不在返回行上。 */
+    expect(byId.get(a.id)).not.toHaveProperty("workflowSnapshot");
+    expect(await taskRepository.findByIdsWithImages([])).toEqual([]);
+  });
+
   it("countStatusesWithToday 与三次独立 count 等价（#5124 合并重复聚合）", async () => {
     const a = await taskRepository.createQueued({ ...queued });
     const b = await taskRepository.createQueued({ ...queued, projectId: "p1" });

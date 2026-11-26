@@ -261,16 +261,15 @@ export const characterLibraryRouter = createTRPCRouter({
     const portraits = normalizePortraits(row.portraits)
       .filter((portrait) => portrait.taskId !== undefined)
       .slice(0, MAX_PORTRAIT_CANDIDATES);
-    /* 任务回查互不依赖，一趟并行取回（no-await-in-loop 的正解）。 */
-    const tasks = await Promise.all(
-      portraits.map((portrait) =>
-        portrait.taskId === undefined
-          ? Promise.resolve(undefined)
-          : taskRepository.findByIdWithImages(portrait.taskId),
-      ),
+    /* 批量窄投影一趟取回（#5149）：此前每个候选各自一次 findByIdWithImages，
+     * 把四个 MB 级重列整批反序列化后其实只读十来列。 */
+    const taskIds = portraits.flatMap((portrait) =>
+      portrait.taskId === undefined ? [] : [portrait.taskId],
     );
-    const visible = portraits.flatMap((portrait, index) => {
-      const task = tasks[index];
+    const tasks = await taskRepository.findByIdsWithImages(taskIds);
+    const byId = new Map(tasks.map((row) => [row.id, row]));
+    const visible = portraits.flatMap((portrait) => {
+      const task = portrait.taskId === undefined ? undefined : byId.get(portrait.taskId);
       if (portrait.taskId === undefined || task === undefined || task.userId !== ctx.user.id) {
         return [];
       }
@@ -533,20 +532,18 @@ export const characterLibraryRouter = createTRPCRouter({
    */
   syncGeneration: authedProcedure.mutation(async ({ ctx }) => {
     const generating = await characterProfileRepository.listByStatus(ctx.user.id, "generating");
-    /* 任务行的回查没有顺序依赖，一趟并行取回（no-await-in-loop 的正解）；
-     * 回写仍逐行串行——复制成功才落库，SQLite 单写者下并行无收益。 */
-    const tasks = await Promise.all(
-      generating.map((character) =>
-        character.taskId === null
-          ? Promise.resolve(null)
-          : taskRepository.findByIdWithImages(character.taskId),
-      ),
+    /* 批量窄投影一趟取回（#5149）；回写仍逐行串行——复制成功才落库，
+     * SQLite 单写者下并行无收益。 */
+    const taskIds = generating.flatMap((character) =>
+      character.taskId === null ? [] : [character.taskId],
     );
+    const tasks = await taskRepository.findByIdsWithImages(taskIds);
+    const byId = new Map(tasks.map((row) => [row.id, row]));
     let ready = 0;
     let failed = 0;
     let pending = 0;
-    for (const [index, character] of generating.entries()) {
-      const task = tasks[index] ?? null;
+    for (const character of generating) {
+      const task = character.taskId === null ? null : (byId.get(character.taskId) ?? null);
       if (
         task === null ||
         task.status === "FAILED" ||
