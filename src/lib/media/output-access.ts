@@ -79,7 +79,11 @@ export async function isForeignOwnedArtifact(
     if (segments.length < 4) {
       return false;
     }
-    const task = await taskRepository.findById(segments[3]!);
+    const taskId = segments[3];
+    if (taskId === undefined) {
+      return false;
+    }
+    const task = await taskRepository.findById(taskId);
     return !!task && task.userId !== userId;
   }
   // 其余落点是迁移前的 `<任务 id>/…`
