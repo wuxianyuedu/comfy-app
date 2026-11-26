@@ -134,16 +134,23 @@ function dedupeLeaves(
   return nodes;
 }
 
-function buildKindTree(entries: ReadonlyArray<ModelTreeEntry>): Array<ModelTreeNode> {
+/** 用途 → 模式 → 叶子这一层是「按用途」与「按来源」共用的子树（对话没有模式层，
+ *  叶直接挂在用途下）。keyPrefix 是布局前缀：按用途传空串，按来源传
+ *  `source:<local|remote>:` —— 两档的 key 空间不撞，展开态与用例锚点各走各的。 */
+function buildKindNodes(
+  entries: ReadonlyArray<ModelTreeEntry>,
+  keyPrefix: string,
+): Array<ModelTreeNode> {
   const nodes: Array<ModelTreeNode> = [];
   for (const kind of MODEL_TEST_KINDS) {
     const kindEntries = entries.filter((e) => e.kind === kind);
     if (kindEntries.length === 0) {
       continue;
     }
+    const kindKey = `${keyPrefix}kind:${kind}`;
     const children: Array<ModelTreeNode> =
       kind === "chat"
-        ? dedupeLeaves(kindEntries, (e) => `leaf:chat:${e.value}`)
+        ? dedupeLeaves(kindEntries, (e) => `leaf:${keyPrefix}chat:${e.value}`)
         : generativeModeCodes(kind).flatMap((code) => {
             const modeEntries = kindEntries.filter((e) => e.mode === code);
             if (modeEntries.length === 0) {
@@ -151,36 +158,49 @@ function buildKindTree(entries: ReadonlyArray<ModelTreeEntry>): Array<ModelTreeN
             }
             return [
               {
-                children: dedupeLeaves(modeEntries, (e) => `leaf:${kind}:${code}:${e.value}`),
-                key: `kind:${kind}:${code}`,
+                children: dedupeLeaves(
+                  modeEntries,
+                  (e) => `leaf:${keyPrefix}${kind}:${code}:${e.value}`,
+                ),
+                key: `${kindKey}:${code}`,
                 kind,
                 label: workflowTypeLabel(code),
                 mode: code,
               } satisfies ModelTreeNode,
             ];
           });
-    nodes.push({ children, key: `kind:${kind}`, kind, label: MODEL_TEST_KIND_LABELS[kind] });
+    nodes.push({ children, key: kindKey, kind, label: MODEL_TEST_KIND_LABELS[kind] });
   }
   return nodes;
 }
 
+function buildKindTree(entries: ReadonlyArray<ModelTreeEntry>): Array<ModelTreeNode> {
+  return buildKindNodes(entries, "");
+}
+
+/** 来源组：本地 / 远端各自按用途 → 模式 → 模型展开，与「按用途」同构。
+ *  同一「模型 × 模式」在一组内只列一次（dedupeLeaves 的既有去重口径）；
+ *  多模式候选在每个支持的模式组各列一次，和按用途档一致。 */
 function buildSourceGroup(
   local: boolean,
   label: string,
   entries: ReadonlyArray<ModelTreeEntry>,
 ): ModelTreeNode {
-  const seen = new Set<string>();
-  const children: Array<ModelTreeNode> = [];
-  for (const entry of entries) {
-    if (entry.local !== local || seen.has(entry.value)) {
-      continue;
-    }
-    seen.add(entry.value);
-    children.push(leafNode(entry, `leaf:source:${local ? "local" : "remote"}:${entry.value}`));
-  }
-  return { children, key: `source:${local ? "local" : "remote"}`, label, local };
+  const sourceKey = `source:${local ? "local" : "remote"}`;
+  return {
+    children: buildKindNodes(
+      entries.filter((e) => e.local === local),
+      `${sourceKey}:`,
+    ),
+    key: sourceKey,
+    label,
+    local,
+  };
 }
 
+/** 「按来源」= 本地 / 远端两组，组内仍是用途 → 模式 → 模型。叶子自带用途与
+ *  模式，选中时直接取叶子三态；旧「本地 / 远端 → 模型」平铺布局那种按当前页
+ *  状态解析模式的做法随平铺一起取消。 */
 function buildSourceTree(entries: ReadonlyArray<ModelTreeEntry>): Array<ModelTreeNode> {
   return [
     buildSourceGroup(true, "本地模型", entries),
@@ -255,22 +275,4 @@ export function buildModelTree(
     return buildModelNameTree(entries);
   }
   return buildKindTree(entries);
-}
-
-/** 「按来源」布局的叶子没有展开模式层：选中时按当前页状态解析落在哪个模式格
- *  —— 当前「用途 + 模式」可用就用当前的，否则取该候选在同用途下的第一个
- *  可测模式；跨用途选中（如图片页里点了一个对话模型）则整条切换。 */
-export function resolveSourceSelection(args: {
-  currentKind: ModelTestKind;
-  currentMode: string;
-  entries: ReadonlyArray<ModelTreeEntry>;
-  value: string;
-}): ModelTreeEntry | null {
-  const sameValue = args.entries.filter((e) => e.value === args.value);
-  const exact = sameValue.find((e) => e.kind === args.currentKind && e.mode === args.currentMode);
-  if (exact !== undefined) {
-    return exact;
-  }
-  const sameKind = sameValue.filter((e) => e.kind === args.currentKind);
-  return sameKind[0] ?? sameValue[0] ?? null;
 }

@@ -69,6 +69,8 @@ function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorCon
     logRow: null,
     expandedId: null,
     runningDetail: null,
+    runningLogs: [],
+    runningSettled: null,
     toggleExpanded: vi.fn(),
     detailLoading: false,
     paramRows: [],
@@ -245,6 +247,10 @@ describe("QueueMonitor", () => {
     expect(screen.getByText("统一输入（提交时的参数）")).toBeInTheDocument();
     expect(screen.getByText("请求信息")).toBeInTheDocument();
     expect(screen.getByText("本地任务")).toBeInTheDocument();
+    expect(screen.getByText("生成进度")).toBeInTheDocument();
+    expect(screen.getByText("执行日志")).toBeInTheDocument();
+    expect(screen.getByText("请求返回")).toBeInTheDocument();
+    expect(screen.getByText("执行中")).toBeInTheDocument();
     detail.click();
     expect(toggleExpanded).toHaveBeenCalledWith("run-1");
   });

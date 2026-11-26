@@ -21,6 +21,7 @@ import { useTRPC, type RouterOutputs } from "~/trpc/react";
 
 import { useToast } from "../../ToastProvider";
 import type { QueueTaskLogTarget } from "../QueueTaskLogModal";
+import { useTaskLogStream } from "./use-task-log-stream";
 import {
   bucketQueueRows,
   estimateRemainingMs,
@@ -99,9 +100,13 @@ export type QueueMonitorController = {
     NonNullable<RouterOutputs["task"]["detail"]>,
     "id" | "modelName" | "params" | "prompt" | "status" | "workflowName"
   > | null;
+  /** 运行中任务的就地日志（仅展开时订阅；未展开为 null 时不连 SSE）。 */
+  runningLogs: ReturnType<typeof useTaskLogStream>["logs"];
   /** 库里 status=RUNNING 的行。`running` 为 null 而这里非空 = ComfyUI 没连上
    * （富卡片的数据源不可达），离线兜底卡用它渲染。 */
   runningRows: Array<QueueRow>;
+  /** 运行中任务的终态落定读数（未落定为 null）。 */
+  runningSettled: ReturnType<typeof useTaskLogStream>["settled"];
   /** 顶部指标带四格（运行中 / 排队中 / 今日完成 / 失败）。 */
   stats: QueueStats;
   /** 点同一行收起、点另一行切换。 */
@@ -216,6 +221,10 @@ export function useQueueMonitor(): QueueMonitorController {
   const runningId = running?.id ?? buckets.running[0]?.id ?? null;
   const runningDetail =
     expandedId !== null && expandedId === runningId ? (detailQ.data ?? null) : null;
+  /* 就地日志只在展开运行时那条时订阅（#5093）；收起即断开，不给轮询叠加 SSE。 */
+  const runningLogStream = useTaskLogStream(
+    expandedId !== null && expandedId === runningId ? runningId : null,
+  );
 
   const cancel = useCallback(
     async (id: string, label: string) => {
@@ -343,6 +352,8 @@ export function useQueueMonitor(): QueueMonitorController {
     logRow,
     expandedId,
     runningDetail,
+    runningLogs: runningLogStream.logs,
+    runningSettled: runningLogStream.settled,
     toggleExpanded,
     detailLoading: detailQ.isFetching,
     paramRows,

@@ -220,7 +220,10 @@ function RunningCard({ c, running }: { c: QueueMonitorController; running: Runni
         <RunningDetails
           detail={c.runningDetail}
           detailLoading={c.detailLoading}
+          logs={c.runningLogs}
           paramRows={c.paramRows}
+          progressPct={running.progressPct}
+          settled={c.runningSettled}
         />
       ) : null}
     </article>
