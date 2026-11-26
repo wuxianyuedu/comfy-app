@@ -145,12 +145,41 @@ export function searchQueueRows(rows: ReadonlyArray<QueueRow>, query: string): A
   );
 }
 
-/** 任务耗时：开始时刻优先取 claimedAt，缺失的旧任务退回创建时刻。 */
-export function queueTaskDurationMs(row: QueueRow): number | null {
-  if (row.finishedAt === null) {
+/** 任务时间的两种在途形态：task.list 投影成 ISO 串，task.detail 经 superjson 还原成 Date。 */
+export type TaskTimeInput = Date | string | null | undefined;
+
+function taskTimeMs(value: TaskTimeInput): number | null {
+  if (value === null || value === undefined) {
     return null;
   }
-  return Math.max(0, row.finishedAt.getTime() - (row.claimedAt ?? row.createdAt).getTime());
+  const ms = typeof value === "string" ? Date.parse(value) : value.getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * 任务耗时（毫秒）：开始时刻优先取 claimedAt，缺失的旧任务退回 createdAt
+ *（后者会把排队算进去，口径与 schema 注释一致，不冒充「纯生成时间」）。
+ * 终态时刻缺失（未完 / 被中断）返回 null —— 不编一个 0 秒出来。
+ */
+export function taskDurationMs(row: {
+  claimedAt?: TaskTimeInput;
+  createdAt: TaskTimeInput;
+  finishedAt?: TaskTimeInput;
+}): number | null {
+  const end = taskTimeMs(row.finishedAt);
+  if (end === null) {
+    return null;
+  }
+  const start = taskTimeMs(row.claimedAt) ?? taskTimeMs(row.createdAt);
+  if (start === null) {
+    return null;
+  }
+  return Math.max(0, end - start);
+}
+
+/** 队列页耗时：与历史页共用同一份派生（不另写第二套）。 */
+export function queueTaskDurationMs(row: QueueRow): number | null {
+  return taskDurationMs(row);
 }
 
 /**

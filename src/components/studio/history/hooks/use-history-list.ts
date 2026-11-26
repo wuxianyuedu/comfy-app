@@ -23,13 +23,14 @@ import { useItemAction } from "~/components/ui/use-item-action";
 import { useViewTabActive } from "~/components/ui/view-tab-active";
 
 import { useToast } from "../../ToastProvider";
-import { parseWorkflowIOMap, type WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 
 import {
   buildModelTestRetryPayload,
   buildReprintPayload,
   taskWorkflowId,
+  workflowIOOfDetailFull,
 } from "../history-detail-derive";
 import type { ModelTestRetryPayload } from "../history-detail-derive";
 import {
@@ -217,18 +218,21 @@ export function useHistoryList(args: {
   const detail = detailQ.isSuccess ? detailQ.data : null;
   const detailLoading = detailQ.isPending;
   /* 参数可读名要按工作流 IO 的作者标签查 —— 任务行里只存了 pin 名
-   *（`text` / `aspect_ratio` / `megapixels`），那是 ComfyUI 的程序名。
-   * 用轻量的 `workflow.detail`（一次 DB 读，不做派生）拿 `workflowIO` 列；
-   * 工作流已被删除时查询失败，这里保持空表，参数名如实显示 pin 名 —— 不编。 */
+   *（`replace` / `aspect_ratio` / `megapixels`），那是 ComfyUI 的程序名。
+   * 必须用 `workflow.detailFull`：它把落库的「勾选了哪个 pin」富化成带 label
+   *（作者标签 > 本地化名 > pin 名）与默认值的条目，IO 预览显示的就是这一套；
+   * 轻量 `workflow.detail` 只给原始列，label 为空 → 历史只能回落 pin 名，
+   * 且没提交值的端口整行缺失（ISSUE #5118）。工作流已被删除时查询失败，
+   * 这里保持空表，参数名如实显示 pin 名 —— 不编。 */
   const detailWorkflowId = detail ? taskWorkflowId(detail) : null;
   const ioQ = useQuery(
-    trpc.workflow.detail.queryOptions(
+    trpc.workflow.detailFull.queryOptions(
       { id: detailWorkflowId ?? "" },
       { enabled: detailWorkflowId !== null && detailWorkflowId !== "" },
     ),
   );
   const workflowIO = useMemo<WorkflowIOMap>(
-    () => (ioQ.isSuccess ? parseWorkflowIOMap(ioQ.data?.template?.workflowIO) : EMPTY_WORKFLOW_IO),
+    () => (ioQ.isSuccess ? workflowIOOfDetailFull(ioQ.data) : EMPTY_WORKFLOW_IO),
     [ioQ.isSuccess, ioQ.data],
   );
   /* 模式契约注册表：详情弹窗按「任务模式 + 生效契约」枚举工坊对外口（与工坊

@@ -1,6 +1,7 @@
 import { memo, useState } from "react";
 import { ChevronDown, Copy, FileText, FolderOpen, FolderPlus, Maximize2 } from "lucide-react";
 
+import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { ValidationErrorList } from "~/components/ui/validation-error-list";
@@ -21,7 +22,7 @@ import { clampPct } from "~/lib/progress";
 import { cn } from "~/lib/utils";
 
 import type { TaskItem } from "./history-types";
-import { activityAtOf, modelLabelOf, modeLabelOf } from "./history-list-derive";
+import { activityAtOf, modelLabelOf, modeLabelOf, taskDurationTextOf } from "./history-list-derive";
 import { QUEUED_STATUS_STYLE, STATUS_STYLE } from "./history-utils";
 
 type HistoryTaskCardProps = {
@@ -170,7 +171,13 @@ export const HistoryTaskCard = memo(function HistoryTaskCard({
           <TruncatedText className="text-ink-strong min-w-0 truncate text-xs font-medium">
             {modelLabelOf(task)}
           </TruncatedText>
-          <span className="text-ink-fainter ml-auto shrink-0 text-xs tabular-nums">
+          <span className="text-ink-fainter ml-auto flex shrink-0 items-center gap-1.5 text-xs tabular-nums">
+            {/* 生成耗时（ISSUE #5115）：与详情弹窗同一份派生 / 格式，终态才显示。 */}
+            {taskDurationTextOf(task) !== null && (
+              <Hint label="生成耗时（领取 → 终态；旧任务无领取时刻时含排队时间）">
+                <span className="text-ink-muted text-2xs">耗时 {taskDurationTextOf(task)}</span>
+              </Hint>
+            )}
             {/* 水合安全口径（ISSUE #4852）：挂载前渲染稳定占位，挂载后再算相对时间。 */}
             <TimeAgo fallback="刚刚" value={activityAtOf(task)} />
           </span>
