@@ -173,8 +173,8 @@ describe("折叠态侧栏的关闭按钮（ISSUE #4981）", () => {
     /* #5040：不再是右上角盖图标的 top-0.5/right-0.5，改为垂直居中靠右缘外移。 */
     expect(close.className).not.toContain("group-data-[collapsible=icon]:top-0.5");
     expect(close.className).toContain("group-data-[collapsible=icon]:top-1/2");
-    /* #5059：收回 48px 轨内（right-0），落进悬浮拉宽的胶片，不再探出轨外压住气泡。 */
-    expect(close.className).toContain("group-data-[collapsible=icon]:right-0");
+    /* #5059：贴住悬浮**只向右**拉宽的胶片右缘（right-[-8px]），图标固定在左半，不相交。 */
+    expect(close.className).toContain("group-data-[collapsible=icon]:right-[-8px]");
     expect(close.className).toContain("group-data-[collapsible=icon]:size-3");
     /* #5059：关闭钮比底片拉宽晚 100ms 淡入，节奏是「底片先展开、按钮再落位」。 */
     expect(close.className).toContain("group-data-[collapsible=icon]:delay-100");
@@ -194,16 +194,49 @@ describe("折叠态侧栏的关闭按钮（ISSUE #4981）", () => {
     expect(glyph!.className).toContain("group-data-[collapsible=icon]:absolute");
     expect(glyph!.className).toContain("group-data-[collapsible=icon]:inset-0");
     expect(glyph!.className).toContain("group-data-[collapsible=icon]:size-full");
-    /* #5059：悬浮 / 聚焦时底片向左扩到整条 48px 轨，给关闭钮让出停靠背景。 */
-    expect(glyph!.className).toContain(
+    /* #5059 反馈：悬浮 / 聚焦时底片**只向右**拉宽，左缘保持 0 与轨对齐，
+     * 不往左扩盖住按钮左侧那条「当前打开页签」指示条（data-active:before）。 */
+    expect(glyph!.className).not.toContain(
       "group-hover/menu-item:group-data-[collapsible=icon]:-left-2",
     );
-    expect(glyph!.className).toContain(
-      "group-hover/menu-item:group-data-[collapsible=icon]:w-[calc(100%+16px)]",
-    );
-    expect(glyph!.className).toContain(
+    expect(glyph!.className).not.toContain(
       "group-focus-within/menu-item:group-data-[collapsible=icon]:-left-2",
     );
+    expect(glyph!.className).toContain(
+      "group-hover/menu-item:group-data-[collapsible=icon]:w-[calc(100%+8px)]",
+    );
+    expect(glyph!.className).toContain(
+      "group-focus-within/menu-item:group-data-[collapsible=icon]:w-[calc(100%+8px)]",
+    );
+  });
+
+  it("折叠态底片只向右拉宽、左缘不动，关闭钮贴底片右侧不挡图标（#5059 反馈）", () => {
+    renderShell({
+      active: "history",
+      tabs: tabsOf("history", "models"),
+      defaultSidebarOpen: false,
+    });
+    expectCollapsedContext();
+    const glyph = document.querySelector('[data-open-state="true"]');
+    expect(glyph, "打开态项应有胶片").not.toBeNull();
+    /* 左缘保持 0 / inset-0：不往左扩，才不会盖住当前页签指示条（left-0 的伪元素）。 */
+    expect(glyph!.className).toContain("group-data-[collapsible=icon]:inset-0");
+    expect(glyph!.className).not.toContain(
+      "group-hover/menu-item:group-data-[collapsible=icon]:-left-2",
+    );
+    expect(glyph!.className).not.toContain(
+      "group-focus-within/menu-item:group-data-[collapsible=icon]:-left-2",
+    );
+    /* 只改宽度：动画面也不含 left，免得哪天又偷偷加回左移。 */
+    expect(glyph!.className).toContain("transition-[width]");
+    /* 图标固定在按钮内容盒左侧（justify-start + pl-2），悬浮拉宽前后位置不变，
+     * 不被拉宽的底片带着居中右移，才不会撞上右侧的关闭钮。 */
+    expect(glyph!.className).toContain("group-data-[collapsible=icon]:justify-start");
+    expect(glyph!.className).toContain("group-data-[collapsible=icon]:pl-2");
+    const close = screen.getByRole("button", { name: "关闭 模型 页签" });
+    /* 关闭钮贴拉宽底片右缘（right-[-8px]），不压在图标上（不回 right-0 与图标重叠）。 */
+    expect(close.className).toContain("group-data-[collapsible=icon]:right-[-8px]");
+    expect(close.className).not.toContain("group-data-[collapsible=icon]:right-0");
   });
 
   it("折叠态打开项放开按钮 overflow 并隐藏名称，拉宽胶片不被裁、文字不漏出轨外（#5059）", () => {
