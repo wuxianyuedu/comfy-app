@@ -3,6 +3,8 @@
  * 名字 / 原型**不进**提示词（模型会把它们画成画面文字）。
  * 两套形状互斥：接负向词的走词表，不接的把文字约束折成正向前缀。
  */
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -81,5 +83,14 @@ describe("buildPortraitPrompts —— 两套互斥的提示词", () => {
       expect(prompt).not.toContain("魔法少女，");
       expect(prompt).toContain("她有一头粉色的短发。");
     }
+  });
+});
+
+/* ISSUE #5085：被导出函数签名引用的类型必须导出，否则 typedoc 报
+ * 「referenced but not included」warning，API 文档自检把任何 warning 判红。 */
+describe("API 文档契约（ISSUE #5085）", () => {
+  it("PortraitCharacter 已导出，typedoc 能收进文档", () => {
+    const source = readFileSync("src/lib/character/portrait-prompt.ts", "utf8");
+    expect(source).toMatch(/export type PortraitCharacter\s*=/);
   });
 });

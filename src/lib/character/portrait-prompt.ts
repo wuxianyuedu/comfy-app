@@ -27,8 +27,10 @@ export const PORTRAIT_TEXT_CONSTRAINT_AS_POSITIVE =
 /** 立绘生成的构图与画质约束（追加在描述之后，不含绝对禁字句）。 */
 const PORTRAIT_SUFFIX = "单人角色立绘，全身像，居中构图，动漫风格，高质量，细节丰富，简洁背景";
 
-/** 折算立绘提示词需要的档案字段。 */
-type PortraitCharacter = {
+/** 折算立绘提示词需要的档案字段（导出以便 typedoc 收进文档：
+ *  被导出函数的签名引用却不导出的类型会触发「referenced but not included」warning，
+ *  API 文档自检把任何 warning 判红）。 */
+export type PortraitCharacter = {
   archetype?: string | null;
   description: string;
   name?: string | null;
