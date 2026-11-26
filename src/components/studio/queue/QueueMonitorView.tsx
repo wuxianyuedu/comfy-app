@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import {
   Ban,
   Boxes,
@@ -282,9 +282,17 @@ export const QueueMonitorView = memo(function QueueMonitorView({
     [c.runningRows, c.queued, c.recent],
   );
   const keepIds = useMemo(() => tree.filterIds(allRows), [tree, allRows]);
-  const runningRows = c.runningRows.filter((row) => keepIds.has(row.id));
-  const queued = c.queued.filter((entry) => keepIds.has(entry.row.id));
-  const recent = c.recent.filter((row) => keepIds.has(row.id));
+  /* 三段过滤都进 memo：700+ 行的队列里，视图每次渲染重扫一遍是白干，
+   * 而且新数组身份会击穿下游已 memo 的行组件。 */
+  const runningRows = useMemo(
+    () => c.runningRows.filter((row) => keepIds.has(row.id)),
+    [c.runningRows, keepIds],
+  );
+  const queued = useMemo(
+    () => c.queued.filter((entry) => keepIds.has(entry.row.id)),
+    [c.queued, keepIds],
+  );
+  const recent = useMemo(() => c.recent.filter((row) => keepIds.has(row.id)), [c.recent, keepIds]);
   /* 虚拟列表的项形状在这里定型，位次文案也只算一次。 */
   const queuedRows = useMemo(
     () => queued.map(({ position, row }) => ({ leading: `第 ${String(position)} 位`, row })),
@@ -306,25 +314,45 @@ export const QueueMonitorView = memo(function QueueMonitorView({
   const treeCurrentKind = treeKind === "video" || treeKind === "chat" ? treeKind : "image";
 
   /* 逐行闭包收在行组件自己的 render 里（QueueRowLine 已 memo），视图这里
-   * 只传稳定 handler；行身份由 controller 给，轮询不会换掉静止行的 props。 */
-  const handleToggleParams = (id: string) => {
-    c.toggleExpanded(id);
-  };
-  const handleCancel = (row: QueueRow) => {
-    void c.cancel(row.id, row.workflowName);
-  };
-  const handleMoveUp = (row: QueueRow) => {
-    void c.moveUp(row);
-  };
-  const handleCopy = (row: QueueRow) => {
-    void c.copyForReprint(row);
-  };
-  const handleOpenFolder = (row: QueueRow) => {
-    void c.openFolder(row);
-  };
-  const handleOpenLog = (row: QueueRow) => {
-    c.openLog(row);
-  };
+   * 只传稳定 handler。controller 的六个方法本身是 useCallback 稳定的，逐个
+   * 作为依赖：每 2s 的轮询不会换掉这些身份，否则行组件的 memo 等于没写。 */
+  const { cancel, copyForReprint, moveUp, openFolder, openLog, toggleExpanded } = c;
+  const handleToggleParams = useCallback(
+    (id: string) => {
+      toggleExpanded(id);
+    },
+    [toggleExpanded],
+  );
+  const handleCancel = useCallback(
+    (row: QueueRow) => {
+      void cancel(row.id, row.workflowName);
+    },
+    [cancel],
+  );
+  const handleMoveUp = useCallback(
+    (row: QueueRow) => {
+      void moveUp(row);
+    },
+    [moveUp],
+  );
+  const handleCopy = useCallback(
+    (row: QueueRow) => {
+      void copyForReprint(row);
+    },
+    [copyForReprint],
+  );
+  const handleOpenFolder = useCallback(
+    (row: QueueRow) => {
+      void openFolder(row);
+    },
+    [openFolder],
+  );
+  const handleOpenLog = useCallback(
+    (row: QueueRow) => {
+      openLog(row);
+    },
+    [openLog],
+  );
 
   return (
     <DocumentFrame

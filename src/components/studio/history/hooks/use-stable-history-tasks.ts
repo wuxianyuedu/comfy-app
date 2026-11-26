@@ -19,31 +19,42 @@ type TaskRow = Omit<TaskItem, "createdAt" | "finishedAt" | "claimedAt"> & {
 type TaskPage = { tasks: ReadonlyArray<TaskRow> };
 export type HistoryTaskPages = ReadonlyArray<TaskPage> | undefined;
 
-type Holder = { prints: Array<string>; tasks: Array<TaskItem> };
+type Holder = { rows: ReadonlyArray<TaskRow>; tasks: Array<TaskItem> };
 
-/** 用户能感知到的行字段：时间、状态、文案、封面与结构化错误。
- *  指纹只用于判等，不落库、不展示。 */
-function taskFingerprint(task: TaskRow): string {
-  return JSON.stringify([
-    task.id,
-    task.status,
-    task.createdAt,
-    task.finishedAt ?? null,
-    task.claimedAt ?? null,
-    task.prompt,
-    task.cover ?? null,
-    task.coverIsCover === true,
-    task.modelName ?? null,
-    task.workflowName,
-    task.type,
-    task.error ?? null,
-    task.negativePrompt ?? null,
-    task.params ?? null,
-    task.validationErrors ?? null,
-  ]);
+/** 两个外来 JSON 值是否等价。同一行里只有 params / validationErrors 需要深比，
+ *  其余都是标量；原实现对整行 16 个字段做一次 JSON.stringify，每次 4s 轮询
+ *  100 行就是 100 次数组分配 + 字符串拼接，发生在 render 期。 */
+function sameLooseValue(a: unknown, b: unknown): boolean {
+  const left = a ?? null;
+  const right = b ?? null;
+  if (left === right) {
+    return true;
+  }
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function sameFingerprints(prev: ReadonlyArray<string>, next: ReadonlyArray<string>): boolean {
+/** 用户能感知到的行字段逐项判等；短路，内容没变时一次字符串都不拼。 */
+function sameTaskRow(a: TaskRow, b: TaskRow): boolean {
+  return (
+    a.id === b.id &&
+    a.status === b.status &&
+    a.createdAt === b.createdAt &&
+    (a.finishedAt ?? null) === (b.finishedAt ?? null) &&
+    (a.claimedAt ?? null) === (b.claimedAt ?? null) &&
+    a.prompt === b.prompt &&
+    (a.cover ?? null) === (b.cover ?? null) &&
+    (a.coverIsCover === true) === (b.coverIsCover === true) &&
+    (a.modelName ?? null) === (b.modelName ?? null) &&
+    a.workflowName === b.workflowName &&
+    a.type === b.type &&
+    (a.error ?? null) === (b.error ?? null) &&
+    (a.negativePrompt ?? null) === (b.negativePrompt ?? null) &&
+    sameLooseValue(a.params, b.params) &&
+    sameLooseValue(a.validationErrors, b.validationErrors)
+  );
+}
+
+function sameRows(prev: ReadonlyArray<TaskRow>, next: ReadonlyArray<TaskRow>): boolean {
   if (prev === next) {
     return true;
   }
@@ -51,7 +62,9 @@ function sameFingerprints(prev: ReadonlyArray<string>, next: ReadonlyArray<strin
     return false;
   }
   for (let i = 0; i < prev.length; i += 1) {
-    if (prev[i] !== next[i]) {
+    const before = prev[i];
+    const after = next[i];
+    if (before === undefined || after === undefined || !sameTaskRow(before, after)) {
       return false;
     }
   }
@@ -79,10 +92,10 @@ function isoText(value: unknown): string | null {
  * 读它做判等，ref 会让 react(refs) 规则报警；普通 holder 的语义等价而判据不误伤。
  */
 export function useStableHistoryTasks(pages: HistoryTaskPages): Array<TaskItem> {
-  const [holder] = useState<Holder>(() => ({ prints: [], tasks: [] }));
+  const [holder] = useState<Holder>(() => ({ rows: [], tasks: [] }));
   return useMemo<Array<TaskItem>>(() => {
-    const prints = (pages ?? []).flatMap((page) => page.tasks.map(taskFingerprint));
-    if (sameFingerprints(holder.prints, prints)) {
+    const rows = (pages ?? []).flatMap((page) => page.tasks);
+    if (sameRows(holder.rows, rows)) {
       return holder.tasks;
     }
     const byId = new Map<string, TaskItem>();
@@ -108,7 +121,7 @@ export function useStableHistoryTasks(pages: HistoryTaskPages): Array<TaskItem> 
       }
     }
     const tasks = [...byId.values()];
-    holder.prints = prints;
+    holder.rows = rows;
     holder.tasks = tasks;
     return tasks;
   }, [holder, pages]);
