@@ -575,6 +575,67 @@ describe("纯函数", () => {
     }
   });
 
+  it("git-lfs batch 的 Go 服务端 5xx 话术：Server error ... from HTTP 502 认瞬时错、可重试（#5066）", () => {
+    /* 现场 PR #5065 两跑（`cnb-c7d-1k89n2806` / `cnb-8on-1k89nbiul`）的原话：
+     * git-lfs 的 batch response 是 Go 的 `Server error &{...}s(MISSING) from HTTP 502`，
+     * 既不是 `Internal Server Error`、也没有 `remote: HTTP 5xx` 前缀 —— 旧正则一条都不
+     * 命中，于是上游 502 被念成「类别=其他 / 重试 0 次」、一跳交账、不派发。 */
+    const upstream502 = "batch response: Fatal error: Server error &{...}s(MISSING) from HTTP 502";
+    /* 正控：同一事实源的两个消费面（重试决策 + 话术分类）都认这一形。 */
+    expect(isTransientRemoteFailure(upstream502)).toBe(true);
+    expect(shouldRetryGitFailure(upstream502)).toBe(true);
+    /* 它不是 egress（包到了 GitHub，是服务端没接住），话术不许念成节点出网。 */
+    expect(isEgressFailure(upstream502)).toBe(false);
+    /* 5xx 的各形态都认，措辞里的 `&{...}` 任意内容不挡 `from HTTP 5xx`。 */
+    for (const shape of [
+      "batch response: Server error &{Message:x RequestID:y} from HTTP 500",
+      "batch response: Fatal error: Server error &{...} from HTTP 503",
+    ]) {
+      expect(isTransientRemoteFailure(shape)).toBe(true);
+      expect(shouldRetryGitFailure(shape)).toBe(true);
+    }
+    /* 反控：只认 5xx，认证 / 配额 / 仓库不存在仍一次都不重试。 */
+    for (const text of [
+      "remote: HTTP 401 Unauthorized",
+      "batch response: This repository is over its data quota. (402 Payment Required)",
+      "batch request: Repository or object not found: exit status 404",
+      "Server error &{...} from HTTP 200 ok",
+    ]) {
+      expect(isTransientRemoteFailure(text)).toBe(false);
+      expect(shouldRetryGitFailure(text)).toBe(false);
+    }
+  });
+
+  it("runGitWithRetry：git-lfs 的上游 502 不再单次即弃（#5066）", async () => {
+    const heard: string[] = [];
+    let calls = 0;
+    const ctx = (stderr: string) => ({
+      budgetMs: LFS_PUSH_RETRY_BUDGET_MS,
+      label: "LFS 推送",
+      log: (line: string) => {
+        heard.push(line);
+      },
+      maxAttempts: 2,
+      now: () => 0,
+      prefix: "mirror",
+      runGit: () => {
+        calls += 1;
+        return calls === 1
+          ? { code: 128, stderr, stdout: "" }
+          : { code: 0, stderr: "", stdout: "" };
+      },
+      sleep: () => Promise.resolve(),
+    });
+    const args = lfsPushArgs("https://example.invalid/x.git");
+    const retried = await runGitWithRetry(
+      args,
+      ctx("batch response: Fatal error: Server error &{...}s(MISSING) from HTTP 502"),
+    );
+    expect(retried.attempts).toBe(2);
+    expect(retried.code).toBe(0);
+    expect(heard.join("\n")).toContain("可重试类");
+  });
+
   /* git-lfs 是 Go 写的，batch 请求不经 git / curl，回话是 Go net 包在 Winsock / POSIX
    * 那一层抛的措辞。这一族与上面「Recv failure / schannel」讲的是同一件事，但一个字
    * 都对不上；漏认的现场是 LFS 那一跳「重试=1 次」、类别念成「其他」（PR #3398 首跑
