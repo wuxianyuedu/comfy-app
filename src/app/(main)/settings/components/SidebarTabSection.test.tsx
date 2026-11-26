@@ -66,8 +66,8 @@ describe("SidebarTabSection 的配置面", () => {
   it("配置面里的每一项都给出两档选择，且当前生效值落在选中态上", () => {
     seedController();
     render(<SidebarTabSection />);
-    // 十五项全局视图（首页是固定页签，不在配置面内）；设置与 UI 控件总览也算在内
-    expect(screen.getAllByRole("radiogroup")).toHaveLength(15);
+    // 十七项全局视图（首页是固定页签，不在配置面内）；服饰库 / 装饰库与设置、UI 控件总览也算在内
+    expect(screen.getAllByRole("radiogroup")).toHaveLength(17);
     expect(checkedMode("模型适配")).toBe("独立标签页");
     expect(checkedMode("模型")).toBe("共享标签页");
     /* ISSUE #3798：非侧栏的两屏出现在配置面里；出厂默认两屏都是共享档。 */

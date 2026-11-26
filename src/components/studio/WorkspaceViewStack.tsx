@@ -22,9 +22,11 @@ import { HeavyViewGate } from "~/components/studio/HeavyViewGate";
 import { isProjectTab } from "~/components/studio/NavItems";
 import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
 import {
+  AccessoryLibraryView,
   AssetLibraryView,
   CharacterLibraryView,
   ComfyuiControl,
+  CostumeLibraryView,
   ConsoleView,
   FaceLibraryView,
   ModeContractView,
@@ -210,6 +212,14 @@ export function WorkspaceViewStack({
 
       case "face": {
         return <FaceLibraryView />;
+      }
+
+      case "costumes": {
+        return <CostumeLibraryView />;
+      }
+
+      case "accessories": {
+        return <AccessoryLibraryView />;
       }
 
       case "comfyui": {

@@ -4,6 +4,8 @@
   "characters": "independent",
   "style": "independent",
   "face": "independent",
+  "costumes": "independent",
+  "accessories": "independent",
   "history": "independent",
   "queue": "independent",
   "comfyui": "independent",
