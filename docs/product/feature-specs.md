@@ -2084,6 +2084,21 @@
   `src/lib/character/character-store.ts`（单张安全删除）、
   `src/components/studio/characters/CharacterDetailModal.tsx`、`hooks/use-character-library.ts`
 
+#### FR-AL-06 调研页成品入库
+
+- 状态：已上线（#5114）
+- 需求：脸库 / 风格库是找提示词与试画风的调研入口，真正要用的成品沉淀进资产库；
+  两张结果卡都要有「加入资产库」动作，复用归属 / 分类 / 子目录弹窗与参数快照口径。
+- 行为与验收：① 成品卡出现按钮，点击弹窗，可改归属 / 分类 / 子目录；
+  ② 本地工作流通道带任务号，走 `asset.createFromTask`，提示词 / 负向词 / 参数快照由任务行提供；
+  ③ 远端 API 通道没有任务行，带图片 URL + 提示词 / 模型走 `asset.createFromUrl`：
+  服务端用统一 `safeFetch` 安全下载（SSRF 判据）、校验图片类型与大小、落进产物根后再复制进资产目录；
+  ④ 入库成功后资产列表缓存失效，两页立刻能看到新资产；失败有可读出口。
+- 落点：`src/components/studio/faces/FaceLibrary.tsx`、`src/components/studio/styles/StyleLibrary.tsx`（按钮）、
+  `src/components/studio/assets/AddToAssetLibraryDialog.tsx`（共用弹窗）、
+  `src/components/studio/assets/hooks/use-asset-library.ts`（`addFromCandidate`）、
+  `src/server/api/routers/asset.ts`（`createFromUrl`）、`src/lib/media/asset-store.ts`（远端缓冲落盘）。
+
 ## 18. 风格库（FR-SL）
 
 #### FR-SL-01 侧栏风格库与可搜索画风列表

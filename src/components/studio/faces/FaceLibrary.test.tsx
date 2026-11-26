@@ -51,7 +51,16 @@ const mocks = vi.hoisted(() => {
     notice: "",
     prompt: "anime girl, blue iris, silver hair\nanime swordsman, black hair",
     query: "",
-    results: {} as Record<string, { status: string; taskId?: string }>,
+    results: {} as Record<
+      string,
+      {
+        modelName?: string;
+        prompt?: string;
+        status: string;
+        taskId?: string;
+        url?: string;
+      }
+    >,
     selectAll,
     selectedIds: ["silver-mage", "black-swordsman"],
     selectedPresets: presets,
@@ -78,6 +87,21 @@ vi.mock("~/components/workshop/ModelCascadeSelect", () => ({
 }));
 vi.mock("~/components/ui/image-viewer", () => ({
   ViewableImage: ({ alt }: { alt: string }) => <img alt={alt} src="x" />,
+}));
+vi.mock("~/components/studio/assets/AddToAssetLibraryDialog", () => ({
+  AddToAssetLibraryDialog: ({
+    candidate,
+    taskId,
+  }: {
+    candidate: { sourceUrl: string } | null;
+    taskId: string | null;
+  }) => (
+    <div
+      data-candidate={candidate?.sourceUrl ?? ""}
+      data-task-id={taskId ?? ""}
+      data-testid="add-to-library"
+    />
+  ),
 }));
 
 const { FaceLibrary } = await import("./FaceLibrary");
@@ -128,5 +152,26 @@ describe("角色脸库视图（ISSUE #5087 / #5098）", () => {
     const remote = screen.getByLabelText("取消生成：黑发剑士");
     expect(remote.hasAttribute("disabled")).toBe(true);
     expect(screen.getByText("远端通道不可取消")).toBeTruthy();
+  });
+
+  it("成品卡可加入资产库：本地带 taskId，远端带 URL 与提示词（#5114）", () => {
+    mocks.controller.results = {
+      "silver-mage": { status: "done", taskId: "task-local", url: "/api/generated/x.png" },
+      "black-swordsman": {
+        modelName: "remote-model",
+        prompt: "black swordsman",
+        status: "done",
+        url: "https://example.test/b.png",
+      },
+    };
+    render(<FaceLibrary />);
+
+    fireEvent.click(screen.getByLabelText("把「银发清新少女」加入资产库"));
+    expect(screen.getByTestId("add-to-library")?.dataset.taskId).toBe("task-local");
+
+    fireEvent.click(screen.getByLabelText("把「黑发剑士」加入资产库"));
+    expect(screen.getByTestId("add-to-library")?.dataset.candidate).toBe(
+      "https://example.test/b.png",
+    );
   });
 });

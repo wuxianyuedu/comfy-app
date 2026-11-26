@@ -213,12 +213,24 @@ export function useAssetLibrary(): AssetLibraryController {
   };
 }
 
-/** 「加入资产库」弹窗的逻辑（历史页挂它；与列表页互不共享状态）。 */
+/** 调研页（脸库 / 风格库）远端生图结果的入库候选：没有任务行，参数由调用方随行带。 */
+export type AssetCandidate = {
+  category: AssetCategoryKey;
+  modelName?: string;
+  negativePrompt?: string;
+  params?: Record<string, unknown>;
+  prompt: string;
+  sourceUrl: string;
+  workflowName?: string;
+};
+
+/** 「加入资产库」弹窗的逻辑（历史页与调研页共用；与列表页互不共享状态）。 */
 export function useAddToAssetLibrary(onDone?: () => void) {
   const trpc = useTRPC();
   const toast = useToast();
   const queryClient = useQueryClient();
   const mutation = useMutation(trpc.asset.createFromTask.mutationOptions());
+  const urlMutation = useMutation(trpc.asset.createFromUrl.mutationOptions());
 
   const addToLibrary = useCallback(
     async (args: {
@@ -267,7 +279,50 @@ export function useAddToAssetLibrary(onDone?: () => void) {
     [mutation, onDone, queryClient, toast, trpc],
   );
 
-  return { addToLibrary, pending: mutation.isPending };
+  /** 远端生图结果入库（无任务行）：复用同一个弹窗的归属 / 分类 / 子目录，走 createFromUrl。 */
+  const addFromCandidate = useCallback(
+    async (
+      args: AssetCandidate & {
+        projectId?: string;
+        scope: "public" | "project";
+        subdir?: string;
+      },
+    ): Promise<boolean> => {
+      const result = await runAsyncAction(
+        async () => {
+          await urlMutation.mutateAsync({
+            category: args.category,
+            ...(args.modelName === undefined ? {} : { modelName: args.modelName }),
+            ...(args.negativePrompt === undefined ? {} : { negativePrompt: args.negativePrompt }),
+            ...(args.params === undefined ? {} : { params: args.params }),
+            ...(args.projectId === undefined ? {} : { projectId: args.projectId }),
+            prompt: args.prompt,
+            scope: args.scope,
+            sourceUrl: args.sourceUrl,
+            ...(args.subdir === undefined || args.subdir === "" ? {} : { subdir: args.subdir }),
+            ...(args.workflowName === undefined ? {} : { workflowName: args.workflowName }),
+          });
+          return { ok: true, detail: "已加入资产库" };
+        },
+        {
+          report: (kind, detail) => (kind === "ok" ? toast.info(detail) : toast.error(detail)),
+          failureText: "加入资产库失败，请稍后重试",
+        },
+      );
+      if (result.ok) {
+        await queryClient.invalidateQueries({ queryKey: trpc.asset.list.queryKey() });
+        onDone?.();
+      }
+      return result.ok;
+    },
+    [onDone, queryClient, toast, trpc, urlMutation],
+  );
+
+  return {
+    addFromCandidate,
+    addToLibrary,
+    pending: mutation.isPending || urlMutation.isPending,
+  };
 }
 
 /** 尺寸档 → 网格列宽（Tailwind 任意值走 style，避免动态类名被 purge）。 */

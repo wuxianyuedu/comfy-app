@@ -10,11 +10,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const trpcMocks = vi.hoisted(() => {
   const createFromTaskMutationFn = vi.fn();
+  const createFromUrlMutationFn = vi.fn();
   return {
     createFromTaskMutationFn,
+    createFromUrlMutationFn,
     trpcStub: {
       asset: {
         createFromTask: { mutationOptions: () => ({ mutationFn: createFromTaskMutationFn }) },
+        createFromUrl: { mutationOptions: () => ({ mutationFn: createFromUrlMutationFn }) },
         list: { queryKey: () => ["asset", "list"] },
       },
     },
@@ -43,6 +46,11 @@ describe("useAddToAssetLibrary — 写后失效 asset.list 缓存（ISSUE #4935�
     });
     invalidateSpy = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
     trpcMocks.createFromTaskMutationFn.mockResolvedValue({
+      created: 1,
+      skipped: 0,
+      duplicated: 0,
+    });
+    trpcMocks.createFromUrlMutationFn.mockResolvedValue({
       created: 1,
       skipped: 0,
       duplicated: 0,
@@ -115,5 +123,31 @@ describe("useAddToAssetLibrary — 写后失效 asset.list 缓存（ISSUE #4935�
     expect(invalidateSpy).not.toHaveBeenCalled();
     expect(onDone).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalled();
+  });
+
+  it("远端调研结果入库走 createFromUrl，成功后同样失效缓存并回调", async () => {
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useAddToAssetLibrary(onDone), { wrapper });
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.addFromCandidate({
+        category: "style",
+        prompt: "新海诚风格天空",
+        scope: "public",
+        sourceUrl: "https://example.com/a.png",
+      });
+    });
+
+    expect(ok).toBe(true);
+    const firstCall: unknown = trpcMocks.createFromUrlMutationFn.mock.calls[0]?.[0];
+    expect(firstCall).toMatchObject({
+      category: "style",
+      prompt: "新海诚风格天空",
+      scope: "public",
+      sourceUrl: "https://example.com/a.png",
+    });
+    expect(invalidateSpy).toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalledOnce();
   });
 });
