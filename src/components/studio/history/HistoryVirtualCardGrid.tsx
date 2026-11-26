@@ -65,7 +65,6 @@ export const HistoryVirtualCardGrid = memo(function HistoryVirtualCardGrid({
   progressMap,
 }: HistoryCardGridProps) {
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
   const [boxRef, box] = useElementBox();
   const [animateRef] = useAutoAnimate<HTMLDivElement>(ANIMATE_OPTIONS);
@@ -76,9 +75,6 @@ export const HistoryVirtualCardGrid = memo(function HistoryVirtualCardGrid({
       listRef.current = el;
       boxRef(el);
       setScrollEl(el?.closest<HTMLElement>("[data-document-scroll]") ?? null);
-      /* 布局量测只在 ref 回调（挂载）时做一次，不在 render 期读 offsetTop ——
-       * render 期读布局会强制同步回流，大列表每次轮询都付一次。 */
-      setScrollMargin(el?.offsetTop ?? 0);
     },
     [boxRef],
   );
@@ -106,6 +102,9 @@ export const HistoryVirtualCardGrid = memo(function HistoryVirtualCardGrid({
     return out;
   }, [items, cols]);
 
+  /* 与队列列表同款：必须 render 期读，ref 回调里布局未定会量到 0，
+   * 之后不再更新会让 scrollMargin 错位、列表顶部出现一大块空白。 */
+  const scrollMargin = listRef.current?.offsetTop ?? 0;
   // oxlint-disable-next-line react/incompatible-library
   const virtualizer = useVirtualizer({
     count: rows.length,
