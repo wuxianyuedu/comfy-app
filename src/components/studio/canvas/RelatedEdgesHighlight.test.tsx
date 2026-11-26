@@ -71,6 +71,8 @@ type Sink = {
   /** 删掉一条连线（模拟作者断开映射 / 上游节点被删）。 */
   dropEdge: (edgeId: string) => void;
   edges: Array<Edge>;
+  /** 仅改节点位置并触发 store 更新（模拟拖动的一帧）。 */
+  moveNode: (nodeId: string) => void;
   /** 最新节点表（带端口关注标记的那一份）。 */
   nodes: Array<Node>;
   select: (nodeId: string, selected: boolean) => void;
@@ -128,12 +130,26 @@ function Stage({
     [setEdges],
   );
 
+  const moveNode = useCallback(
+    (nodeId: string) => {
+      const internal = store.getState().nodeLookup.get(nodeId);
+      const userNode = internal?.internals.userNode;
+      if (!userNode) {
+        return;
+      }
+      userNode.position = { x: userNode.position.x + 10, y: userNode.position.y };
+      store.setState({});
+    },
+    [store],
+  );
+
   const sinkRef = useRef(sink);
   useEffect(() => {
     sinkRef.current.edges = currentEdges;
     sinkRef.current.nodes = nodes;
     sinkRef.current.select = select;
     sinkRef.current.dropEdge = dropEdge;
+    sinkRef.current.moveNode = moveNode;
   });
 
   return (
@@ -157,6 +173,7 @@ function renderStage(
     nodes: [],
     select: () => undefined,
     dropEdge: () => undefined,
+    moveNode: () => undefined,
   };
   render(
     <ReactFlowProvider>
@@ -189,6 +206,24 @@ function nodeById(sink: Sink, id: string): Node {
   expect(node).toBeTruthy();
   return node!;
 }
+
+describe("订阅成本（#5128）", () => {
+  it("仅位置更新不重写边表；连线增删仍重算", () => {
+    const sink = renderStage();
+    toggleSelected(sink, "2", true);
+    const before = sink.edges;
+    act(() => {
+      sink.moveNode("2");
+    });
+    /* 拖动的一帧只改位置：高亮关注级别没变，边表必须保持同一引用。 */
+    expect(sink.edges).toBe(before);
+
+    act(() => {
+      sink.dropEdge("e-2-3");
+    });
+    expect(sink.edges.map((edge) => edge.id)).toEqual(["e-1-2"]);
+  });
+});
 
 describe("readEdgeFocusRole", () => {
   it("未标记 / 非法值都归零，只认三种关注级别", () => {
