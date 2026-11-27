@@ -54,7 +54,8 @@ function main(argv) {
   /** @param {string} cmd @param {string[]} args */
   const run = (cmd, args) => runGateStep(cmd, args, { cwd: ROOT, timeoutMs: 30_000, echo: false });
   const files = changedPaths({
-    diff: run("git", ["diff", "--name-only", `${base}...HEAD`]).stdout,
+    diff: run("git", ["-c", "core.quotePath=false", "diff", "--name-only", `${base}...HEAD`])
+      .stdout,
     status: run("git", ["status", "--porcelain=v1", "-z"]).stdout,
   });
   if (files.length === 0) {
