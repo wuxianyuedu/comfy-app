@@ -18,9 +18,11 @@ import { isFilmShotStatus, type ShotStatus } from "~/lib/film/film-status";
 import { sizeSpecDims, toSizeSpec } from "~/lib/media/size-presets";
 import { loadSizePresetTable } from "~/lib/media/size-preset-fs.server";
 import {
+  artifactDiskPath,
   artifactUrl,
   filmBgmRoot,
   filmsRoot,
+  generatedRoot,
   isWithinGeneratedRoot,
 } from "~/lib/media/output-paths";
 import { isSafeBgmName } from "~/lib/film/bgm-name";
@@ -37,6 +39,7 @@ import {
 } from "./compose-steps";
 import { appendFilmLog } from "./film-log";
 import { checkFilmQuality, probeFilm } from "./film-quality";
+import { audioPathOfParams, buildDialogueMixArgs, type DialogueTrack } from "./voice-track";
 
 /** `filmShot.params`（JSON 列）里的台词。只认字符串，形状不对就当没有——
  *  字幕宁可回退标题，也不把「[object Object]」烧进画面。 */
@@ -361,60 +364,64 @@ export async function composeFilm(id: string) {
      * 自己拼一份前缀就会与 `taskOutputUrl()` 的形状分叉（台账 A8 的同一族）。 */
     const localPath = artifactUrl(["films", `${id}.mp4`]);
 
+    /* 逐镜对白轨（ISSUE #5213）：只收有配音产物的镜头，按拼接后的时长累加起点；
+     * 静音镜直接缺席，不让空音轨把整条 amix 拖成静音。 */
+    const dialogueTracks: Array<DialogueTrack> = [];
+    let cursor = 0;
+    for (const shot of shots) {
+      const audioUrl = audioPathOfParams(shot.params);
+      if (audioUrl !== null) {
+        const disk = artifactDiskPath(audioUrl, generatedRoot());
+        if (disk !== null) {
+          dialogueTracks.push({ file: disk, start: cursor });
+        }
+      }
+      cursor += shot.duration ?? film.framesPerShot / film.fps;
+    }
+
+    /* BGM 根内包含校验（ISSUE #4738）：bgmName 形状不安全（带路径分隔符 / `.` / `..`）
+     * 或解析结果落在 films/bgm 之外时**拒绝读取**——宁可无配乐，也不把根外文件
+     * 混进音轨。路由侧的 isSafeBgmName 是第一道闸，这里对历史行与绕过路由的
+     * 调用方兜底；判据与路由共用同一份（~/lib/film/bgm-name.ts）。 */
+    let bgm: string | undefined;
     if (film.bgmName !== null && film.bgmName !== "") {
-      /* 根内包含校验（ISSUE #4738）：bgmName 形状不安全（带路径分隔符 / `.` / `..`）
-       * 或解析结果落在 films/bgm 之外时**拒绝读取**——宁可无配乐，也不把根外文件
-       * 混进音轨。路由侧的 isSafeBgmName 是第一道闸，这里对历史行与绕过路由的
-       * 调用方兜底；判据与路由共用同一份（~/lib/film/bgm-name.ts）。 */
-      const bgm = path.resolve(filmBgmRoot(), film.bgmName);
-      const bgmAllowed = isSafeBgmName(film.bgmName) && isWithinGeneratedRoot(bgm, filmBgmRoot());
-      const bgmExists = bgmAllowed
-        ? await fs
-            .stat(bgm)
-            .then(() => true)
-            .catch(() => false)
-        : false;
-      if (!bgmAllowed) {
+      const candidate = path.resolve(filmBgmRoot(), film.bgmName);
+      const allowed =
+        isSafeBgmName(film.bgmName) && isWithinGeneratedRoot(candidate, filmBgmRoot());
+      if (allowed) {
+        const exists = await fs
+          .stat(candidate)
+          .then(() => true)
+          .catch(() => false);
+        if (exists) {
+          bgm = candidate;
+        }
+      } else {
         await appendFilmLog(
           id,
           "warn",
           `BGM 文件名越界，已跳过配乐：${clampText(film.bgmName, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
         );
       }
-      if (bgmAllowed && bgmExists) {
-        const mres = await runFFmpeg(
-          [
-            "-y",
-            "-i",
-            concatPath,
-            "-i",
-            bgm,
-            "-filter_complex",
-            "[0:a][1:a]amix=inputs=2:duration=shortest:dropout_transition=0[a]",
-            "-map",
-            "0:v",
-            "-map",
-            "[a]",
-            "-c:v",
-            "copy",
-            "-c:a",
-            "aac",
-            "-shortest",
-            finalPath,
-          ],
-          tmpDir,
+    }
+
+    if (dialogueTracks.length === 0 && bgm === undefined) {
+      await fs.copyFile(concatPath, finalPath);
+    } else {
+      const mres = await runFFmpeg(
+        buildDialogueMixArgs({ bgm, dialogueTracks, output: finalPath, video: concatPath }),
+        tmpDir,
+      );
+      if (mres.code === 0) {
+        await appendFilmLog(
+          id,
+          "success",
+          `已混入音轨（对白 ${dialogueTracks.length} 条${bgm === undefined ? "" : " + BGM"}）`,
         );
-        if (mres.code === 0) {
-          await appendFilmLog(id, "success", "已混入背景音乐");
-        } else {
-          await appendFilmLog(id, "warn", "BGM 混音失败，使用无配乐版本");
-          await fs.copyFile(concatPath, finalPath);
-        }
       } else {
+        await appendFilmLog(id, "warn", "音轨混音失败，使用无配音版本");
         await fs.copyFile(concatPath, finalPath);
       }
-    } else {
-      await fs.copyFile(concatPath, finalPath);
     }
 
     /* 整片 SRT 与逐镜烧录用同一份文本/时长口径（ISSUE #5210）：既能烧录也能下载校对，

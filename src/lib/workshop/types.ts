@@ -263,6 +263,14 @@ function paramsObject(value: unknown): Record<string, unknown> {
   return isPlainRecord(value) ? value : {};
 }
 
+/** 声音绑定（ISSUE #5213）：音色 / 方言 / 语速。角色卡与镜头各持一份，镜头可覆写；
+ *  随草稿 JSON 列持久化，新增字段不需要数据库迁移。 */
+const voiceBindingSchema = z.object({
+  timbre: z.string().optional(), // 音色名 / 音色 id
+  dialect: z.string().optional(), // 方言（如「普通话」「四川话」）
+  speed: z.number().positive().optional(), // 语速倍率（>0）
+});
+
 export const characterPortraitInputSchema = z.object({
   /** 浏览器可直接引用的图片地址（本机产物走 /api/generated，导入走素材库）。 */
   url: z.string().min(1),
@@ -306,6 +314,8 @@ export const characterInputSchema = z
     /** LoRA 强度（0~2，缺省 1 由工作流图内值兜底；只连 lora-name 不连
      *  lora-strength 口时本值不生效）。 */
     loraStrength: z.number().optional(),
+    /** 角色声音绑定（ISSUE #5213）：逐镜配音沿用此音色 / 方言 / 语速，镜头可覆写。 */
+    voice: voiceBindingSchema.optional(),
   })
   .transform((character) => ({
     ...character,
@@ -347,6 +357,10 @@ export const shotInputSchema = z
     referenceImages: stringList.transform((value) => value.slice(0, 16)).optional(),
     // ── 视频生成计划 ──
     dialogue: z.string().optional(), // 对白 / 字幕文本
+    /** 逐镜声音覆写（ISSUE #5213）：覆盖出场角色的声音绑定。 */
+    voice: voiceBindingSchema.optional(),
+    /** 逐镜配音产物地址（ISSUE #5213）：TTS 链路回写，成片合成混入对白轨。 */
+    audioUrl: z.string().optional(),
     motion: optionalEnum(MOTION_LEVELS), // 运动强度（I2V）
     duration: z.number().optional(), // 镜头时长（秒）
     transition: optionalEnum(TRANSITIONS), // 与下一镜的转场
