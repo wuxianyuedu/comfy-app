@@ -7,6 +7,8 @@ export type ActivityItem = {
   createdAt: string;
   event: string;
   id: string;
+  /** 来源标签（启动器注入的 handle），无来源的老行缺省。 */
+  source?: string;
 };
 
 export async function fetchProjectActivity(projectId: string): Promise<Array<ActivityItem>> {
@@ -31,6 +33,7 @@ export async function fetchProjectActivity(projectId: string): Promise<Array<Act
           createdAt: row.createdAt,
           event: row.event,
           id: typeof row.id === "string" ? row.id : row.createdAt,
+          ...(typeof row.source === "string" ? { source: row.source } : {}),
         },
       ];
     });

@@ -38,6 +38,7 @@ import { isRecord } from "~/lib/is-record";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { rejectCrossOriginWrite } from "~/server/lib/same-origin";
 import { audit } from "~/server/lib/audit";
+import { env } from "~/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -210,7 +211,7 @@ export async function PUT(req: NextRequest) {
       await audit(
         "project_content_saved",
         { headers: req.headers, session: { user: { id: user.id } } },
-        { project },
+        { project, source: env.COMFYAPP_ACTIVITY_SOURCE ?? "unknown" },
       );
     }
     if (outcome.skipped) {

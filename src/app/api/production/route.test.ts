@@ -19,6 +19,8 @@ const auth = vi.hoisted((): { user: { id: string } | null } => ({
 vi.mock("~/server/auth/request-user", () => ({
   requireRequestUser: () => auth.user,
 }));
+/* 活动流来源标签由 env 注入（ISSUE #5251），测试里给固定值，不读真实环境。 */
+vi.mock("~/env", () => ({ env: { COMFYAPP_ACTIVITY_SOURCE: "test-handle" } }));
 
 import { getTestDb, seedUser } from "../../../../tests/helpers/test-db";
 import { productionRepository } from "~/lib/core/repository-production";

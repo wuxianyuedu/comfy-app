@@ -225,6 +225,11 @@ export const RUNTIME_SCRIPTS = [
   // 缺一份即整条编排在运行时 ENOENT
   "dev-launcher-session.mjs",
   "app-port.mjs",
+  // 协作活动流的来源标签（ISSUE #5251）：dev-launcher.mjs 顶层静态 import 它，
+  // 从既有 handle 取值链算出 COMFYAPP_ACTIVITY_SOURCE 注入应用服务。缺这份就是
+  // 编排器加载期 ERR_MODULE_NOT_FOUND（桌包「双击没反应」）。它自己 import 的
+  // app-port.mjs / launcher-core/shell.mjs 均已在本清单里。
+  "platform/dev-handle.mjs",
   // 「应用服务为什么结束」的落盘侧（ISSUE #1692）：`dev-launcher.mjs` 顶层静态
   // import 它的 `writeAppServiceExit`，收尾定性时写 `run/app-service-exit.json`。
   // 缺这份同样是整个编排器 ENOENT —— 而它恰恰只在「服务已经出过事」时才被用到，

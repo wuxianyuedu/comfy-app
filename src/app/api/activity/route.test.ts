@@ -42,7 +42,7 @@ describe("GET /api/activity", () => {
         event: "project_content_saved",
         userId: "u1",
         ip: "unknown",
-        meta: JSON.stringify({ project: "proj_1" }),
+        meta: JSON.stringify({ project: "proj_1", source: "d-win" }),
         createdAt: new Date("2026-11-27T10:00:00.000Z"),
       },
       {
@@ -67,5 +67,19 @@ describe("GET /api/activity", () => {
     }
     expect(body.items).toHaveLength(1);
     expect(JSON.stringify(body.items)).toContain("2026-11-27T10:00");
+    expect(JSON.stringify(body.items)).toContain("d-win");
+  });
+
+  it("畸形 meta 不抛、也不把原文回显给客户端", async () => {
+    await tdb.insert((await import("~/server/db/schema")).auditLog).values({
+      event: "project_content_saved",
+      userId: "u1",
+      ip: "unknown",
+      meta: '{not json "secret-value"',
+      createdAt: new Date("2026-11-27T10:00:00.000Z"),
+    });
+    const res = await get("proj_1");
+    expect(res.status).toBe(200);
+    expect(await res.text()).not.toContain("secret-value");
   });
 });

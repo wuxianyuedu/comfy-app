@@ -13,7 +13,10 @@ export function ProjectActivityPanel({ projectId }: { projectId?: string }) {
     return null;
   }
   return (
-    <div className="border-border flex flex-col gap-1.5 border-l-2 pl-3">
+    <div
+      className="border-border flex flex-col gap-1.5 border-l-2 pl-3"
+      data-component="project-activity-panel"
+    >
       <div className="text-ink-muted text-sm font-medium">最近活动</div>
       {items.length === 0 ? (
         <span className="text-ink-faint text-xs">还没有保存记录。</span>
@@ -21,6 +24,9 @@ export function ProjectActivityPanel({ projectId }: { projectId?: string }) {
         items.map((item) => (
           <div className="text-ink-faint flex items-center gap-2 text-xs" key={item.id}>
             <span className="text-ink-muted">{EVENT_LABEL[item.event] ?? item.event}</span>
+            {item.source !== undefined && (
+              <span className="text-ink-fainter text-3xs">来源 {item.source}</span>
+            )}
             <time dateTime={item.createdAt}>{item.createdAt.slice(0, 16).replace("T", " ")}</time>
           </div>
         ))

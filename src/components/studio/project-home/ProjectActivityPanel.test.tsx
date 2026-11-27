@@ -17,10 +17,16 @@ describe("ProjectActivityPanel", () => {
     expect(container.firstChild).toBeNull();
 
     mocks.fetchProjectActivity.mockResolvedValue([
-      { event: "project_content_saved", id: "a1", createdAt: "2026-11-27T10:00:00.000Z" },
+      {
+        event: "project_content_saved",
+        id: "a1",
+        createdAt: "2026-11-27T10:00:00.000Z",
+        source: "d-win",
+      },
     ]);
     rerender(<ProjectActivityPanel projectId="proj_1" />);
     expect(await screen.findByText("保存了剧本 / 角色 / 分镜")).toBeTruthy();
     expect(screen.getByText("2026-11-27 10:00")).toBeTruthy();
+    expect(screen.getByText("来源 d-win")).toBeTruthy();
   });
 });

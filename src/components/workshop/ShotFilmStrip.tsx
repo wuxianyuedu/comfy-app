@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
+
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -14,6 +16,12 @@ import { shotFrameView } from "./shot-status-config";
 /** 镜号统一成两位（`01`…`16`）：胶片带的意义是**扫**，宽度不齐就扫不动。 */
 export function formatShotIndex(index: number): string {
   return String(index).padStart(2, "0");
+}
+
+/** 评审通过谓词（ISSUE #5251）：复用 `shot.review`，共享 DB 下另一个检出审过的镜头一眼可见。
+ *  模块级纯函数 —— 既能进 useMemo 依赖稳定的计数，也能给每帧角标用，不写第二份。 */
+function isReviewed(shot: Shot): boolean {
+  return normalizeReviewVerdict(asRecord(shot)?.review)?.pass === true;
 }
 
 /**
@@ -33,11 +41,7 @@ export function ShotFilmStrip({
     () => shots.filter((shot) => shot.status === "failed").length,
     [shots],
   );
-  const reviewedCount = useMemo(
-    () =>
-      shots.filter((shot) => normalizeReviewVerdict(asRecord(shot)?.review)?.pass === true).length,
-    [shots],
-  );
+  const reviewedCount = useMemo(() => shots.filter(isReviewed).length, [shots]);
 
   if (shots.length === 0) {
     return null;
@@ -102,6 +106,17 @@ export function ShotFilmStrip({
                   <span className="text-4xs absolute top-0.5 left-0.5 rounded bg-black/60 px-1 leading-4 text-white tabular-nums">
                     {formatShotIndex(shot.index)}
                   </span>
+                )}
+
+                {isReviewed(shot) && (
+                  <Badge
+                    aria-hidden
+                    className="pointer-events-none absolute top-0.5 right-0.5"
+                    size="xs"
+                    tone="success"
+                  >
+                    已评审
+                  </Badge>
                 )}
 
                 <span aria-hidden className={`absolute inset-x-0 bottom-0 h-1 ${frame.barClass}`} />

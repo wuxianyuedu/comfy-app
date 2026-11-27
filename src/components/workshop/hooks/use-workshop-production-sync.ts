@@ -33,6 +33,7 @@ import {
 import {
   fetchProduction,
   pushProduction,
+  type ProductionData,
   type ProductionPayload,
 } from "~/lib/production/production-client";
 import type { ProductionStage } from "~/lib/production/progress";
@@ -56,6 +57,10 @@ export type UseWorkshopProductionSyncInput = {
 };
 
 export type WorkshopProductionSync = {
+  /** 显式采纳服务端当前内容（复用挂载采纳体），不自动覆盖本机编辑。 */
+  adoptServerProduction: () => void;
+  /** 关闭「服务端已更新」提示。 */
+  dismissServerChanged: () => void;
   /** 最新草稿 ref（主管线的卸载兜底与挂载回填都要读它）。 */
   latestDraftRef: React.RefObject<WorkshopDraft>;
   /** 卸载兜底：把「此刻最新的那一份草稿」立即写穿（读的是 hook 内的 ref，
@@ -67,6 +72,8 @@ export type WorkshopProductionSync = {
   renderedRef: React.RefObject<boolean>;
   /** 服务端草稿镜像对账是否已落定（#4023 的闸门，落定前不放行任何写穿）。 */
   restoreSettledRef: React.RefObject<boolean>;
+  /** 服务端被别的检出更新过（stale 读数）；给视图常驻提示用（ISSUE #5251）。 */
+  serverChanged: boolean;
   /** 草稿镜像对账落定时调（放行写穿）。 */
   settleRestore: () => void;
   /** 当前阶段的 ref 镜像（卸载兜底时读最新值）。 */
@@ -99,6 +106,35 @@ export function useWorkshopProductionSync(
   /* 基线对应的服务端版本时刻：窄写入把它当 `baseUpdatedAt` 带回去。
    * 挂载对账读到行之后填上（缺省 = 旧行 / 没读到，不参与版本闸）。 */
   const productionBaseAtRef = React.useRef<string | undefined>(undefined);
+  /* 另一个检出写过库（ISSUE #5251）：只做提示与显式采纳，不自动覆盖本机编辑。 */
+  const [serverChanged, setServerChanged] = React.useState(false);
+  const guardRef = React.useRef<ReturnType<typeof beginStaleRun> | null>(null);
+  React.useEffect(() => {
+    guardRef.current = beginStaleRun();
+    return () => {
+      guardRef.current?.dispose();
+      guardRef.current = null;
+    };
+  }, []);
+
+  /** 采纳服务端内容的唯一实现体：挂载对账与用户点「采纳」共用，避免两份分叉。 */
+  const applyProduction = React.useCallback(
+    (production: ProductionData, activeId: string) => {
+      const local = latestDraftRef.current;
+      const next = productionContentToDraft(productionToContent(production), local);
+      writeDraft(activeId, next);
+      applyDraft(next);
+      latestDraftRef.current = next;
+      setDraftCache(next);
+      productionBaseRef.current = buildProductionPayload(
+        next,
+        stageRef.current,
+        renderedRef.current,
+      );
+      productionBaseAtRef.current = production.updatedAt;
+    },
+    [applyDraft, setDraftCache],
+  );
 
   React.useEffect(() => {
     activeProjectRef.current = activeProjectId;
@@ -126,6 +162,10 @@ export function useWorkshopProductionSync(
        * 那几个字段），所以照旧推进基线，不把用户的改动卡在重试里。 */
       void pushProduction(projectId, patch, {
         expectedUpdatedAt: productionBaseAtRef.current,
+        /* stale 不阻断窄写入（#5147 语义保留），只把「别人也改过」摆到台面上。 */
+        onStale: () => {
+          setServerChanged(true);
+        },
       }).then((result) => {
         if (result !== "failed") {
           productionBaseRef.current = next;
@@ -198,18 +238,8 @@ export function useWorkshopProductionSync(
           productionBaseAtRef.current = production.updatedAt;
           return;
         }
-        const next = productionContentToDraft(productionToContent(production), local);
-        writeDraft(activeId, next);
-        applyDraft(next);
-        latestDraftRef.current = next;
-        setDraftCache(next);
         /* 基线 = 刚采纳的这一份：用户接下来动哪一项，就只发哪一项。 */
-        productionBaseRef.current = buildProductionPayload(
-          next,
-          stageRef.current,
-          renderedRef.current,
-        );
-        productionBaseAtRef.current = production.updatedAt;
+        applyProduction(production, activeId);
         setNotice("已同步服务端最新的剧本 / 角色卡 / 分镜内容");
       });
     })();
@@ -220,12 +250,39 @@ export function useWorkshopProductionSync(
     // oxlint-disable-next-line react/exhaustive-deps
   }, []);
 
+  /** 用户点「采纳服务端内容」：显式覆盖本机编辑，不经过挂载的 shouldAdopt 策略。 */
+  const adoptServerProduction = React.useCallback(() => {
+    const activeId = activeProjectRef.current;
+    const guard = guardRef.current;
+    if (!activeId || guard === null) {
+      return;
+    }
+    void fetchProduction(activeId).then((production) => {
+      guard.commit(() => {
+        if (!production) {
+          setServerChanged(false);
+          return;
+        }
+        applyProduction(production, activeId);
+        setServerChanged(false);
+        setNotice("已采纳服务端最新内容");
+      });
+    });
+  }, [applyProduction, setNotice]);
+
+  const dismissServerChanged = React.useCallback(() => {
+    setServerChanged(false);
+  }, []);
+
   return {
+    adoptServerProduction,
+    dismissServerChanged,
     latestDraftRef,
     persistLatest,
     persistNow,
     renderedRef,
     restoreSettledRef,
+    serverChanged,
     settleRestore,
     stageRef,
   };
