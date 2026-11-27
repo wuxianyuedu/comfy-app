@@ -235,6 +235,14 @@ React 19 已移除 `setState-in-render` 豁免并新增严格 hooks 规则，`es
 - **已改造文件**：`settings/page.tsx`、`FilmStudio.tsx`、`ModelLibrary.tsx`、`ContentAssetNode.tsx`、`llm-context.tsx`、`CanvasNode.tsx`、`workflow-stores.tsx`、`workflow-editor-build-nodes.ts` 等；配套删除 5 个文件的文件级豁免。
 - **提交粒度**：lint 修复与功能改动分开提交，便于回滚与 review。
 
+### 4.7 解决问题先看外部生态（ISSUE #5151）
+
+动手解决一个问题（尤其做新功能、换实现路线）之前，先到 GitHub / 同类开源项目 / 上游文档
+搜一圈：有没有现成的、或比我们更优的方案、思路、库或数据。有值得采用或借鉴的（哪怕只是
+思路，如更优的生成视频流程、角色一致性控制、动作库组织方式），**先立单评估**（收益 / 代价 /
+怎么接，§13.10.9），再决定采用、借鉴或不采用及理由；不在代码里默默从零重造。
+这是 §12.18「复用优先」向外延伸的前一跳，细则见 [12.18.1](12-代码组织与文件结构.md#12181-先向外看一眼外部生态调研与提单评估issue-5151)。
+
 ---
 
 ## 5. Git 工作流
