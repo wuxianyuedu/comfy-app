@@ -31,6 +31,8 @@ import { resolveFilmFirstFrame } from "./first-frame";
 import { watchFilm } from "./film-watch";
 
 export type FilmShotInput = {
+  /** 角色台词（工坊 Shot.dialogue）：字幕与后续配音的唯一源，落 params.dialogue。 */
+  dialogue?: string;
   /** 镜头时长（秒，工坊 Shot.duration）；缺省按 frames / fps 折算。 */
   duration?: number;
   /** 工坊阶段④定稿的镜头图（ISSUE #5141）：进 params.firstFrame，视频首帧不再另合成。 */
@@ -235,6 +237,11 @@ async function persistFilmWithShots(args: {
             /* 时长口按秒、帧数口按帧：两种单位都随任务落库（ISSUE #5139），
              * 端口挑自己认的那个，监看侧算 -t / 字幕也用同一份秒值。 */
             duration: shot.duration ?? args.framesPerShot / args.fps,
+            /* 台词随镜头落 params（ISSUE #5210）：字幕烧录与 SRT 导出都读这一份，
+             * 不再让 heading/prompt 冒充对白。 */
+            ...(shot.dialogue === undefined || shot.dialogue === ""
+              ? {}
+              : { dialogue: shot.dialogue }),
             /* 单镜画幅用场景无关档（ISSUE #5138）：出图与视频两侧算出同一组宽高。 */
             size: shotSizeFor(args.sizeSpec),
             videoWorkflowId: args.videoWorkflowId,
@@ -335,6 +342,7 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
     order: i,
     shotId: shot.id,
     heading: shot.sceneHeading || undefined,
+    dialogue: shot.dialogue ?? undefined,
     prompt: shot.prompt,
     negative: shot.negativePrompt || undefined,
     /* 工坊阶段④定稿的镜头图直接接到阶段⑤的首帧输入（ISSUE #5141）。 */

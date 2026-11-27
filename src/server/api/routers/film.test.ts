@@ -228,3 +228,9 @@ describe("film.create / createFromProject —— 上下文只能来自会话", (
     expect(orchestrator.createFilm).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("film.subtitleSrt（ISSUE #5210）", () => {
+  it("成片不属于当前用户 → NOT_FOUND，与四个取片口同契约", async () => {
+    expect(await codeOf(caller().subtitleSrt({ id: "film-missing" }))).toBe("NOT_FOUND");
+  });
+});
