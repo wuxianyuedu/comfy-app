@@ -123,6 +123,19 @@ describe("pushProduction", () => {
     expect(JSON.parse(body)).toEqual({ project: "proj_1", production: payload });
   });
 
+  it("旧版本被服务端拒绝（stale:true）→ 触发可行动提示，不静默覆盖（ISSUE #5208）", async () => {
+    const onStale = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response('{"ok":true,"stale":true}', { status: 200 }))),
+    );
+    await pushProduction("proj_1", payload, {
+      expectedUpdatedAt: "2026-11-27T00:00:00.000Z",
+      onStale,
+    });
+    expect(onStale).toHaveBeenCalledTimes(1);
+  });
+
   it("空 projectId → 不发请求（草稿本地缓存就是全部）", async () => {
     const spy = vi.fn();
     vi.stubGlobal("fetch", spy);

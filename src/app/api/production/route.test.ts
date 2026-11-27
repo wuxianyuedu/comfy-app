@@ -67,11 +67,33 @@ describe("PUT /api/production", () => {
       }),
     );
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ ok: true });
+    await expect(res.json()).resolves.toEqual({ ok: true, stale: false });
     const got = await productionRepository.getForUser("u1", "proj_1");
     expect(got?.title).toBe("我的短剧");
     expect(got?.shots).toEqual([{ id: "s1", prompt: "p" }]);
     expect(got?.progress).toEqual({ stage: "storyboard", rendered: false });
+  });
+
+  it("ifUpdatedAt 与当前版本不符 → 回 stale:true 且不覆盖他人写入（ISSUE #5208）", async () => {
+    await productionRepository.upsertForUser("u1", {
+      id: "proj_1",
+      title: "第一版",
+      shots: [{ id: "s1" }],
+    });
+    const before = await productionRepository.getForUser("u1", "proj_1");
+    const res = await PUT(
+      putRequest({
+        project: "proj_1",
+        production: { title: "旧版本覆盖", shots: [{ id: "bad" }] },
+        ifUpdatedAt: "2000-01-01T00:00:00.000Z",
+      }),
+    );
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ ok: true, stale: true });
+    const after = await productionRepository.getForUser("u1", "proj_1");
+    expect(after?.title).toBe("第一版");
+    expect(after?.shots).toEqual([{ id: "s1" }]);
+    expect(after?.updatedAt?.toISOString()).toBe(before?.updatedAt?.toISOString());
   });
 
   it("目标 project 已归属他人时返回 403 且不覆盖", async () => {
