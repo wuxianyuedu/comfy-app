@@ -25,7 +25,9 @@ function ItemProbe() {
 
 function Wrapper() {
   const [, setTick] = useState(0);
-  bump = () => setTick((value) => value + 1);
+  bump = () => {
+    setTick((value) => value + 1);
+  };
   const form = useForm<{ name: string }>({ defaultValues: { name: "甲" } });
   return (
     <Form {...form}>
