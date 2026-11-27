@@ -7,6 +7,7 @@
     "build": "next build && node scripts/build/standalone-link-repair.mjs && node scripts/build/build-executor-host.mjs && node scripts/standalone-private-inputs.mjs && node scripts/gates/check-standalone-contents.cjs && node scripts/gates/check-bundle-budget.cjs && node scripts/devtools/smoke-executor-host-standalone.mjs",
     "analyze": "next analyze",
     "check:bundle": "node scripts/gates/check-bundle-budget.cjs",
+    "check:standalone": "node scripts/gates/check-standalone-cli.mjs",
     "agent:film": "node scripts/platform/agent-film.mjs",
     "agent:index": "node scripts/platform/agent-index.mjs",
     "check": "pnpm run lint && pnpm run typecheck",

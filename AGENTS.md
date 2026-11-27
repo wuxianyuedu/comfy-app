@@ -564,7 +564,7 @@ CI / 每日档的读数为准——不要把「本地整档跑过了」写成交
 
 **「类型检查」格红了 `.mjs` 的错 ≠ 判据漂移，先读两行读数再归因**（ISSUE #3049 / §13.5.14.1）：主 `tsconfig.json` 的 `allowJs`+`checkJs` 沿 import 图把**被引到的** `.mjs` 纳入主面（硬闸零容忍），`.mjs` 全量面归 `tsconfig.scripts.json` 的棘轮——登记过的分工，不是漏洞。红行下面紧跟着 `[ci-run-tool] 判决面`（判的是哪份 tsconfig、哪把 tsc）与 `[ci-run-tool] 程序图里的 .mjs`（通道在不在场）两行读数，照它归因；别照「主面不含 `.mjs`」的旧印象去推候选根因（ISSUE #3041 的误诊现场）。
 
-启动 / 构建 / 产物层的**症状 → 已知根因**、日志顺序、端口「解析链 vs 静态链」、corepack 三形态、`dev.mjs` 静默 `exit=0`、启动页被 Explorer 压后……**全部收在 [`docs/standards/launch-and-build.md`](docs/standards/launch-and-build.md) §5 排障手册**（本项目全部历史事故都在里面）。按需定位：端口两条链与派生端口的判据见 §1.1（**文档里不要写死端口号**，`pnpm doc:check` 核这条）；起 Next 之前的两项预检（`.env` 与表结构）见 §9.1 / §9.2；corepack 三形态探测与 `pnpm check:toolchain` 自查入口见 §2.1.1–2.1.4；启动页与应用窗的前台归属见 §1.3。**日志按 §4 布局看** `log/` 分区（`launcher/` → `nextjs/` → `services/` → `tools/` → `archive/`）。改完构建 / 产物相关的东西，先跑 `node scripts/gates/check-standalone-contents.cjs`（同时查「不该有的」与「必须有的」）。**用例红先定性再改**：`pnpm exec vitest run --no-file-parallelism <文件>` 隔离重跑，串行也红才是真红；串行绿的是预算 / 并发问题（预算与 `maxWorkers` 的实测出处见 §11.13，不要靠继续抬超时掩盖）。
+启动 / 构建 / 产物层的**症状 → 已知根因**、日志顺序、端口「解析链 vs 静态链」、corepack 三形态、`dev.mjs` 静默 `exit=0`、启动页被 Explorer 压后……**全部收在 [`docs/standards/launch-and-build.md`](docs/standards/launch-and-build.md) §5 排障手册**（本项目全部历史事故都在里面）。按需定位：端口两条链与派生端口的判据见 §1.1（**文档里不要写死端口号**，`pnpm doc:check` 核这条）；起 Next 之前的两项预检（`.env` 与表结构）见 §9.1 / §9.2；corepack 三形态探测与 `pnpm check:toolchain` 自查入口见 §2.1.1–2.1.4；启动页与应用窗的前台归属见 §1.3。**日志按 §4 布局看** `log/` 分区（`launcher/` → `nextjs/` → `services/` → `tools/` → `archive/`）。改完构建 / 产物相关的东西，先跑 `pnpm check:standalone`（同时查「不该有的」与「必须有的」）。**用例红先定性再改**：`pnpm exec vitest run --no-file-parallelism <文件>` 隔离重跑，串行也红才是真红；串行绿的是预算 / 并发问题（预算与 `maxWorkers` 的实测出处见 §11.13，不要靠继续抬超时掩盖）。
 
 ## 遇到代码怪癖：当场立案，不就地绕开
 
