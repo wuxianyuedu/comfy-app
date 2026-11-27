@@ -6,6 +6,7 @@
  * 「查看参数 / 移动目录 / 删除」三件（重生成走详情里的「用此参数生成」）。
  * 纯展示组件：数据与回调都由 AssetLibrary 注入（规范 17 §17.2 第③层）。
  */
+import { memo } from "react";
 import { FileText, FolderInput, Music, Settings2, Trash2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -20,9 +21,9 @@ import type { AssetListItem } from "./hooks/use-asset-library";
 export type AssetCardProps = {
   asset: AssetListItem & { createdAt: string };
   /** 移动到其他目录（可选；目录树改版 #4943 起提供）。 */
-  onMove?: (asset: AssetListItem & { createdAt: string }) => void;
+  onMove?: (id: string) => void;
   onOpenDetail: (id: string) => void;
-  onRemove: (asset: AssetListItem & { createdAt: string }) => void;
+  onRemove: (id: string) => void;
 };
 
 /** 类型徽标的文案（mediaType → 短名）。 */
@@ -43,7 +44,12 @@ function mediaTypeLabel(mediaType: string): string {
   }
 }
 
-export function AssetCard({ asset, onMove, onOpenDetail, onRemove }: AssetCardProps) {
+export const AssetCard = memo(function AssetCard({
+  asset,
+  onMove,
+  onOpenDetail,
+  onRemove,
+}: AssetCardProps) {
   const isVideo = asset.mediaType === "video";
   return (
     <div
@@ -133,7 +139,7 @@ export function AssetCard({ asset, onMove, onOpenDetail, onRemove }: AssetCardPr
                 aria-label={`移动 ${asset.name} 到其他目录`}
                 className="text-ink-faint hover:text-primary-strong size-7 rounded-md"
                 onClick={() => {
-                  onMove(asset);
+                  onMove(asset.id);
                 }}
                 size="icon-xs"
                 variant="ghost"
@@ -145,7 +151,7 @@ export function AssetCard({ asset, onMove, onOpenDetail, onRemove }: AssetCardPr
               aria-label={`删除资产 ${asset.name}`}
               className="text-ink-faint hover:text-danger-strong size-7 rounded-md"
               onClick={() => {
-                onRemove(asset);
+                onRemove(asset.id);
               }}
               size="icon-xs"
               variant="ghost"
@@ -157,4 +163,4 @@ export function AssetCard({ asset, onMove, onOpenDetail, onRemove }: AssetCardPr
       </div>
     </div>
   );
-}
+});

@@ -9,7 +9,7 @@
  * `useAssetFolders`，列表 / 详情 / 删除在 `useAssetLibrary`，本文件只做
  * 组合与弹层编排（规范 17 §17.2 第④层，不出现取数与业务规则）。
  */
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { History, Search } from "lucide-react";
 
 import { DocumentFrame } from "~/components/studio/ViewContainer";
@@ -77,6 +77,11 @@ export function AssetLibrary() {
     }
     return newPath !== null;
   };
+
+  /* memo 卡片的 onMove：setter 本身稳定，用 useCallback 固定引用（规范 14 C7）。 */
+  const handleMove = useCallback((id: string) => {
+    setMoveTargetId(id);
+  }, []);
 
   return (
     <DocumentFrame
@@ -169,13 +174,9 @@ export function AssetLibrary() {
                 <AssetCard
                   asset={item}
                   key={item.id}
-                  onMove={(target) => {
-                    setMoveTargetId(target.id);
-                  }}
+                  onMove={handleMove}
                   onOpenDetail={c.openDetail}
-                  onRemove={(target) => {
-                    c.openRemove(target.id);
-                  }}
+                  onRemove={c.openRemove}
                 />
               ))}
             </div>
