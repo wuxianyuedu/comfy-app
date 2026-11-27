@@ -8,7 +8,7 @@
 //   ② 服务端比本机新时，挂载会采纳 AI 写的内容（用户看得见它们）；
 //   ③ 用户没编辑时一拍都不发（旧行为是每 600ms 重发整份）。
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act, cleanup, waitFor } from "@testing-library/react";
+import { renderHook, act, cleanup } from "@testing-library/react";
 
 import { useWorkshopPipeline } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { createProject } from "~/lib/project-canvas/canvas-store";
@@ -62,6 +62,17 @@ function readPutBodies(spy: ReturnType<typeof vi.fn>): Array<PutBody> {
     }
   }
   return out;
+}
+
+/** 最后一个 PUT 的 `production` 载荷（形状不符时直接抛，报错里带原值）。 */
+function lastPutPayload(spy: ReturnType<typeof vi.fn>): Record<string, unknown> {
+  const puts = readPutBodies(spy);
+  expect(puts.length).toBeGreaterThan(0);
+  const last = puts.at(-1);
+  if (!last || !isPlainRecord(last.production)) {
+    throw new TypeError(`最后一个 PUT 载荷形状不符：${JSON.stringify(last)}`);
+  }
+  return last.production;
 }
 
 /** 记录所有请求，并按路径给出应答。 */
@@ -140,8 +151,9 @@ describe("工坊自动保存不覆盖 AI 侧写入（#5147）", () => {
     stubFetch(aiRow(60_000));
 
     const { result } = renderHook(() => useWorkshopPipeline());
-    await waitFor(() => {
-      expect(result.current.shots).toHaveLength(1);
+    /* 等服务端对账把 AI 那一份采纳进来（等的是 hook 的值 ⇒ `expect.poll`）。 */
+    await vi.waitFor(() => {
+      expect(result.current.characters).toHaveLength(1);
     });
     expect(result.current.scriptMarkdown).toBe("# AI 写的剧本");
     expect(result.current.scenes).toEqual(AI_SCENES);
@@ -154,8 +166,8 @@ describe("工坊自动保存不覆盖 AI 侧写入（#5147）", () => {
     const spy = stubFetch(aiRow(-60_000));
 
     const { result } = renderHook(() => useWorkshopPipeline());
-    /* 等服务端对账落定并采纳（落定前不放行自动保存，见 #4023）。 */
-    await waitFor(() => {
+    /* 先等服务端对账落定并采纳（落定前不放行自动保存，见 #4023）。 */
+    await vi.waitFor(() => {
       expect(result.current.characters).toHaveLength(1);
     });
 
@@ -163,17 +175,12 @@ describe("工坊自动保存不覆盖 AI 侧写入（#5147）", () => {
     act(() => {
       result.current.setScriptMarkdown("# 用户改过的剧本");
     });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 900));
+    /* 等 600ms 防抖那一拍真的发出 PUT（等的是「有没有发出」这个条件）。 */
+    await vi.waitFor(() => {
+      expect(readPutBodies(spy).length).toBeGreaterThan(0);
     });
 
-    const puts = readPutBodies(spy);
-    expect(puts.length).toBeGreaterThan(0);
-    const last = puts.at(-1);
-    if (!last || !isPlainRecord(last.production)) {
-      throw new TypeError(`最后一个 PUT 载荷形状不符：${JSON.stringify(last)}`);
-    }
-    const payload = last.production;
+    const payload = lastPutPayload(spy);
     expect(payload.scriptMarkdown).toBe("# 用户改过的剧本");
     /* 三列是 AI 写的、用户没碰 —— 缺键 = 不写。整份发就是 #5147 的复现。 */
     expect(Object.hasOwn(payload, "characters")).toBe(false);
@@ -182,12 +189,14 @@ describe("工坊自动保存不覆盖 AI 侧写入（#5147）", () => {
   });
 
   it("用户没做任何编辑 → 一拍自动保存都不发（旧行为是每 600ms 整片重发）", async () => {
+    /* 这一格等的是「**一直没发生**的事」——条件轮询表达不了它（它能表达的只有
+     * 「发生了」），所以必须走真时间窗（§11.14 ③）。1.2s 是 600ms 防抖的两倍：
+     * 窗口内若会发，一定已经发过了。 */
     createProject("冲突测试");
     const spy = stubFetch(null);
     const { result } = renderHook(() => useWorkshopPipeline());
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 900));
-    });
+    // sleep-ok: 断言的是「窗口内一次都没发」（= 一直没发生的事），条件轮询表达不了
+    await new Promise((resolve) => setTimeout(resolve, 1200));
     expect(result.current.activeProjectId).not.toBe("");
     expect(readPutBodies(spy)).toHaveLength(0);
   });
@@ -205,25 +214,20 @@ describe("卸载兜底保存（#5147）", () => {
     const spy = stubFetch(aiRow(-60_000));
 
     const { result, unmount } = renderHook(() => useWorkshopPipeline());
-    await waitFor(() => {
+    await vi.waitFor(() => {
       expect(result.current.characters).toHaveLength(1);
     });
 
     act(() => {
       result.current.setScriptMarkdown("# 改完就切走");
     });
-    /* 立刻卸载（早于 600ms 防抖）：卸薮兜底是这一次唯一的落盘机会。 */
+    /* 立刻卸载（早于 600ms 防抖）：卸载兜底是这一次唯一的落盘机会。 */
     unmount();
 
-    const puts = readPutBodies(spy);
-    expect(puts.length).toBeGreaterThan(0);
-    const last = puts.at(-1);
-    if (!last || !isPlainRecord(last.production)) {
-      throw new TypeError(`卸载兜底的载荷形状不符：${JSON.stringify(last)}`);
-    }
-    expect(last.production.scriptMarkdown).toBe("# 改完就切走");
-    expect(Object.hasOwn(last.production, "characters")).toBe(false);
-    expect(Object.hasOwn(last.production, "shots")).toBe(false);
-    expect(Object.hasOwn(last.production, "scenes")).toBe(false);
+    const payload = lastPutPayload(spy);
+    expect(payload.scriptMarkdown).toBe("# 改完就切走");
+    expect(Object.hasOwn(payload, "characters")).toBe(false);
+    expect(Object.hasOwn(payload, "shots")).toBe(false);
+    expect(Object.hasOwn(payload, "scenes")).toBe(false);
   });
 });
