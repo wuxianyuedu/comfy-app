@@ -1,0 +1,2 @@
+## Added
+- 启动与看日志收成统一工具（#5157）：此前录制 dev server 日志靠手敲 `pnpm dev 2>&1 | Tee-Object -FilePath …`，再用 `Get-Content -Tail` 看，落点与参数各写一套，还有固定名锁句柄的风险。现在 `pnpm dev:log` 启动 dev server 并把 stdout/stderr 按次命名落到 `log/current/dev/dev-<时刻>-<pid>.log`（硬规则 4 的按次命名 + 轮转，进程树仍由 dev.mjs → dev-launcher 收）；`pnpm logs [分区] [-n N] [-f]` 从 `log/current/<分区>` 取最新一份日志尾部，分区就是规范 §4 的固定布局。两份脚本顶层只在直接执行时跑（测试 import 纯函数不产生子进程 / stdout 副作用）。规范 §4 登记两个入口，同批补按次命名 / 轮转 / 分区参数 / tail 的行为用例。
