@@ -53,6 +53,8 @@ export type ProductionRun = {
   autoReview: boolean;
   /** status=awaiting_approval 时，在等哪个阶段被确认。 */
   awaitingStage: ProductionStage | null;
+  /** 角色定妆照步骤是否已尝试过（成功 / 失败都置位，避免失败时无限重出；#5218）。 */
+  characterRefsDone?: boolean;
   error: string | null;
   /** 已触发出片的时间戳（非空=已 kick render，引擎下一步只等 rendered、不重复起）。 */
   filmStartedAt: string;
@@ -81,6 +83,8 @@ export type ProductionRun = {
   scriptReviewDigest: string;
   /** 评审提出改写、尚未改写 → true；规划器先出 `revise_script`，改完剧本变 → 回到待评审。 */
   scriptRevisionPending: boolean;
+  /** 跳过角色定妆照步骤（#5218）：只到角色文本，继续分镜。 */
+  skipCharacterRefs?: boolean;
   /** 当前阶段游标（与 progress.stage 同源，run 期间由引擎推进）。 */
   stage: ProductionStage;
   status: RunStatus;
@@ -116,6 +120,8 @@ export const DEFAULT_PRODUCTION_RUN: ProductionRun = {
   videoShotRev: {},
   processedShotRev: {},
   autoReview: false,
+  characterRefsDone: false,
+  skipCharacterRefs: false,
   reviewedShotRev: {},
   reviewAttempts: {},
   scriptReviewDigest: "",
@@ -227,6 +233,8 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
     videoShotRev: parseRevMap(obj.videoShotRev),
     processedShotRev: parseRevMap(obj.processedShotRev),
     autoReview: obj.autoReview === true,
+    characterRefsDone: obj.characterRefsDone === true,
+    skipCharacterRefs: obj.skipCharacterRefs === true,
     reviewedShotRev: parseRevMap(obj.reviewedShotRev),
     reviewAttempts: parseRevMap(obj.reviewAttempts),
     scriptReviewDigest: typeof obj.scriptReviewDigest === "string" ? obj.scriptReviewDigest : "",
@@ -264,6 +272,8 @@ export type ProductionRunView = {
   characterCount: number;
   filmRendered: boolean;
   hasScript: boolean;
+  /** 还没有定妆照的角色数（#5218）：>0 才有「出角色参考图」这一步。 */
+  portraitPendingCount?: number;
   /** 当前剧本的指纹（`scriptDigestOf`）：剧本变了指纹就变，是「基于改动续跑」的剧本侧判据。 */
   scriptDigest: string;
   /** 剧本人工裁决（#2480）：`digest` 快照与当前剧本指纹相等才新鲜（有效）。没裁决过 → null/缺省。 */
@@ -320,6 +330,10 @@ export function toRunView(production: ProductionLike | null): ProductionRunView 
     hasScript: script.trim().length > 0,
     scriptDigest: scriptDigestOf(script),
     characterCount: characters.length,
+    portraitPendingCount: characters.filter((c) => {
+      const rec = asRecord(c);
+      return rec !== null && !(typeof rec.portraitUrl === "string" && rec.portraitUrl !== "");
+    }).length,
     shots,
     filmRendered: normalizeProductionProgress(production?.progress).rendered,
     scriptHumanVerdict: normalizeHumanVerdict(scriptReviewRaw?.humanVerdict),
@@ -335,6 +349,7 @@ export type RunAction =
   | { kind: "review_script" }
   | { kind: "revise_script" }
   | { kind: "extract_characters" }
+  | { kind: "render_character_refs" }
   | { kind: "plan_storyboard" }
   | { kind: "render_images"; shotIds: Array<string> }
   | { kind: "review_shots"; shotIds: Array<string> }
@@ -389,6 +404,16 @@ export function planNextRunAction(view: ProductionRunView, run: ProductionRun): 
   }
   if (view.characterCount === 0) {
     return { kind: "extract_characters" };
+  }
+  /* 角色定妆照（#5218）：有图类工作流、有角色还没定妆照、本 run 没试过也没跳过时，
+   * 先出参考图再进分镜。失败也置 characterRefsDone，不让坏角色卡把整条 run 卡死。 */
+  if (
+    !run.skipCharacterRefs &&
+    !run.characterRefsDone &&
+    (view.portraitPendingCount ?? 0) > 0 &&
+    run.imageWorkflowId !== ""
+  ) {
+    return { kind: "render_character_refs" };
   }
   if (view.shots.length === 0) {
     return { kind: "plan_storyboard" };
