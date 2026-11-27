@@ -4,7 +4,7 @@
  * 行为不变地拆成 hook：上传管线 / 工作流 IO / 生成与重试 / 错误面板住在兄弟模块。
  * 本文件保留状态组装、patch 与「按 kind 渲染 body」的 JSX。
  */
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { WorkflowNode } from "../WorkflowNode";
 import { ContentAssetBody } from "../ContentAssetNode";
@@ -21,6 +21,7 @@ import { NodeChip, PORT_STYLE, StatusBadge, StatusDot } from "./CanvasNodePrimit
 import { OutputRowPort, SelectedToolbar } from "./SelectedToolbar";
 import { useFileUpload } from "./hooks/use-file-upload";
 import { useNodePatch } from "./hooks/use-node-patch";
+import { useWorkflowCallbacks } from "./hooks/use-workflow-callbacks";
 import { useWorkflowIo } from "./hooks/use-workflow-io";
 import { useGenerate } from "./hooks/use-generate";
 import { useShotGenerationWriteback } from "./hooks/use-shot-generation-writeback";
@@ -117,63 +118,15 @@ export const CanvasNode = React.memo(function CanvasNode({
     screenToFlowPosition,
   });
 
-  /* ── WorkflowNode 的四个稳定回调（ISSUE #5204 / 规范 4.8 C7）
-   * WorkflowNode 已 React.memo，父渲染现造箭头回调会让浅比较必失败 ⇒ 每次
-   * 重渲整棵 W 节点。这里把回调收成 useCallback：patch / saveModes 已稳定，
-   * 会变的 d.seedModes 与 wfList 用 ref 读最新值，不进依赖数组。 */
-  const currentSeedModes = useRef(d.seedModes);
-  const currentWfList = useRef(wfList);
-  useEffect(() => {
-    currentSeedModes.current = d.seedModes;
-    currentWfList.current = wfList;
-  }, [d.seedModes, wfList]);
-
-  const onFormChange = useCallback(
-    (next: Record<string, unknown>) => {
-      patch({ workflowInputs: next });
-    },
-    [patch],
-  );
-
-  const onModesChange = useCallback(
-    (modes: Array<string>, defaultMode: string) => {
-      void saveModes({ modes, defaultMode });
-    },
-    [saveModes],
-  );
-
-  const onSeedModeChange = useCallback(
-    (ioKey: string, mode: string) => {
-      patch({ seedModes: { ...currentSeedModes.current, [ioKey]: mode } });
-    },
-    [patch],
-  );
-
-  const onSelectWorkflow = useCallback(
-    (workflowId: string) => {
-      const wf = currentWfList.current.find((item) => item.id === workflowId);
-      seededFor.current = null;
-      patch({
-        workflowId: workflowId || undefined,
-        workflowName: wf?.name,
-        workflowTaskType: wf?.taskType,
-        workflowInputs: {},
-        paramMap: undefined,
-        workflowSinkId: undefined,
-      });
-    },
-    [patch, seededFor],
-  );
-
-  /* runGenerate 是 hook 每次渲染新建的 async 函数；用 ref 转发成稳定引用，
-   * 免得 onGenerate 这一路也击穿 memo。 */
-  const runGenerateRef = useRef(runGenerate);
-  useEffect(() => {
-    runGenerateRef.current = runGenerate;
-  }, [runGenerate]);
-  const onGenerate = useCallback(() => {
-    void runGenerateRef.current();
-  }, []);
+  const { onFormChange, onGenerate, onModesChange, onSeedModeChange, onSelectWorkflow } =
+    useWorkflowCallbacks({
+      patch,
+      runGenerate,
+      saveModes,
+      seedModes: d.seedModes,
+      seededFor,
+      wfList,
+    });
 
   /* ── 按 kind 渲染 body ── */
   let body: React.ReactNode = null;
