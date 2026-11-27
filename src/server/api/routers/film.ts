@@ -4,6 +4,9 @@ import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { filmRepository } from "~/lib/core/repository";
 import { FILM_COMPOSE_SIZE } from "~/lib/film/film-size";
 import { isSafeBgmName } from "~/lib/film/bgm-name";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { filmsRoot } from "~/lib/media/output-paths";
 
 /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数）。老口径的 "1280x720"
  *  字符串仍收 —— 由 `toSizeSpec` 归一，落库一律是尺寸表达。 */
@@ -28,6 +31,21 @@ export const filmRouter = createTRPCRouter({
     const { isFFmpegAvailable } = await import("~/server/film/compose-film");
     return { films, ffmpegAvailable: await isFFmpegAvailable() };
   }),
+
+  /* 成片字幕导出：与烧录同源的整片 SRT（ISSUE #5210）。
+   *  id 只收单段标识（防路径穿越），且必须属于当前用户；文件不存在返回空串而不是报错。 */
+  subtitleSrt: authedProcedure
+    .input(z.object({ id: z.string().regex(/^[A-Za-z0-9_-]+$/) }))
+    .query(async ({ ctx, input }) => {
+      const film = await filmRepository.findByIdForUser(ctx.user.id, input.id);
+      if (!film) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "成片不存在" });
+      }
+      const srt = await fs
+        .readFile(path.join(filmsRoot(), `${input.id}.srt`), "utf8")
+        .catch(() => "");
+      return { srt };
+    }),
 
   /* POST /api/film —— 新建：create */
   create: authedProcedure

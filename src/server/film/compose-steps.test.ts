@@ -9,9 +9,11 @@ import { generatedRoot } from "~/lib/media/output-paths";
 import {
   buildNormalizeArgs,
   buildSegmentVf,
+  buildFilmSrt,
   buildSrtBody,
   clipPathOf,
   formatSrtTimestamp,
+  subtitleTextOf,
 } from "./compose-steps";
 
 describe("buildSegmentVf", () => {
@@ -28,6 +30,29 @@ describe("buildSegmentVf", () => {
     expect(vf).toContain("fade=t=in:st=0:d=0.3");
     // fadeOut 按两位小数写（number-format）
     expect(vf).toContain("fade=t=out:st=2.70:d=0.3");
+  });
+});
+
+describe("字幕源与整片 SRT（ISSUE #5210）", () => {
+  it("台词优先于标题，标题优先于提示词；空白视作缺失", () => {
+    expect(
+      subtitleTextOf({ dialogue: "  你好，世界  ", heading: "场景一", prompt: "画面描述" }),
+    ).toBe("你好，世界");
+    expect(subtitleTextOf({ dialogue: "  ", heading: "场景一", prompt: "画面描述" })).toBe(
+      "场景一",
+    );
+    expect(subtitleTextOf({ dialogue: null, heading: "", prompt: "画面描述" })).toBe("画面描述");
+  });
+  it("整片 SRT 按镜头时长累加，空文本跳过且编号连续", () => {
+    expect(
+      buildFilmSrt([
+        { dur: 3.9, text: "第一句" },
+        { dur: 2, text: "" },
+        { dur: 2.5, text: "第二句" },
+      ]),
+    ).toBe(
+      "1\n00:00:00,000 --> 00:00:03,000\n第一句\n\n" + "2\n00:00:05,000 --> 00:00:08,000\n第二句\n",
+    );
   });
 });
 

@@ -52,6 +52,38 @@ export function buildSrtBody(opts: { dur: number; text: string }): string {
   return `1\n00:00:00,000 --> ${formatSrtTimestamp(dur)}\n${text}\n`;
 }
 
+/** 字幕文本的唯一取法（ISSUE #5210）：角色台词优先，标题次之，提示词兜底。
+ *  此前成片只读 `heading`/`prompt`，`dialogue` 在工坊模型里有却进不了 MP4。 */
+export function subtitleTextOf(shot: {
+  dialogue?: string | null;
+  heading?: string | null;
+  prompt: string;
+}): string {
+  const pick = (v: string | null | undefined): string =>
+    typeof v === "string" && v.trim() !== "" ? v.trim() : "";
+  return (pick(shot.dialogue) || pick(shot.heading) || pick(shot.prompt)).slice(0, 80);
+}
+
+/** 多镜合并 SRT：逐镜时长累加成时间轴，与单镜烧录用同一份文本口径。
+ *  空文本的镜头跳过（不产出空字幕条目），全空时返回空串。 */
+export function buildFilmSrt(items: Array<{ dur: number; text: string }>): string {
+  let cursor = 0;
+  const blocks: string[] = [];
+  let index = 1;
+  for (const item of items) {
+    const dur = Math.max(0, item.dur);
+    const text = item.text.trim();
+    if (text !== "") {
+      blocks.push(
+        `${index}\n${formatSrtTimestamp(cursor)} --> ${formatSrtTimestamp(cursor + dur)}\n${text}\n`,
+      );
+      index += 1;
+    }
+    cursor += dur;
+  }
+  return blocks.join("\n");
+}
+
 /** 逐镜归一化的 ffmpeg 参数（含 `-t` 时长）。
  *
  *  带字幕时（`srtPath` 非 null）在 `vf` 末尾接 `subtitles` 滤镜；字幕烧录失败
