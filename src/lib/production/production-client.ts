@@ -22,8 +22,8 @@ export type ProductionPayload = {
   type: string;
 };
 
-/** 读回的生产数据（与写入载荷同形）。 */
-export type ProductionData = ProductionPayload;
+/** 读回的生产数据（与写入载荷同形，另带服务端版本戳供乐观并发比对）。 */
+export type ProductionData = ProductionPayload & { updatedAt?: string };
 
 /**
  * 服务端 production 行的宽松读法：必填字段缺省 / 类型不符按默认兜底，其余键原样保留
@@ -52,7 +52,11 @@ function normalizeProductionData(raw: Record<string, unknown>): ProductionData {
 export async function pushProduction(
   projectId: string,
   payload: ProductionPayload,
-  opts: { expectedUpdatedAt?: string; onStale?: () => void } = {},
+  opts: {
+    expectedUpdatedAt?: string;
+    onSaved?: (updatedAt: string) => void;
+    onStale?: () => void;
+  } = {},
 ): Promise<void> {
   if (!projectId) {
     return;
@@ -69,8 +73,13 @@ export async function pushProduction(
     });
     if (res.ok) {
       const body: unknown = await res.json().catch(() => null);
-      if (typeof body === "object" && body !== null && "stale" in body && body.stale === true) {
-        opts.onStale?.();
+      if (typeof body === "object" && body !== null) {
+        if ("stale" in body && body.stale === true) {
+          opts.onStale?.();
+        } else if ("updatedAt" in body && typeof body.updatedAt === "string") {
+          /* 保存成功后推进本地基准，否则后续自动保存会拿旧版本被判 stale。 */
+          opts.onSaved?.(body.updatedAt);
+        }
       }
     }
   } catch {

@@ -67,7 +67,12 @@ describe("PUT /api/production", () => {
       }),
     );
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ ok: true, stale: false });
+    const saved: unknown = await res.json();
+    expect(saved).toMatchObject({ ok: true, stale: false });
+    if (typeof saved !== "object" || saved === null || !("updatedAt" in saved)) {
+      throw new TypeError("响应应带 updatedAt");
+    }
+    expect(typeof saved.updatedAt).toBe("string");
     const got = await productionRepository.getForUser("u1", "proj_1");
     expect(got?.title).toBe("我的短剧");
     expect(got?.shots).toEqual([{ id: "s1", prompt: "p" }]);

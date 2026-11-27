@@ -10,10 +10,11 @@ import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { cancelLocalTask } from "~/lib/workshop/generation-client";
 import { pushServerDraft } from "~/lib/workshop/draft-sync-client";
-import { fetchProductionProgress, pushProduction } from "~/lib/production/production-client";
+import { fetchProductionProgress } from "~/lib/production/production-client";
+import { beginStaleRun } from "~/lib/stale-run";
 import { buildProductionPayload } from "~/lib/production/payload";
 import { errorMessage } from "~/lib/error-message";
-import { beginStaleRun } from "~/lib/stale-run";
+import { useWorkshopServerRevision } from "./use-workshop-server-revision";
 import {
   useWorkshopBootstrapData,
   useWorkshopDraftRestore,
@@ -360,6 +361,8 @@ export function useWorkshopPipeline(
    *  切换在首页发生 → 重挂载时按新的 getActiveId 读对应草稿。 ── */
   const [activeProjectId] = React.useState<string>(() => getActiveId() ?? "");
 
+  const { push: pushWithRevision } = useWorkshopServerRevision(activeProjectId, setNotice);
+
   // ── 角色定妆照会话（同提取会话：由 controller 常驻，切页签不丢进度；
   //    候选写在角色对象上，随草稿持久化）──
   const [characterPortrait, characterPortraitActions] = useCharacterPortrait({
@@ -431,13 +434,12 @@ export function useWorkshopPipeline(
       // localStorage 为即时缓存；同时写穿一份到本地 db.sqlite（防缓存被清丢失）。
       writeDraft(activeProjectId, stamped);
       void pushServerDraft(activeProjectId, stamped);
-      // Phase 3b-2：额外写穿一份「生产数据」到 production 表，供画布读取物化（3c）。
-      void pushProduction(activeProjectId, buildProductionPayload(stamped, tab, rendered));
+      void pushWithRevision(activeProjectId, buildProductionPayload(stamped, tab, rendered));
     }, 600);
     return () => {
       clearTimeout(timer);
     };
-  }, [activeProjectId, currentDraft, tab, rendered]);
+  }, [activeProjectId, currentDraft, pushWithRevision, rendered, tab]);
 
   /* 卸载兜底保存：只靠 600ms 防抖，编辑后立刻切页签时定时器被 clear 来不及落盘；
    * 且模块级草稿缓存只在首次挂载读一次，重挂载会读到旧缓存 —— 两处叠加正是
@@ -456,14 +458,14 @@ export function useWorkshopPipeline(
       }
       const stamped: WorkshopDraft = { ...draft, updatedAt: Date.now() };
       void pushServerDraft(activeProjectRef.current, stamped);
-      void pushProduction(
+      void pushWithRevision(
         activeProjectRef.current,
         buildProductionPayload(stamped, tabRef.current, renderedRef.current),
       );
       invalidateDraftCache();
     };
-    // 仅在卸载时执行一次
-  }, []);
+    // 两个依赖都是稳定函数（useCallback），因此仍只在卸载时执行一次
+  }, [pushWithRevision]);
 
   /* 挂载回填的对账（#4023）沉在 `./use-workshop-pipeline-effects` 的
    * `useWorkshopDraftRestore`：本地为空、或服务端镜像比本地**新**（版本对账）时

@@ -100,7 +100,7 @@ export async function PUT(req: NextRequest) {
     // 成片回写并发时，这个窗口内对方写入的列会被旧基准覆盖（丢失更新）。
     // SQLite 单写者 + immediate 拿锁即串行化这一段（与 saveLlmSettings
     // 同一形状，§18.10.1）；事务很短：两次读 + 一次 upsert。
-    await db.transaction(
+    const savedUpdatedAt = await db.transaction(
       async (tx) => {
         const existing = await productionRepository.getForUser(user.id, project, tx);
         if (ifUpdatedAt !== null && existing !== null) {
@@ -123,7 +123,7 @@ export async function PUT(req: NextRequest) {
               CHARACTER_DERIVED_FIELDS,
             )
           : production.characters;
-        await productionRepository.upsertForUser(
+        const saved = await productionRepository.upsertForUser(
           user.id,
           {
             id: project,
@@ -140,6 +140,7 @@ export async function PUT(req: NextRequest) {
           },
           tx,
         );
+        return saved.updatedAt instanceof Date ? saved.updatedAt.toISOString() : null;
       },
       { behavior: "immediate" },
     );
@@ -150,7 +151,7 @@ export async function PUT(req: NextRequest) {
       { headers: req.headers, session: { user: { id: user.id } } },
       { project },
     );
-    return NextResponse.json({ ok: true, stale: false });
+    return NextResponse.json({ ok: true, stale: false, updatedAt: savedUpdatedAt });
   } catch (error) {
     if (error instanceof StaleProductionWrite) {
       /* 冲突是正常业务结果，不是失败：回 stale 让 UI 提示刷新后重做，不静默覆盖。 */
