@@ -37,6 +37,11 @@ function ToggleGroup({
   const groupStyle: React.CSSProperties & { "--gap": number } = {
     "--gap": spacing,
   };
+  /* value 全是 primitives：只有形态参数变化才换引用，重渲不连累每个 item（E6）。 */
+  const contextValue = React.useMemo(
+    () => ({ variant, size, spacing, orientation }),
+    [variant, size, spacing, orientation],
+  );
   return (
     <ToggleGroupPrimitive
       className={cn(
@@ -51,9 +56,7 @@ function ToggleGroup({
       style={groupStyle}
       {...props}
     >
-      <ToggleGroupContext.Provider value={{ variant, size, spacing, orientation }}>
-        {children}
-      </ToggleGroupContext.Provider>
+      <ToggleGroupContext.Provider value={contextValue}>{children}</ToggleGroupContext.Provider>
     </ToggleGroupPrimitive>
   );
 }

@@ -48,12 +48,13 @@ export function useUpdateCheck(opts: UpdateCheckHookOptions = {}): {
       const dirty = payload.dirty;
       const wasDirty = wasDirtyRef.current;
       wasDirtyRef.current = dirty;
-      applyResult(
-        payload.groups.filter((g) => g.dirty),
-        dirty,
-      );
+      /* filter+map+展开只做一次：applyResult 与 onDirty 共用同一份派生结果（E8）。 */
+      const dirtyGroups = payload.groups
+        .filter((group) => group.dirty)
+        .map((group) => ({ ...group }));
+      applyResult(dirtyGroups, dirty);
       if (dirty && !wasDirty && onDirtyRef.current) {
-        onDirtyRef.current(payload.groups.filter((g) => g.dirty).map((g) => ({ ...g })));
+        onDirtyRef.current(dirtyGroups);
       }
       return true;
     });
