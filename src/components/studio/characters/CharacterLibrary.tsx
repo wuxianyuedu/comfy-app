@@ -21,8 +21,6 @@ import { Input } from "~/components/ui/input";
 import { PageHeader } from "~/components/ui/page-header";
 import { SelectChip } from "~/components/ui/select-chip";
 import { Skeleton } from "~/components/ui/skeleton";
-import { compareText } from "~/lib/ordered-set";
-
 import { CharacterCard } from "./CharacterCard";
 import { CharacterDetailModal } from "./CharacterDetailModal";
 import { CharacterEditDialog, type CharacterFormValues } from "./CharacterEditDialog";
@@ -30,9 +28,7 @@ import { CharacterGenerateDialog } from "./CharacterGenerateDialog";
 import { CharacterSeedDialog } from "./CharacterSeedDialog";
 import { CHARACTER_STATUS_FILTERS } from "./character-status";
 import { useCharacterLibrary } from "./hooks/use-character-library";
-
-/** 标签筛选行最多展示几枚（按分面计数取前 N；已选中的恒在）。 */
-const TAG_FILTER_LIMIT = 24;
+import { buildTagChips } from "./tag-chips";
 
 /** 详情候选删除确认（从页面函数拆出，守住函数长度硬闸）。 */
 type PortraitDeleteConfirmProps = {
@@ -177,16 +173,10 @@ export function CharacterLibrary() {
   );
 
   /** 标签筛选行：分面前 N 名 ∪ 已选中（选中的即便这轮计数为 0 也要能取消）。 */
-  const tagChips = useMemo(() => {
-    const names = new Set<string>(c.selectedTags);
-    for (const facet of c.tagFacets.slice(0, TAG_FILTER_LIMIT)) {
-      names.add(facet.tag);
-    }
-    const countOf = (tag: string) => c.tagFacets.find((facet) => facet.tag === tag)?.count ?? 0;
-    return [...names]
-      .map((tag) => ({ count: countOf(tag), tag }))
-      .sort((left, right) => right.count - left.count || compareText(left.tag, right.tag));
-  }, [c.selectedTags, c.tagFacets]);
+  const tagChips = useMemo(
+    () => buildTagChips(c.tagFacets, c.selectedTags),
+    [c.tagFacets, c.selectedTags],
+  );
 
   return (
     <DocumentFrame
