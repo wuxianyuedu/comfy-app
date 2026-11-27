@@ -168,6 +168,31 @@ function useCharacterSelections() {
   };
 }
 
+/**
+ * 详情 / 删除弹层的打开动作：作为 memo 卡片的回调 prop，必须跨渲染稳定（规范 14 C7）。
+ * 只收 setter 与一个稳定清理回调，独立成 hook 也让主 controller 守住函数长度硬闸。
+ */
+function useCharacterDialogActions(
+  clearPortraitSelection: () => void,
+  setDetailId: (id: string | null) => void,
+  setRemoveTarget: (id: string | null) => void,
+) {
+  const openDetail = useCallback(
+    (id: string) => {
+      setDetailId(id);
+      clearPortraitSelection();
+    },
+    [clearPortraitSelection, setDetailId],
+  );
+  const openRemove = useCallback(
+    (id: string) => {
+      setRemoveTarget(id);
+    },
+    [setRemoveTarget],
+  );
+  return { openDetail, openRemove };
+}
+
 /** 详情新能力（生成历史 + 候选删除）的依赖面；全部由主 controller 注入，不另立判定。 */
 type DetailExtrasInput = {
   clearPortraitSelection: () => void;
@@ -560,17 +585,11 @@ export function useCharacterLibrary(): CharacterLibraryController {
     );
   }, []);
 
-  /* 传给 memo 卡片的回调：必须跨渲染稳定，否则卡片 memo 形同虚设（规范 14 C7）。 */
-  const openDetail = useCallback(
-    (id: string) => {
-      setDetailId(id);
-      clearPortraitSelection();
-    },
-    [clearPortraitSelection],
+  const { openDetail, openRemove } = useCharacterDialogActions(
+    clearPortraitSelection,
+    setDetailId,
+    setRemoveTarget,
   );
-  const openRemove = useCallback((id: string) => {
-    setRemoveTarget(id);
-  }, []);
 
   const empty = useMemo(() => {
     if (q.trim() === "" && selectedTags.length === 0 && status === "all") {
