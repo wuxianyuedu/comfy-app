@@ -4,7 +4,7 @@
  * 行为不变地拆成 hook：上传管线 / 工作流 IO / 生成与重试 / 错误面板住在兄弟模块。
  * 本文件保留状态组装、patch 与「按 kind 渲染 body」的 JSX。
  */
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { WorkflowNode } from "../WorkflowNode";
 import { ContentAssetBody } from "../ContentAssetNode";
@@ -79,14 +79,20 @@ export const CanvasNode = React.memo(function CanvasNode({
     seededFor,
   } = useWorkflowIo({ d, patch });
 
-  /* 多模式保存：乐观更新 + 失败回滚都在这个 hook 里（视图零 IO）。 */
+  /* 多模式保存：乐观更新 + 失败回滚都在这个 hook 里（视图零 IO）。
+   * onFailed 收成 useCallback：hook 把它列入 saveModes 的依赖，内联箭头会让
+   * saveModes 每次都是新引用，击穿 WorkflowNode 的 memo（ISSUE #5204）。 */
+  const handleModeFailed = useCallback(
+    (reason: string) => {
+      patch({ error: reason, status: "error" });
+    },
+    [patch],
+  );
   const { saveModes } = useWorkflowModes({
     workflowId: d.workflowId,
     modes: wfModes,
     setModes: setWfModes,
-    onFailed: (reason) => {
-      patch({ error: reason, status: "error" });
-    },
+    onFailed: handleModeFailed,
   });
 
   /* 任务运行逻辑：挂载时对账 + runGenerate + 错误面板重试。 */
@@ -110,6 +116,64 @@ export const CanvasNode = React.memo(function CanvasNode({
     getNode,
     screenToFlowPosition,
   });
+
+  /* ── WorkflowNode 的四个稳定回调（ISSUE #5204 / 规范 4.8 C7）
+   * WorkflowNode 已 React.memo，父渲染现造箭头回调会让浅比较必失败 ⇒ 每次
+   * 重渲整棵 W 节点。这里把回调收成 useCallback：patch / saveModes 已稳定，
+   * 会变的 d.seedModes 与 wfList 用 ref 读最新值，不进依赖数组。 */
+  const currentSeedModes = useRef(d.seedModes);
+  const currentWfList = useRef(wfList);
+  useEffect(() => {
+    currentSeedModes.current = d.seedModes;
+    currentWfList.current = wfList;
+  }, [d.seedModes, wfList]);
+
+  const onFormChange = useCallback(
+    (next: Record<string, unknown>) => {
+      patch({ workflowInputs: next });
+    },
+    [patch],
+  );
+
+  const onModesChange = useCallback(
+    (modes: Array<string>, defaultMode: string) => {
+      void saveModes({ modes, defaultMode });
+    },
+    [saveModes],
+  );
+
+  const onSeedModeChange = useCallback(
+    (ioKey: string, mode: string) => {
+      patch({ seedModes: { ...currentSeedModes.current, [ioKey]: mode } });
+    },
+    [patch],
+  );
+
+  const onSelectWorkflow = useCallback(
+    (workflowId: string) => {
+      const wf = currentWfList.current.find((item) => item.id === workflowId);
+      seededFor.current = null;
+      patch({
+        workflowId: workflowId || undefined,
+        workflowName: wf?.name,
+        workflowTaskType: wf?.taskType,
+        workflowInputs: {},
+        paramMap: undefined,
+        workflowSinkId: undefined,
+      });
+    },
+    [patch, seededFor],
+  );
+
+  /* runGenerate 是 hook 每次渲染新建的 async 函数；用 ref 转发成稳定引用，
+   * 免得 onGenerate 这一路也击穿 memo。 */
+  const runGenerateRef = useRef(runGenerate);
+  useEffect(() => {
+    runGenerateRef.current = runGenerate;
+  }, [runGenerate]);
+  const onGenerate = useCallback(() => {
+    void runGenerateRef.current();
+  }, []);
 
   /* ── 按 kind 渲染 body ── */
   let body: React.ReactNode = null;
@@ -297,28 +361,13 @@ export const CanvasNode = React.memo(function CanvasNode({
           id={id}
           modelFilter={modelFilter}
           modelTagLib={modelTagLib}
-          onFormChange={(next) => {
-            patch({ workflowInputs: next });
-          }}
-          onGenerate={runGenerate}
+          onFormChange={onFormChange}
+          onGenerate={onGenerate}
           onModelFilterChange={setModelFilter}
-          onModesChange={(modes, defaultMode) => saveModes({ modes, defaultMode })}
+          onModesChange={onModesChange}
           onPatch={patch}
-          onSeedModeChange={(ioKey, mode) => {
-            patch({ seedModes: { ...d.seedModes, [ioKey]: mode } });
-          }}
-          onSelectWorkflow={(workflowId) => {
-            const wf = wfList.find((item) => item.id === workflowId);
-            seededFor.current = null;
-            patch({
-              workflowId: workflowId || undefined,
-              workflowName: wf?.name,
-              workflowTaskType: wf?.taskType,
-              workflowInputs: {},
-              paramMap: undefined,
-              workflowSinkId: undefined,
-            });
-          }}
+          onSeedModeChange={onSeedModeChange}
+          onSelectWorkflow={onSelectWorkflow}
           onSourceFilterChange={setSourceFilter}
           sourceFilter={sourceFilter}
           workflowIO={wfIO}
