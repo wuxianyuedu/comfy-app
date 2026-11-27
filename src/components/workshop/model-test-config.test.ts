@@ -270,6 +270,29 @@ describe("modeTabsForKind / defaultModeForKind", () => {
     expect(tabs.every((t) => typeof t.modelCount === "number")).toBe(true);
   });
 
+  it("同一模型的重复模式只计一次；工作流候选的 taskType 与 modes 也不重复计", () => {
+    /* 同模型重复 T2I 只记 1（2 个模型）+ 工作流 1 = 3；未去重时同模型记 2 ⇒ 4。 */
+    const tabs = modeTabsForKind(
+      "image",
+      {
+        "agnes-image": [{ mode: "T2I" }, { mode: "T2I" }, { mode: "I2I" }],
+      },
+      [
+        {
+          category: "image",
+          encapsulationReady: true,
+          id: "wf-1",
+          modelTags: [],
+          modes: ["T2I", "T2I"],
+          name: "本地工作流",
+          taskType: "T2I",
+        },
+      ],
+    );
+    expect(tabs.find((t) => t.mode === "T2I")?.modelCount).toBe(2);
+    expect(tabs.find((t) => t.mode === "I2I")?.modelCount).toBe(1);
+  });
+
   it("视频用途只列视频侧模式；空适配器索引全为 0", () => {
     const tabs = modeTabsForKind("video", {});
     expect(tabs.length).toBeGreaterThan(0);

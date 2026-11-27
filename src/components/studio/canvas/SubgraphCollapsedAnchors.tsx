@@ -3,6 +3,7 @@
  * 同一套「圆柱 + 不可见逐端口 Handle」视觉契约（原语收口在那里），
  * 差别只在「哪些端口算已接线」的数据模型 —— 这里按子图的
  * `connectedInputs` / `connectedOutputs` 名字集合过滤。 */
+import { useMemo } from "react";
 import { useTheme } from "next-themes";
 import { portColor } from "~/lib/comfyui/types";
 import { resolveAnchorCylinder } from "./workflow-node-palette";
@@ -24,8 +25,14 @@ export function SubgraphCollapsedAnchors({
   connectedInputs,
   connectedOutputs,
 }: SubgraphCollapsedAnchorsProps) {
-  const wiredInputs = connInputs.filter(({ inp }) => connectedInputs?.has(inp.name) === true);
-  const wiredOutputs = outputs.filter(({ out }) => connectedOutputs?.has(out.name) === true);
+  const wiredInputs = useMemo(
+    () => connInputs.filter(({ inp }) => connectedInputs?.has(inp.name) === true),
+    [connInputs, connectedInputs],
+  );
+  const wiredOutputs = useMemo(
+    () => outputs.filter(({ out }) => connectedOutputs?.has(out.name) === true),
+    [outputs, connectedOutputs],
+  );
   /* 锚柱跟主题联动（浅色下白描白会让锚柱整个消失）。 */
   const { resolvedTheme } = useTheme();
   const anchor = resolveAnchorCylinder(resolvedTheme);

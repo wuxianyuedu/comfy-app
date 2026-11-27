@@ -258,10 +258,11 @@ export function DynamicWorkflowFormView({
       : widgetSectionEntries.filter(
           (entry) => (entry.displayOrder ?? Number.POSITIVE_INFINITY) < groupAnchorOrder,
         );
+  const beforeGroupRowSet = new Set(beforeGroupRows);
   const afterGroupRows =
     groupAnchorOrder === undefined
       ? []
-      : widgetSectionEntries.filter((entry) => !beforeGroupRows.includes(entry));
+      : widgetSectionEntries.filter((entry) => !beforeGroupRowSet.has(entry));
 
   const groupIsDropTarget =
     groupAnchorKey !== null &&

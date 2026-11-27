@@ -122,10 +122,10 @@ export function useResearchLibrary<P extends ResearchPreset>(config: ResearchLib
     () => searchResearchPresets(query, config.presets),
     [config.presets, query],
   );
-  const selectedPresets = useMemo(
-    () => config.presets.filter((preset) => selection.selected.includes(preset.id)),
-    [config.presets, selection.selected],
-  );
+  const selectedPresets = useMemo(() => {
+    const selected = new Set(selection.selected);
+    return config.presets.filter((preset) => selected.has(preset.id));
+  }, [config.presets, selection.selected]);
   const prompt = useMemo(
     () => selectedPresets.map(config.buildPrompt).join("\n"),
     [config.buildPrompt, selectedPresets],

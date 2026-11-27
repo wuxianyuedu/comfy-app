@@ -2640,7 +2640,7 @@ pnpm check:standalone   # [standalone] ✓ 产物干净
 
 ```
 .next/standalone/.env        1974 B   ← BETTER_AUTH_SECRET / GitHub OAuth 密钥，明文
-.next/standalone/db.sqlite   328 K    ← 开发库，31 张表
+.next/standalone/db.sqlite   328 K    ← 开发库，33 张表
 ```
 
 而 `scripts/build-desktop.mjs` 的噪声剔除清单**只剔目录名**（`log` / `tests` …），

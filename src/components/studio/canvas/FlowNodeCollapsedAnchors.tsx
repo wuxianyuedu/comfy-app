@@ -3,9 +3,9 @@
  * 底下保留逐端口不可见 <Handle> 栈，让每条边的 id 绑到各自锚点，切换时不脱线。
  * <CollapsedAnchorCylinder> / <CollapsedPortHandles> 与子图折叠锚点共用同一视觉契约，
  * 差别只在「哪些端口算已接线」的数据模型。 */
+import { useMemo } from "react";
 import { clamp } from "~/lib/clamp";
 import { Handle, Position } from "@xyflow/react";
-import { useMemo } from "react";
 import { useTheme } from "next-themes";
 import { portColor } from "~/lib/comfyui/types";
 import { Z } from "~/lib/shell/overlay-z";
@@ -106,18 +106,25 @@ export function FlowNodeCollapsedAnchors({
     () => new Map((data.rawInputs ?? []).map((raw) => [raw.name, raw])),
     [data.rawInputs],
   );
-  const connectedInputs = orderedEntries.filter(([k, v]) => {
-    if (Array.isArray(v)) {
-      return true;
-    }
-    const meta = rawByName.get(k);
-    return (
-      meta?.isConnection === true ||
-      meta?.isBoundary === true ||
-      data.boundaryInputs?.has(k) === true
-    );
-  });
-  const connectedOutputs = outputs.filter(([n]) => data.connectedOutputs?.has(n) === true);
+  const connectedInputs = useMemo(
+    () =>
+      orderedEntries.filter(([k, v]) => {
+        if (Array.isArray(v)) {
+          return true;
+        }
+        const meta = rawByName.get(k);
+        return (
+          meta?.isConnection === true ||
+          meta?.isBoundary === true ||
+          data.boundaryInputs?.has(k) === true
+        );
+      }),
+    [orderedEntries, rawByName, data.boundaryInputs],
+  );
+  const connectedOutputs = useMemo(
+    () => outputs.filter(([n]) => data.connectedOutputs?.has(n) === true),
+    [outputs, data.connectedOutputs],
+  );
   /* 锚柱（收起时的端口载体）跟主题联动：浅色下白描白会让锚柱整个消失。 */
   const { resolvedTheme } = useTheme();
   const anchor = resolveAnchorCylinder(resolvedTheme);

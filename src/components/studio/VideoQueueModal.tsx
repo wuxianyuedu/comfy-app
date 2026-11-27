@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { X } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Hint } from "~/components/ui/hint";
@@ -96,13 +96,14 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
   //`setTimeout(…, 0)` 把首次拉取延出 effect 体，现在那一层由 hook 承担。
   useInterval(loadTasks, { ms: open ? 4000 : null });
 
+  const runningCount = useMemo(
+    () => tasks.filter((task) => task.status === "RUNNING" || task.status === "QUEUED").length,
+    [tasks],
+  );
+
   if (!open) {
     return null;
   }
-
-  const runningCount = tasks.filter(
-    (task) => task.status === "RUNNING" || task.status === "QUEUED",
-  ).length;
 
   /* 关闭语义交给`ui/dialog`：此前这里**既没有点遮罩关闭、也没有 Esc** ——
  只能用右上角的 ✕ 关掉，键盘用户尤其难退出。 */

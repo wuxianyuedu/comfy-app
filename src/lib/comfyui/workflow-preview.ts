@@ -239,7 +239,8 @@ export function buildWorkflowPreview(graph: Record<string, unknown>): WorkflowPr
     const kindOf = (id: string) => classifyNode(nodeById.get(id)?.class_type ?? "Unknown");
     const sinks = visible.filter((id) => kindOf(id) === "output");
     const sources = visible.filter((id) => kindOf(id) === "input");
-    const mid = visible.filter((id) => !sinks.includes(id) && !sources.includes(id));
+    const boundaryIds = new Set([...sinks, ...sources]);
+    const mid = visible.filter((id) => !boundaryIds.has(id));
     mid.sort((left, right) => (level[left] ?? 0) - (level[right] ?? 0));
     const midKeep = Math.max(0, 14 - sources.length - sinks.length);
     visible = [...sources, ...mid.slice(0, midKeep), ...sinks];
