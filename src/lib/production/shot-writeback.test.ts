@@ -306,6 +306,11 @@ describe("requestShotRedo", () => {
 
     expect(pushProdMock).toHaveBeenCalledTimes(1);
     const [, payload] = pushProdMock.mock.calls[0]!;
+    /* 载荷类型是 `ProductionWrite`（`Partial`）：回写路径必带 shots，
+     * 这里先断言在场再判元素（缺了就该红在这一行，而不是在 recordAt 里报形状）。 */
+    if (!Array.isArray(payload.shots)) {
+      throw new TypeError(`回写载荷应带 shots 数组：${JSON.stringify(payload)}`);
+    }
     const pushed = recordAt(payload.shots, 0);
     expect(pushed).toMatchObject({
       status: "idle",
