@@ -945,6 +945,9 @@
 - 行为与验收：合成走服务端 ffmpeg（`compose-film.ts`）；缺 ffmpeg 时
   **如实提示**「本次仅产出合成清单」，不静默降级；
   BGM 上传 / 选择有独立入口（`/api/film/bgm`）。
+- 字幕同源（ISSUE #5210）：SRT 文本以镜头台词 `dialogue` 为首选，缺失回落标题、
+  再回落提示词；烧录用逐镜 SRT，导出用同一份口径生成的整片 SRT
+  （`film.subtitleSrt` 读 `generated/films/<id>.srt`），两者不会各写一份。
 - 落点：`src/server/film/compose-film.ts`、
   `src/server/film/orchestrator.ts`、`src/app/api/film/bgm/route.ts`
 

@@ -27,8 +27,29 @@ import { isSafeBgmName } from "~/lib/film/bgm-name";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { withTimeoutResult } from "~/lib/with-timeout";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
-import { buildNormalizeArgs, buildSegmentVf, buildSrtBody, clipPathOf } from "./compose-steps";
+import {
+  buildFilmSrt,
+  buildNormalizeArgs,
+  buildSegmentVf,
+  buildSrtBody,
+  clipPathOf,
+  subtitleTextOf,
+} from "./compose-steps";
 import { appendFilmLog } from "./film-log";
+
+/** `filmShot.params`（JSON 列）里的台词。只认字符串，形状不对就当没有——
+ *  字幕宁可回退标题，也不把「[object Object]」烧进画面。 */
+function dialogueOfParams(params: unknown): string | null {
+  if (params === null || typeof params !== "object" || Array.isArray(params)) {
+    return null;
+  }
+  for (const [key, value] of Object.entries(params)) {
+    if (key === "dialogue" && typeof value === "string") {
+      return value;
+    }
+  }
+  return null;
+}
 
 // ── 回写：成片合成完成 → 统一项目逐镜 clip + 完成状态（Phase 5 / §6.3 + §7）──
 /** 合成成片里一个镜头的结果（用于把逐镜视频回写进统一项目的对应 Shot）。 */
@@ -278,11 +299,13 @@ export async function composeFilm(id: string) {
       const vf = buildSegmentVf({ width: W, height: H, fps, fadeOut });
 
       const srtPath = path.join(tmpDir, `seg_${i}.srt`);
+      const srtText = subtitleTextOf({
+        heading: shot.heading,
+        prompt: shot.prompt,
+        dialogue: dialogueOfParams(shot.params),
+      });
       if (film.subtitleOn) {
-        // 空串标题也要回落到 prompt（沿用 || 的语义，写成显式判空），沿用既有行为。
-        const srtText = (
-          shot.heading !== null && shot.heading !== "" ? shot.heading : shot.prompt
-        ).slice(0, 80);
+        // 台词优先 → 标题 → 提示词，口径与导出的整片 SRT 完全同源（ISSUE #5210）。
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await fs.writeFile(srtPath, buildSrtBody({ text: srtText, dur }), "utf8");
       }
@@ -391,6 +414,22 @@ export async function composeFilm(id: string) {
       }
     } else {
       await fs.copyFile(concatPath, finalPath);
+    }
+
+    /* 整片 SRT 与逐镜烧录用同一份文本/时长口径（ISSUE #5210）：既能烧录也能下载校对，
+     * 不再出现「画面字幕一个来源、导出字幕另一个来源」。 */
+    const fullSrt = buildFilmSrt(
+      shots.map((shot) => ({
+        dur: shot.duration ?? film.framesPerShot / film.fps,
+        text: subtitleTextOf({
+          heading: shot.heading,
+          prompt: shot.prompt,
+          dialogue: dialogueOfParams(shot.params),
+        }),
+      })),
+    );
+    if (fullSrt !== "") {
+      await fs.writeFile(path.join(filmsRoot(), `${id}.srt`), fullSrt, "utf8");
     }
 
     await filmRepository.markDone(id, localPath);
