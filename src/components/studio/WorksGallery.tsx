@@ -8,7 +8,7 @@
 import { Trash2 } from "lucide-react";
 
 import { useToast } from "./ToastProvider";
-import { AuroraBackground } from "~/components/ui/aurora-background";
+import { AuroraBackdrop } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { Button } from "~/components/ui/button";
@@ -67,7 +67,7 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
 
   return (
     <DocumentFrame
-      backdrop={<AuroraBackground />}
+      backdrop={<AuroraBackdrop />}
       className="px-4 pt-4 pb-8 sm:px-8 sm:pt-5 sm:pb-12"
       width="wide"
     >

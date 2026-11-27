@@ -2,7 +2,7 @@
 
 import { useState, type CSSProperties } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { AuroraBackground } from "~/components/ui/aurora-background";
+import { AuroraBackdrop } from "~/components/ui/aurora-background";
 import { textHandler } from "~/lib/form-props";
 import { Icon } from "~/components/ui/icon";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "~/components/ui/input-group";
@@ -35,7 +35,7 @@ export function ModelLibrary() {
 
   return (
     <DocumentFrame
-      backdrop={<AuroraBackground />}
+      backdrop={<AuroraBackdrop />}
       className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       width="wide"
     >

@@ -15,7 +15,7 @@ import { AddToAssetLibraryDialog } from "~/components/studio/assets/AddToAssetLi
 const QueueTaskLogModal = dynamic(() =>
   import("~/components/studio/queue/QueueTaskLogModal").then((m) => m.QueueTaskLogModal),
 );
-import { AuroraBackground } from "~/components/ui/aurora-background";
+import { AuroraBackdrop } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -84,7 +84,7 @@ export function HistoryList({
 
   return (
     <DocumentFrame
-      backdrop={<AuroraBackground />}
+      backdrop={<AuroraBackdrop />}
       className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       width="wide"
     >

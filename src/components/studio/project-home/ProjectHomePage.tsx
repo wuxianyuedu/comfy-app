@@ -6,7 +6,7 @@
 // + ProjectHomeStatus，复用 agent-run/RunControlBar。主页不复制画布/工坊/成片的功能 —— 只回答状态与入口，
 // 两处都能编辑就会有两份真值。
 
-import { AuroraBackground } from "~/components/ui/aurora-background";
+import { AuroraBackdrop } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { ProgressBar } from "~/components/ui/progress-bar";
@@ -47,7 +47,7 @@ export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectH
 
   return (
     <DocumentFrame
-      backdrop={<AuroraBackground />}
+      backdrop={<AuroraBackdrop />}
       className="flex flex-col gap-6 px-8 py-10"
       width="narrow"
     >

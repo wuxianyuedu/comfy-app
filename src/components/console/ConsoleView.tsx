@@ -9,7 +9,7 @@ import { useCallback } from "react";
 import { AlertTriangle, Eraser, Play, Square, Terminal } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import { AuroraBackground } from "~/components/ui/aurora-background";
+import { AuroraBackdrop } from "~/components/ui/aurora-background";
 import { Hint } from "~/components/ui/hint";
 import { textHandler } from "~/lib/form-props";
 import { Input } from "~/components/ui/input";
@@ -45,7 +45,7 @@ export function ConsoleView() {
        内容是等宽的日志行与命令，不是成篇的文字。压到 `wide`（1200px）意味着宽屏上
        左右各留一大块空，而面板正需要那点宽度（ISSUE #1902）。 */
     <DocumentFrame
-      backdrop={<AuroraBackground />}
+      backdrop={<AuroraBackdrop />}
       className="px-4 pt-4 pb-8 sm:px-8 sm:pt-5 sm:pb-12"
       width="full"
     >

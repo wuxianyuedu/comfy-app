@@ -79,3 +79,23 @@ describe("WorkspaceViewStack — 重视图非活跃降级（ISSUE #4677 / #5196 
     expect(code).toMatch(/<HeavyViewGate active=\{isActive\}>/);
   });
 });
+
+describe("WorkspaceViewStack — 极光背景全栈单实例（ISSUE #5197）", () => {
+  const code = stripComments(fs.readFileSync(STACK_FILE, "utf8"));
+
+  it("背景收在 tabs.map 之外的宿主，按 activeView 控制显隐", () => {
+    /* 每层全屏 blur 与页签数线性相关是 #5197 的根因：宿主必须在栈外层只有一份，
+     * 显隐只改 opacity（visible 由 activeView 决定），不按页签复制背景。 */
+    expect(code).toContain("<AuroraBackgroundHost");
+    expect(code).toMatch(/<AuroraBackgroundHost visible=\{activeView !== "home"\}>/);
+    const mapIndex = code.indexOf("tabs.map(");
+    const hostIndex = code.indexOf("<AuroraBackgroundHost");
+    expect(hostIndex).toBeLessThan(mapIndex);
+  });
+
+  it("页签内不再按视图挂 AuroraBackground，也不再留 isHome 分支", () => {
+    const mapBody = code.slice(code.indexOf("tabs.map("));
+    expect(mapBody).not.toContain("<AuroraBackground");
+    expect(mapBody).not.toContain("isHome");
+  });
+});

@@ -8,9 +8,9 @@
  * 「有没有拼名字」不由本用例守，由 `scripts/gates/check-theme-colors.cjs` 静态判据守（Tailwind v4 按**字面名**决定是否保留 `@theme` 变量，拼出来的名字连编译产物都进不去）。
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 
-import { AuroraGlow } from "./aurora-background";
+import { AuroraBackdrop, AuroraBackgroundHost, AuroraGlow } from "./aurora-background";
 
 afterEach(cleanup);
 
@@ -44,5 +44,41 @@ describe("AuroraGlow", () => {
     expect(cyan).toContain("var(--color-aurora-cyan) 60%");
     expect(cyan).not.toContain("aurora-violet");
     expect(cyan).not.toContain("aurora-magenta");
+  });
+});
+
+describe("AuroraBackgroundHost（单实例宿主，ISSUE #5197）", () => {
+  it("宿主内只渲染一份极光背景，多个 backdrop 都收敛到它", () => {
+    const { container } = render(
+      <AuroraBackgroundHost>
+        <AuroraBackdrop />
+        <AuroraBackdrop />
+        <AuroraBackdrop />
+      </AuroraBackgroundHost>,
+    );
+    /* 宿主那一份铺底 + 三屏 backdrop 收敛后，全树只剩一颗 data-testid=aurora-bg。 */
+    expect(container.querySelectorAll('[data-testid="aurora-bg"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-testid="aurora-host"]')).toHaveLength(1);
+  });
+
+  it("无宿主（独立路由）时 backdrop 各自渲染，视觉不回退", () => {
+    const { container } = render(
+      <div>
+        <AuroraBackdrop />
+      </div>,
+    );
+    expect(container.querySelectorAll('[data-testid="aurora-bg"]')).toHaveLength(1);
+  });
+
+  it("首页把宿主背景降到透明但不卸载", () => {
+    const { container } = render(
+      <AuroraBackgroundHost visible={false}>
+        <AuroraBackdrop />
+      </AuroraBackgroundHost>,
+    );
+    const host = screen.getByTestId("aurora-host");
+    expect(host.style.opacity).toBe("0");
+    /* 背景节点仍在（只改合成属性，不重挂全屏 blur）。 */
+    expect(container.querySelectorAll('[data-testid="aurora-bg"]')).toHaveLength(1);
   });
 });
