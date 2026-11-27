@@ -10,7 +10,7 @@ import { db } from "~/lib/db";
 import { filmRepository, filmShotRepository, skillRepository } from "~/lib/core/repository";
 import { productionRepository } from "~/lib/core/repository-production";
 import { logger } from "~/lib/core/logger";
-import { isProjectType } from "~/lib/workshop/types";
+import { characterListInputSchema, isProjectType } from "~/lib/workshop/types";
 import type { Shot } from "~/lib/workshop/types";
 import { asRecord } from "~/lib/is-record";
 import { cancelTask } from "~/lib/comfyui/enqueue";
@@ -28,10 +28,13 @@ import { toSizeSpec } from "~/lib/media/size-presets";
 import { appendFilmLog } from "./film-log";
 import { resolveFilmFirstFrame } from "./first-frame";
 import { extractTailFrameUrl } from "./tail-frame";
+import { resolveVoice, ttsParamsOf, type VoiceBinding } from "./voice-track";
 /* 监看（无响应看门狗 / 超时收口 / 重启恢复扫描）在 film-watch.ts，这里只取入口。 */
 import { watchFilm } from "./film-watch";
 
 export type FilmShotInput = {
+  /** 逐镜配音产物地址（ISSUE #5213）：落 params.audioPath，成片合成混入对白轨。 */
+  audioUrl?: string;
   /** 角色台词（工坊 Shot.dialogue）：字幕与后续配音的唯一源，落 params.dialogue。 */
   dialogue?: string;
   /** 镜头时长（秒，工坊 Shot.duration）；缺省按 frames / fps 折算。 */
@@ -46,6 +49,8 @@ export type FilmShotInput = {
   shotId?: string;
   /** 跨镜接力的上一镜片段地址（ISSUE #5212）：生成时抽尾帧当本镜首帧。 */
   tailFrameFrom?: string;
+  /** 已归一的逐镜声音绑定（ISSUE #5213）：随 params 落库，供 TTS 与换集复用。 */
+  voice?: VoiceBinding;
 };
 
 export type CreateFilmInput = {
@@ -255,6 +260,20 @@ async function persistFilmWithShots(args: {
             ...(shot.tailFrameFrom === undefined || shot.tailFrameFrom === ""
               ? {}
               : { tailFrameFrom: shot.tailFrameFrom }),
+            /* 逐镜配音（ISSUE #5213）：声音绑定与 TTS 载荷在建片时算一次落 params；
+             * 已有配音产物的镜头把地址一并落库，成片合成据此混入对白轨。 */
+            ...(shot.voice === undefined
+              ? {}
+              : {
+                  voice: shot.voice,
+                  ttsParams: ttsParamsOf({
+                    dialogue: shot.dialogue ?? "",
+                    voice: shot.voice,
+                  }),
+                }),
+            ...(shot.audioUrl === undefined || shot.audioUrl === ""
+              ? {}
+              : { audioPath: shot.audioUrl }),
           },
         })),
         tx,
@@ -349,6 +368,11 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
   const fps = input.fps ?? 16;
   const framesPerShot = input.framesPerShot ?? 49;
 
+  /* 角色声音绑定的唯一入口（ISSUE #5213）：草稿里的 characters 是外来 JSON，
+   * 用写侧 schema 收一遍再喂归一器；脏数据当没有绑定，不打断建片。 */
+  const parsedCharacters = characterListInputSchema.safeParse(row?.characters);
+  const characters = parsedCharacters.success ? parsedCharacters.data : [];
+
   const shotInputs: Array<FilmShotInput> = shots.map((shot, i) => ({
     order: i,
     shotId: shot.id,
@@ -367,6 +391,9 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
       const prev = rawShots.find((candidate) => candidate.id === from);
       return typeof prev?.clipUrl === "string" && prev.clipUrl !== "" ? prev.clipUrl : undefined;
     })(),
+    /* 声音归属：镜头覆写 > 出场角色绑定 > 空绑定（ISSUE #5213）。 */
+    voice: resolveVoice(characters, shot.characterIds ?? [], shot.voice),
+    audioUrl: shot.audioUrl ?? undefined,
     duration: shot.duration,
   }));
 
