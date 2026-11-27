@@ -730,6 +730,17 @@
   `src/components/studio/workflow-library/hooks/use-app-mode-actions.ts`、
   `src/components/studio/workflow-library/workflow-library-detail-config.ts`（`DETAIL_TABS`）
 
+#### FR-WF-17 漫剧推荐工作流包只读分析（ISSUE #5219）
+
+- 状态：纯判据已上线；导入入口 UI 与「一键落库」接线待接。
+- 需求：首次使用门槛降低——不恢复内置模板、不改工作流库唯一来源的前提下，对用户**自己导入**的
+  RAW JSON 给出「这是哪种镜头工作流、还缺什么节点、会用到哪些模型」的导入前提示。
+- 行为与验收：① 识别 T2V / I2V / FLF2V 三种模式（`meta.mode` 优先，节点名兜底）；
+  ② 按模式点名最小必需节点，缺件逐条列出，不静默放过；③ 列出 checkpoint / LoRA / 模型依赖
+  供人确认，**不自动下载**；④ 脏 JSON 按「无法判定」返回，不让一个坏文件打断整批扫描。
+- 落点：`src/lib/workshop/anime-workflow-pack.ts` + 同目录用例；扫描沿用
+  `scanLocalWorkflowRoots`，落库沿用既有工作流导入口（工作流库唯一来源）。
+
 ---
 
 ## 6. 生成与任务（FR-GN）
