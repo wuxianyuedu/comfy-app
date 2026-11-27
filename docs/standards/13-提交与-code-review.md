@@ -12588,10 +12588,16 @@ pnpm ship --new-issue "fix(ship): …" --issue-body-file .git/issue.md --priorit
   「没被判断过」）并把这句念出来；给了词表外的值 ⇒ 退 2，不猜一个近似的值（§13.10.10）。
 - **未配留痕不阻断**：单子照建，只是不带 `提单人:` 标签、也不做那一格回读 —— 它仍是读数。
 
-`--issue-body-file` / `--priority` 单独出现（没有 `--new-issue`）⇒ 退 2：静默忽略会让这一跑
-退回主流程，而人以为单子已经建好了。它是单子动作之一，与 `--claim` / `--release` / `--claims`
-互斥，也不与主流程（`--merge` / `--close-issue` / `--branch` / `--message` …）同跑 ——
-一次只做一件。它排在阶段 0 之前，`master` 上、工作树脏、没有碎片都照样能建。
+`--issue-body-file` / `--priority` 单独出现（既没有 `--new-issue`、也没有 `--edit-issue`）⇒ 退 2：
+静默忽略会让这一跑退回主流程，而人以为单子已经建好 / 改好了。它们是单子动作的输入，与
+`--claim` / `--release` / `--claims` 互斥，也不与主流程（`--merge` / `--close-issue` /
+`--branch` / `--message` …）同跑 —— 一次只做一件。它们排在阶段 0 之前，`master` 上、工作树脏、
+没有碎片都照样能建。
+
+**改已有单子的正文**走 `pnpm ship --edit-issue <号> --issue-body-file <文件> [--priority P1]`
+（ISSUE #5165）：正文同样只从文件进（没有内联 `-m`），写后独立 `get-issue` 回读，
+复用 `--comment` 的末尾换行 / 图片链接归一口径逐字比对 —— 回读取不到退 2、正文或
+优先级不一致退 1。它与 `--new-issue` / `--comment` 同样一次只做一张。
 回归在 `tests/ship.test.ts` 的 `--new-issue` 组（回读缺标签 ⇒ 2、标题不一致 ⇒ 1、
 未配留痕 ⇒ 0 且一次标签动作都不伸手、`--dry-run` 一条都不写）。
 

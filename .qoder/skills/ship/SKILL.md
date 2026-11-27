@@ -57,6 +57,10 @@ pnpm ship --gh-prs                                # 只读：列 GitHub 仓库�
 pnpm ship --stage-log [cnb-xxx-yyy] <格名|格 id>   # 只读：念出某一格的日志正文（绿跑也能用）——按格名反查 stageId，认不出/命中多格退 2，不替你挑一格
 pnpm ship --new-issue "fix(x): …" --issue-body-file .git/issue.md --priority P1   # 一步建单：建 → 补提单人标签 → 独立回读（标题/正文人给）
 pnpm ship --comment 2719 --body-file .git/comment.md   # 往已有单子补一条读数：写 → 独立逐字回读（正文只从文件来）
+pnpm ship --edit-issue 5165 --issue-body-file .git/body.md [--priority P1]
+                                                   # 改单子正文（ISSUE #5165）：正文只从文件进，
+                                                   # 写后 get-issue 独立逐字回读；不给内联 -m，
+                                                   # 一次只做一张，与 --comment / --new-issue 互斥
 pnpm ship --whoami                               # 只读自查：这份检出的留痕短名 + 署名格式 + 手工补 PR 标签的粘贴命令
 pnpm ship --reap                 # 这一轮结束时收掉本检出**端口上那批**残留进程（默认只念读数）
 ```
