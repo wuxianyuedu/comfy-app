@@ -349,6 +349,9 @@ export type AppShellProps = {
   children: ReactNode;
   /** 首帧侧栏展开态。由服务端读 `sidebar_state` cookie 传来（见 `ui/sidebar` 里那段说明）；不传按展开。 */
   defaultSidebarOpen?: boolean;
+  /** 生图暂停闸是否开启（ISSUE #5143）：由有 tRPC Provider 的装配层传入，
+   *  侧栏「队列」行据此在页签上显示「暂停」角标；缺省 false。 */
+  generationPaused?: boolean;
   onCloseViewTab?: (key: string) => void;
   /** 删除项目（侧栏「项目」行右键菜单）：上层负责删本地+服务端、关页签、刷新。 */
   onDeleteProject?: (id: string) => void;
@@ -391,6 +394,7 @@ export function AppShell({
   onNewProject,
   viewTabs,
   activeViewKey,
+  generationPaused = false,
   projectNameOf,
   onSelectViewTab,
   onCloseViewTab,
@@ -508,6 +512,11 @@ export function AppShell({
                           <span className="group-data-[collapsible=icon]:sr-only">
                             {item.label}
                           </span>
+                          {item.id === "queue" && generationPaused ? (
+                            <span className="bg-warning/10 text-warning-strong text-2xs rounded px-1.5 py-0.5 font-medium group-data-[collapsible=icon]:hidden">
+                              暂停
+                            </span>
+                          ) : null}
                         </SidebarMenuButton>
                         {openTab ? (
                           /* 关闭按钮（ISSUE #3740）：只在悬停 / 聚焦时浮现 —— 打开态

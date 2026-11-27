@@ -87,12 +87,18 @@ describe("去重与预算的同源性（漂开就静默失效的那两条）", (
 
   it("监看预算的分钟数只有一处出处（文案与判据不许各写一份）", () => {
     const src = code(FILM_WATCH);
-    expect(src).toMatch("const WATCH_POLL_MS = 4000;");
+    /* #5142：预算常量收进 lib/film/film-wait.ts，与自主 run 的等待方共用同一份。 */
+    const shared = code("src/lib/film/film-wait.ts");
+    expect(shared).toMatch("export const FILM_WATCH_TICK_MS = 4000;");
+    expect(shared).toMatch("export const FILM_WATCH_BASE_MAX_ITER = 240;");
+    expect(shared).toMatch("export const FILM_WATCH_PER_SHOT_ITER = 600;");
+    expect(shared).toMatch("export function filmWaitTicksFor");
+    expect(src).toMatch("FILM_WATCH_TICK_MS as WATCH_POLL_MS");
+    expect(src).toMatch("FILM_WATCH_BASE_MAX_ITER as WATCH_BASE_MAX_ITER");
+    expect(src).toMatch("FILM_WATCH_PER_SHOT_ITER as WATCH_PER_SHOT_ITER");
     /* #4595：固定 240 轮总预算改成两档——无响应看门狗（连续 900 轮零进展）+
      * 「底仓 240 + 每镜 600 轮」的绝对上限。这里的分钟数都由常量现算，不写死。 */
     expect(src).toMatch("const WATCH_IDLE_MAX_ITER = 900;");
-    expect(src).toMatch("const WATCH_BASE_MAX_ITER = 240;");
-    expect(src).toMatch("const WATCH_PER_SHOT_ITER = 600;");
     expect(src).toMatch(
       /const WATCH_IDLE_MIN = Math\.round\(\(WATCH_POLL_MS \* WATCH_IDLE_MAX_ITER\) \/ 60_?000\);/,
     );

@@ -12,6 +12,9 @@ import { productionRepository } from "~/lib/core/repository-production";
 import { completeLLM, completeLLMStructured, getLLMConfig } from "~/lib/llm/server";
 import { buildScriptMarkdownMessages } from "~/lib/llm/prompts";
 import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
+import { shotSizeFor } from "~/lib/film/film-size";
+import { filmWaitTicksFor } from "~/lib/film/film-wait";
+import { asRecord } from "~/lib/is-record";
 import { randomSeed } from "~/lib/comfyui/random-seed";
 import { workshopUid } from "~/lib/workshop/script-parser";
 import {
@@ -42,14 +45,9 @@ import { sleep } from "~/lib/with-timeout";
 
 const MAX_TICKS = 240;
 const TICK_MS = 4000;
-/* render_film 等待拍的上界（#4223）：成片管线自带监看预算（film orchestrator 的
- * WATCH_MAX_ITER×WATCH_POLL_MS ≈16 分钟，到点会自行判 FAILED），这里的等待拍挂
- * film 终态收口、**不消耗**执行步数预算——旧形态把等待拍与执行步同池计数，多镜头
- * 视频超过 16 分钟时 run 被误判「步数超限」而 film 其实最终 DONE（状态矛盾）。
- * 等待本身仍要有上界（§08 8.11④ 常驻等待要能退）：预算对齐监看再加余量，兜
- * 「监看刚耗尽、终态还没落库」的尾差；耗尽按「成片仍在生成」落 failed，而不是把
- * 等待误读成执行卡死。测试经 advanceRunLoop 的 opts 注入小预算。 */
-const FILM_WAIT_MAX_TICKS = 300;
+/* render_film 等待拍挂 film 终态收口、**不消耗**执行步数预算（#4223）。
+ * 上界与成片监看侧共用 filmWaitTicksFor(shotCount)（#5142）：此前写死 300 拍
+ *（20 分钟），多镜头片子还在正常生成时 run 先判超时。测试可经 opts 注入小预算。 */
 const nowIso = () => new Date().toISOString();
 
 /**
@@ -350,6 +348,8 @@ async function execImages(
         negative: shot.negativePrompt || undefined,
         projectId,
         seed: randomSeed(),
+        /* 与逐镜视频任务同一份场景无关画幅（ISSUE #5138）：首帧与潜空间同尺寸。 */
+        size: shotSizeFor(asRecord(shot.params)?.size),
       });
       produced.set(shot.id, { imageUrl: path, status: "done" });
     } catch {
@@ -724,7 +724,7 @@ async function advanceRunLoopOnce(
   projectId: string,
   opts: { filmWaitMaxTicks?: number } = {},
 ): Promise<void> {
-  const filmWaitMaxTicks = opts.filmWaitMaxTicks ?? FILM_WAIT_MAX_TICKS;
+  let filmWaitMaxTicks = opts.filmWaitMaxTicks ?? 0;
   /* render_film 的等待拍独立计数：等待不是执行，不该花执行步数（#4223）。 */
   let filmWaitTicks = 0;
   try {
@@ -733,6 +733,9 @@ async function advanceRunLoopOnce(
       const row = await productionRepository.getForUser(userId, projectId);
       if (!row) {
         return;
+      }
+      if (opts.filmWaitMaxTicks === undefined) {
+        filmWaitMaxTicks = filmWaitTicksFor(isShotArray(row.shots) ? row.shots.length : 0);
       }
       let run = normalizeProductionRun(row.run);
       // 用户暂停 / 取消 / 待确认 / 已收尾 → 引擎让位（编辑改的内容靠 rev 在下次 resume 生效）。

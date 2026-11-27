@@ -158,6 +158,32 @@ async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
   }
 }
 
+/** 「生图暂停闸挡路」提示的去重上限（ISSUE #5143），与 WS 等待表同形。 */
+export const PAUSE_WAIT_LOGGED_MAX = 512;
+
+/** 暂停闸挡住队首生图任务时，给排队任务写一条可读提示——此前整条队列静默卡住，
+ *  任务行只有一句「本进程没有该任务的在飞执行」，用户与自动化都只能从「长时间
+ *  不动」反推。形状与 `hintWaitingTasks` 一致，但用独立的去重表。 */
+async function hintPausedTasks(repo: DispatchRepo, owner: TaskClaimMode) {
+  const s = state();
+  try {
+    const ids = await repo.listQueuedIds(owner, WAIT_HINT_LIMIT);
+    for (const id of ids) {
+      if (s.pauseWaitLogged.has(id)) {
+        continue;
+      }
+      touchAndEvict(s.pauseWaitLogged, id, true, PAUSE_WAIT_LOGGED_MAX);
+      logWhileQueued(
+        id,
+        "warn",
+        "⏳ 生图已暂停，等待在「队列」页恢复生成；视频 / 音频任务会在轮到生图任务后继续排队…",
+      );
+    }
+  } catch (error) {
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(error, "暂停等待提示写入失败")}`);
+  }
+}
+
 /** 一次领取尝试；返回领到并交棒给执行链的 taskId，没领到返回 null。
  *
  * 一个 tick 最多推进一个任务（`MAX_CONCURRENCY=1`）。**不抛**：调用点是定时器与
@@ -213,9 +239,15 @@ async function claimAndDispatchOnceInner(options?: {
    * 照常收尾（本闸只挡「领新行」），恢复后由常驻循环按队列序继续。状态落库，
    * 重启后仍是库里那份。视频 / 音频任务不受影响；队首是生图任务时整拍不领
    * （FIFO 不跳发，队首让位给后面任务的那种「插队」不在本闸的语义里）。 */
-  if ((await repo.getGenerationPauseState()).paused) {
+  const pauseState = await repo.getGenerationPauseState();
+  if (!pauseState.paused && s.pauseWaitLogged.size > 0) {
+    /* 恢复后清表：下一轮再卡住时提示要能重新出现（ISSUE #5143）。 */
+    s.pauseWaitLogged.clear();
+  }
+  if (pauseState.paused) {
     const next = await repo.peekNextQueued(owner);
     if (next !== null && isImageTaskType(next.type)) {
+      await hintPausedTasks(repo, owner);
       return null;
     }
   }

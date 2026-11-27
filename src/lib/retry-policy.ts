@@ -135,18 +135,23 @@ export const OLLAMA_READY = {
   maxAttempts: 20,
 } as const;
 
-/** 首帧（文生视频的第一跳）等库里收口：150 次 × 2s（共 5min）。
+/**
+ * 单个 ComfyUI 任务的执行超时（ISSUE #5140）：执行链用它下发 `--timeout`，
+ * WS 执行器用它判任务超时，等候方按它算包络。此前执行链给 600s、等候方只等
+ * 300s、runner-state 又写 5min —— 三处各写一份且不等，慢模型在正常生成时
+ * 被等候方先放弃、随后补偿撤单。这里收成唯一一份权威值。
+ */
+export const COMFY_JOB_TIMEOUT_MS = 10 * 60 * 1000;
+
+/** 首帧（文生视频的第一跳）等库里收口：执行超时 + 1 分钟收尾余量。
  *
  *  与 `HISTORY_READ` 同为「固定间隔」而不是指数退避：这一等的对象是**自己刚提交
  *  的任务**，它一定会走到终态，退避只会让「图早就好了、调用方却很晚才知道」。
- *  5min 这个包络不是新口径 —— 它就是执行链给单个任务的 `JOB_TIMEOUT_MS`，
- *  也与本助手改之前的超时一致（改前是 emitter 订阅 + `withTimeout`，见
- *  `comfyui/firstframe.ts`）。 */
-/* SAFETY: 类型断言已复核 */
+ *  包络必须 ≥ `COMFY_JOB_TIMEOUT_MS`，否则等候方会比执行链先放弃（#5140）。 */
 export const FIRST_FRAME_WAIT = {
   shape: "fixed",
   baseMs: 2000,
-  maxAttempts: 150,
+  maxAttempts: (COMFY_JOB_TIMEOUT_MS + 60_000) / 2000,
 } as const;
 
 /** ComfyUI 停止后的探针：5 次 × 500ms（共 2.5s）—— 等进程树退出。 */

@@ -5,11 +5,18 @@
 // 视图层走 `generation-client.buildLibraryWorkflowInput` + tRPC `generate.generate`；
 // 服务端编排（成片工作室 / 首帧合成）没有浏览器可用的 tRPC，故收在这一个模块里。
 //
-// 与视图层的唯一差别是**取工作流元数据的方式**：视图层经 `workflow.detailFull`
-// 拿富化后的 workflowIO，本模块直接读仓储行。封装口径（`buildEncapsulatedInputs`）
-// 与落库形状（`workflowInputs` 三元组）两边完全一致 —— 那是同一份纯函数。
+// 与视图层的取数差一步：视图层经 `workflow.detailFull` 拿富化后的 workflowIO
+//（COMBO 候选来自 object_info）；本模块读仓储行后再把富化的 `options` 拷回来
+//（ISSUE #5137），否则尺寸口只能拿到 `"16:9"` 短标签、被 ComfyUI 拒收。
+// 身份字段（nodeId / name / direction / kind）一律以库行为准 —— 落点由作者连线决定。
+// 封装口径（`buildEncapsulatedInputs`）与落库形状（`workflowInputs` 三元组）两边一致。
 import { upperToken } from "~/lib/upper-token";
+import { createLogger } from "~/lib/core/logger";
+import { errorText } from "~/lib/error-message";
+import { buildWorkflowDetailFull } from "~/lib/comfyui/workflow-detail";
 import "server-only";
+
+const log = createLogger("workshop:run");
 
 import { taskRepository, workflowTemplateRepository } from "~/lib/core/repository";
 import { kickQueue } from "~/lib/comfyui/executor-continuation";
@@ -62,6 +69,26 @@ export async function prepareWorkflowRun(
   const modes = parseModesJson(tpl.modes);
   const mode = tpl.defaultMode ?? tpl.taskType ?? modes[0] ?? null;
   const io = parseWorkflowIOMap(tpl.workflowIO);
+  /* COMBO 候选（aspect_ratio / size-resolution / size-multiple）的唯一权威是
+   * ComfyUI 的 object_info，保存工作流时不可能落库。服务端此前直接用库里那份
+   * 无 options 的 IO → 派值落成短标签 → ComfyUI 静默回落第一个候选。这里借
+   * 视图层同一份富化派生（30s 缓存），**只拷 options**：富化会丢 IMAGEUPLOAD
+   * 条目、会规范化 nodeId，整体替换会改掉作者的落点。 */
+  try {
+    const detail = await buildWorkflowDetailFull(userId, workflowId);
+    for (const [key, entry] of Object.entries(io)) {
+      const enriched = detail.workflowIO[key];
+      if (enriched && Array.isArray(enriched.options) && enriched.options.length > 0) {
+        io[key] = { ...entry, options: enriched.options };
+      }
+    }
+  } catch (error) {
+    /* 富化失败（ComfyUI 离线 / 派生异常）：不阻断入队，按库里的 IO 原样回落。 */
+    log.warn("COMBO 候选富化失败，按库里 workflowIO 回落", {
+      workflowId,
+      err: errorText(error, "富化失败"),
+    });
+  }
   const contracts = await loadModeContracts();
   const contractIds = contracts.find((c) => c.mode === upperToken(mode))?.inputs;
   const sizeTable = await loadSizePresetTable();

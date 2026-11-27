@@ -653,6 +653,17 @@ export function sizeSpecFromText(
  *  值（含 `undefined` / 脏 JSON）回退默认，不抛错。 */
 export function toSizeSpec(raw: unknown): SizeSpec {
   if (typeof raw === "string") {
+    /* 成片 text 列存的是 JSON.stringify(sizeSpec)，不是旧式 "1280x720"（#5136）。 */
+    if (raw.trim().startsWith("{")) {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+          return normalizeSizeSpec(parsed);
+        }
+      } catch {
+        /* 非法 JSON 落回宽高文本解析。 */
+      }
+    }
     return sizeSpecFromText(raw);
   }
   if (raw !== null && raw !== undefined && typeof raw === "object") {
