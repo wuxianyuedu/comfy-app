@@ -1,5 +1,5 @@
 "use client";
-import { useId, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { textHandler } from "~/lib/form-props";
 import { Check, ChevronDown, Search, X } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
@@ -41,7 +41,7 @@ export function AttributeMultiSelect({
   const [custom, setCustom] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const selected = new Set(value);
+  const selected = useMemo(() => new Set(value), [value]);
 
   function toggle(opt: string) {
     const next = new Set(selected);

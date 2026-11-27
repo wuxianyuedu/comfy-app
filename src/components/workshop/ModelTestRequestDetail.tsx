@@ -5,7 +5,7 @@
 // 从 ModelTestView 拆出（§12.13：函数长度硬闸的第二刀）—— 只渲染，读数与
 // 开关都由 props 给。
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { SectionLabel } from "~/components/ui/section-label";
@@ -62,6 +62,22 @@ export function RequestDetailSection(props: {
     sent = false,
     variant,
   } = props;
+  /* 调试行的 body / excerpt 都是请求与响应快照：引用稳定时不该每次重渲
+   * （GeneratingElapsed 每 500ms 重渲自己）整片 stringify 一遍。按 rows 与
+   * excerptPretty 缓存，面板其余控件（开关 / 秒表）变化不再重算。 */
+  const formattedRows = useMemo(
+    () =>
+      rows.map((row) => ({
+        bodyText: JSON.stringify(row.body, null, 2),
+        excerptText:
+          row.excerpt === null || row.excerpt === undefined
+            ? null
+            : excerptPretty
+              ? prettyOrRaw(row.excerpt)
+              : (JSON.stringify(row.excerpt) ?? ""),
+      })),
+    [rows, excerptPretty],
+  );
   return (
     <section className="flex flex-col gap-2">
       <SectionLabel
@@ -157,13 +173,14 @@ export function RequestDetailSection(props: {
             </TruncatedText>
           </div>
           <pre className="border-border/60 text-2xs overflow-x-auto border-t px-3 py-2 font-mono break-all whitespace-pre-wrap">
-            {JSON.stringify(row.body, null, 2)}
+            {formattedRows[i]?.bodyText}
           </pre>
-          {row.excerpt !== null && row.excerpt !== undefined && (
-            <pre className="text-muted-foreground border-border/60 text-2xs overflow-x-auto border-t px-3 py-2 font-mono break-all whitespace-pre-wrap">
-              {excerptPretty ? prettyOrRaw(row.excerpt) : (JSON.stringify(row.excerpt) ?? "")}
-            </pre>
-          )}
+          {formattedRows[i]?.excerptText !== null &&
+            formattedRows[i]?.excerptText !== undefined && (
+              <pre className="text-muted-foreground border-border/60 text-2xs overflow-x-auto border-t px-3 py-2 font-mono break-all whitespace-pre-wrap">
+                {formattedRows[i]?.excerptText}
+              </pre>
+            )}
         </div>
       ))}
       {/* #3949 需求 4：megapixels / multiple 不是用户填的，是所选

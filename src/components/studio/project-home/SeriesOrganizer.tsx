@@ -6,7 +6,7 @@
  * 系列 → 季 → 集，集可挂一个 projectId（assignCurrentProject）。
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select";
@@ -29,7 +29,12 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
   const [genWorkflow, setGenWorkflow] = useState("");
 
   const ep = c.currentEp;
-  const progressById = new Map((c.seasonProgress ?? []).map((p) => [p.episodeId, p]));
+  /* 进度索引只在 seasonProgress 变化时重建：本组件每次输入 / 展开 / 加载态
+   * 变化都会重渲，逐集渲染都要查这张表，没必要每次重造。 */
+  const progressById = useMemo(
+    () => new Map((c.seasonProgress ?? []).map((p) => [p.episodeId, p])),
+    [c.seasonProgress],
+  );
 
   return (
     <section className="flex flex-col gap-3">

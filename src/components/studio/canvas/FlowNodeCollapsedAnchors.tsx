@@ -3,6 +3,7 @@
  * 底下保留逐端口不可见 <Handle> 栈，让每条边的 id 绑到各自锚点，切换时不脱线。
  * <CollapsedAnchorCylinder> / <CollapsedPortHandles> 与子图折叠锚点共用同一视觉契约，
  * 差别只在「哪些端口算已接线」的数据模型。 */
+import { useMemo } from "react";
 import { clamp } from "~/lib/clamp";
 import { Handle, Position } from "@xyflow/react";
 import { useTheme } from "next-themes";
@@ -101,7 +102,12 @@ export function FlowNodeCollapsedAnchors({
   // （字符串/数字，见 allEntries 的装配），不会是连线元组 —— 只按 `Array.isArray`
   // 挑「已连线」会把这些输入整批漏掉，折叠态下它们没有 Handle，落在这类输入上的
   // 边被 React Flow 静默丢弃（error#008），画布上表现为「连线消失」（ISSUE #4548）。
-  const rawByName = new Map((data.rawInputs ?? []).map((raw) => [raw.name, raw]));
+  /* raw_inputs 按名字索引，折叠态每次父级重渲都会重算这张 Map；
+   * rawInputs 引用稳定时这个索引不变，缓存起来避免逐节点重复建表。 */
+  const rawByName = useMemo(
+    () => new Map((data.rawInputs ?? []).map((raw) => [raw.name, raw])),
+    [data.rawInputs],
+  );
   const connectedInputs = orderedEntries.filter(([k, v]) => {
     if (Array.isArray(v)) {
       return true;
