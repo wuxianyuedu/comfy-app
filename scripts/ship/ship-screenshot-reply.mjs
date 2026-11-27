@@ -23,11 +23,20 @@ import { withCommentHeader } from "./ship-ticket.mjs";
  * @returns {string|null}
  */
 export function assetLinkOf(json) {
-  /** @type {any} */
-  const source = json;
-  const d = /** @type {any} */ (cnbData(json));
-  const link = d?.asset_link ?? d?.data?.asset_link ?? source?.asset_link;
-  return typeof link === "string" && link.trim() !== "" ? link : null;
+  /** @param {unknown} value */
+  const pick = (value) => {
+    if (value === null || typeof value !== "object") {
+      return null;
+    }
+    for (const [key, v] of Object.entries(value)) {
+      if (key === "asset_link" && typeof v === "string" && v.trim() !== "") {
+        return v;
+      }
+    }
+    return null;
+  };
+  const d = cnbData(json);
+  return pick(d) ?? pick(d && typeof d === "object" ? d.data : null) ?? pick(json);
 }
 
 /**
