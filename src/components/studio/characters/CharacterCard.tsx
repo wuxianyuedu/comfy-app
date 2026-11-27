@@ -6,6 +6,7 @@
  * 状态徽标放信息区、不压在立绘上（反馈：徽标挡图影响观看）。
  * 纯展示组件：数据与回调都由 CharacterLibrary 注入（规范 17 §17.2 第③层）。
  */
+import { memo } from "react";
 import { Trash2, UserRound, X } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -23,7 +24,7 @@ export type CharacterCardProps = {
   character: CharacterListItem;
   onCancelGeneration?: (id: string) => void;
   onOpenDetail: (id: string) => void;
-  onRemove: (character: CharacterListItem) => void;
+  onRemove: (id: string) => void;
   /** 选择模式下勾选本卡（由工具行「选择角色」开关驱动）。 */
   onToggleSelection?: (id: string) => void;
   /** 本卡是否已被勾选。 */
@@ -32,7 +33,7 @@ export type CharacterCardProps = {
   selectionMode?: boolean;
 };
 
-export function CharacterCard({
+export const CharacterCard = memo(function CharacterCard({
   cancellingGeneration = false,
   character,
   onCancelGeneration,
@@ -93,7 +94,7 @@ export function CharacterCard({
           aria-label={`删除角色 ${character.name}`}
           className="hover:text-danger-strong absolute top-2 right-2 size-7 rounded-md bg-black/45 text-white opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
           onClick={() => {
-            onRemove(character);
+            onRemove(character.id);
           }}
           size="icon-xs"
           variant="ghost"
@@ -168,4 +169,4 @@ export function CharacterCard({
       </Button>
     </div>
   );
-}
+});

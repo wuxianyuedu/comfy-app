@@ -19,7 +19,9 @@ export function useProjectActivity(projectId?: string) {
         setItems(rows);
       });
     });
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [projectId]);
 
   return { items };

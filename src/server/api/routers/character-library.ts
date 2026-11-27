@@ -13,6 +13,7 @@ import { TRPCError } from "@trpc/server";
 import { createId } from "@paralleldrive/cuid2";
 
 import { asRecord, isRecord } from "~/lib/is-record";
+import { runWithConcurrency } from "~/lib/async-pool";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import {
   characterProfileRepository,
@@ -56,6 +57,10 @@ const MAX_PORTRAIT_CANDIDATES = 12;
 
 /** 单角色单批生图上限：一次入队太多会长时间占满队列，分批点几次更可控。 */
 const MAX_ENQUEUE_PER_CALL = 200;
+
+/** 批内并发宽度：与工坊批量派发同一档（2），SQLite 单连接下留一条在途即可，
+ *  再多只是把微任务挤在一起，并不会让单写者更快（#5199 实测）。 */
+const BATCH_CONCURRENCY = 2;
 
 /** json 列回读是 unknown：标签只认非空字符串数组。 */
 function normalizeTags(raw: unknown): Array<string> {
@@ -141,7 +146,11 @@ async function enqueueCharacters(
   /* 一批只用同一条工作流，能力探针在循环外判一次（避免逐角色重复封装）。 */
   const supportsNegative = workflowSupportsNegative(runCtx);
   let enqueued = 0;
-  for (const character of characters) {
+  /* 批次内角色互不依赖，用有界并发池派发（#5199）：单角色内仍是先 createQueued
+   * 再 markGenerating 的顺序依赖，池只把不同角色错开。SQLite 单连接是同步驱动，
+   * 有界宽度避免几十条同时抢锁；一条失败即短路，已入队的先落地，不会留下
+   * 「建了任务没标记生成中」的孤儿（那段留在同一个 worker 的先后两步里）。 */
+  await runWithConcurrency(characters, BATCH_CONCURRENCY, async (character) => {
     const { prompt, negativePrompt } = buildPortraitPrompts(
       {
         name: character.name,
@@ -158,7 +167,6 @@ async function enqueueCharacters(
        * 宽高 / 比例值落不进枚举，会在执行前校验被打回。角色立绘直接用
        * 工作流作者烘在图里的默认档。 */
     });
-    // oxlint-disable-next-line no-await-in-loop -- 先入队成功再标记生成中，顺序依赖
     const task = await taskRepository.createQueued({
       userId,
       type: runCtx.tpl.taskType,
@@ -172,10 +180,9 @@ async function enqueueCharacters(
       execPayload: runCtx.tpl.rawJson,
       parentId: null,
     });
-    // oxlint-disable-next-line no-await-in-loop -- 先入队成功再标记生成中，顺序依赖
     await characterProfileRepository.markGenerating(character.id, userId, task.id, params);
     enqueued += 1;
-  }
+  });
   if (enqueued > 0) {
     kickQueue();
   }

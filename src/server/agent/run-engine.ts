@@ -36,6 +36,8 @@ import { withProductionContentLock } from "~/lib/production/content-write-lock";
 import { fixed } from "~/lib/number-format";
 import { displayValue } from "~/lib/display-value";
 import { reviewContent, reviewScript, reviewShotImage, reviseScript } from "~/server/agent/review";
+import { execVideos } from "~/server/agent/run-videos";
+import { recoverFilmStart } from "~/server/agent/run-film-recovery";
 import type { ProductionStage } from "~/lib/production/progress";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { isProjectType, normalizeShotType } from "~/lib/workshop/types";
@@ -107,8 +109,11 @@ function actionLabel(action: RunAction): string {
     case "review_shots": {
       return `逐镜评审（${action.shotIds.length} 个）`;
     }
+    case "render_videos": {
+      return `逐镜生成视频（${action.shotIds.length} 个）`;
+    }
     case "render_film": {
-      return "生成视频并合成成片";
+      return "合成成片";
     }
     default: {
       return action.kind;
@@ -134,6 +139,7 @@ function gateStageFor(action: RunAction): ProductionStage | null {
     case "review_shots": {
       return "shots";
     }
+    case "render_videos":
     case "render_film": {
       return "render";
     }
@@ -572,75 +578,29 @@ async function execFilm(
   projectId: string,
   run: ProductionRun,
 ): Promise<ExecResult> {
-  if (run.filmStartedAt) {
-    /* 认领后崩溃/窗口中断的恢复（ISSUE #3962）：`filmStartedAt` 已写但 film 可能
-     * 尚未进入可恢复生成态（未创建、或停在 PARSING/未启动）。无可恢复实体时
-     * 清理认领允许规划器重试；已在生成/合成/完成或已终态失败时按当前实体收口。 */
+  if (run.videoFilmId !== "" && run.filmStartedAt === "") {
+    /* 逐镜视频已单独跑完（ISSUE #5211）：成片阶段只对这份影片合成，不再重建管线。 */
     const { filmRepository } = await import("~/lib/core/repository");
-    const latest = await filmRepository.findLatestByProjectId(userId, projectId);
-    const cleared = { ...run, filmStartedAt: "" };
-    if (latest === null) {
-      await productionRepository.clearFilmStart(userId, projectId).catch((clearError: unknown) => {
-        /* 释放失败要看得见（ISSUE #4267）：释放不掉 = filmStartedAt 永久残留、
-         * claimFilmStart 永远抢不到，该项目在释放成功前无法再次起片——这种失败
-         * 不许静默（也不上抛：恢复路径还有多级补偿，抛出会掩盖原始错误）。 */
-        logger.warn(
-          `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
-        );
-      });
-      return {
-        ok: false,
-        error: "成片启动中断（未创建影片实体），已释放起片认领，请重试",
-        run: cleared,
-      };
+    const ready = await filmRepository.findById(run.videoFilmId);
+    if (!ready) {
+      return { ok: false, error: "待合成的影片不存在，请重新跑逐镜视频" };
     }
-    if (latest.status === "PARSING") {
-      try {
-        await filmRepository.markFailed(latest.id, "成片启动中断（影片未进入可恢复生成态）");
-      } catch {
-        // 补偿尽力而为；仍需释放认领避免永久卡死。
-      }
-      await productionRepository.clearFilmStart(userId, projectId).catch((clearError: unknown) => {
-        /* 释放失败要看得见（ISSUE #4267）：释放不掉 = filmStartedAt 永久残留、
-         * claimFilmStart 永远抢不到，该项目在释放成功前无法再次起片——这种失败
-         * 不许静默（也不上抛：恢复路径还有多级补偿，抛出会掩盖原始错误）。 */
-        logger.warn(
-          `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
-        );
-      });
-      return {
-        ok: false,
-        error: "成片启动中断（影片未进入可恢复生成态），已释放起片认领，请重试",
-        run: cleared,
-      };
+    const startedAt = nowIso();
+    const claimed = await productionRepository.claimFilmStart(userId, projectId, startedAt);
+    if (!claimed) {
+      return { ok: true, skipLog: true, summary: "成片合成中" };
     }
-    if (latest.status === "FAILED" || latest.status === "CANCELLED") {
-      await productionRepository.clearFilmStart(userId, projectId).catch((clearError: unknown) => {
-        /* 释放失败要看得见（ISSUE #4267）：释放不掉 = filmStartedAt 永久残留、
-         * claimFilmStart 永远抢不到，该项目在释放成功前无法再次起片——这种失败
-         * 不许静默（也不上抛：恢复路径还有多级补偿，抛出会掩盖原始错误）。 */
-        logger.warn(
-          `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
-        );
-      });
-      return {
-        ok: false,
-        error: "成片生成未完成（影片已终止），已释放起片认领，请重试",
-        run: cleared,
-      };
-    }
-    if (latest.status === "DONE") {
-      await productionRepository.clearFilmStart(userId, projectId).catch((clearError: unknown) => {
-        /* 释放失败要看得见（ISSUE #4267）：释放不掉 = filmStartedAt 永久残留、
-         * claimFilmStart 永远抢不到，该项目在释放成功前无法再次起片——这种失败
-         * 不许静默（也不上抛：恢复路径还有多级补偿，抛出会掩盖原始错误）。 */
-        logger.warn(
-          `[run] project=${projectId} ${errorText(clearError, "释放起片认领失败")}；释放前该项目无法再次起片`,
-        );
-      });
-      return { ok: true, run: cleared, skipLog: true, summary: "成片已完成，等待状态同步" };
-    }
-    return { ok: true, skipLog: true, summary: "成片生成中（等待合成完成）" };
+    void import("~/server/film/compose-film").then((m) => m.composeFilm(run.videoFilmId));
+    return {
+      ok: true,
+      summary: "已启动成片合成（复用已就绪的逐镜视频）",
+      run: { ...run, filmStartedAt: startedAt },
+    };
+  }
+  /* 认领后崩溃/窗口中断的恢复：filmStartedAt 已写但 film 未必就绪。 */
+  const recovered = await recoverFilmStart(userId, projectId, run);
+  if (recovered !== null) {
+    return recovered;
   }
   // 服务端直接调成片编排（引擎在服务器上跑，不能用浏览器端的 render-film-client）。
   // createFilmFromProject→start：服务端 watchFilm 逐镜视频 + composeFilm 合成 + syncFilmToProject 回写。
@@ -798,6 +758,11 @@ async function advanceRunLoopOnce(
         case "review_shots": {
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           res = await execReviewShots(userId, projectId, run, view, action.shotIds);
+          break;
+        }
+        case "render_videos": {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+          res = await execVideos(userId, projectId, run, view, action.shotIds);
           break;
         }
         case "render_film": {

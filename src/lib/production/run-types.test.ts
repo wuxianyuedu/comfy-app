@@ -16,7 +16,9 @@ import {
 } from "./run-types";
 
 function run(over: Partial<ProductionRun> = {}): ProductionRun {
-  return { ...DEFAULT_PRODUCTION_RUN, ...over };
+  /* 既有规划测试都围绕镜头 a，默认给它一份「视频已按 rev 1 生成」的快照，
+   * 让新增的逐镜视频阶段不淹没旧断言；新阶段另用 videoShotRev: {} 显式测。 */
+  return { ...DEFAULT_PRODUCTION_RUN, videoShotRev: { a: 1 }, ...over };
 }
 function view(over: Partial<ProductionRunView> = {}): ProductionRunView {
   return {
@@ -234,6 +236,50 @@ describe("planNextRunAction", () => {
         run({ status: "running", processedShotRev: { a: 1 } }),
       ),
     ).toEqual({ kind: "done" });
+  });
+});
+
+describe("逐镜视频独立阶段（ISSUE #5211）", () => {
+  it("图齐但视频快照为空 → render_videos（不再一把梭进 render_film）", () => {
+    const base = {
+      hasScript: true,
+      characterCount: 1,
+      shots: [{ id: "a", rev: 1, hasImage: true, hasClip: false }],
+    };
+    expect(planNextRunAction(view(base), run({ status: "running", videoShotRev: {} }))).toEqual({
+      kind: "render_videos",
+      shotIds: ["a"],
+    });
+  });
+
+  it("镜头 rev 变大 → 只重出变化的那镜", () => {
+    const base = {
+      hasScript: true,
+      characterCount: 1,
+      shots: [
+        { id: "a", rev: 2, hasImage: true, hasClip: true },
+        { id: "b", rev: 1, hasImage: true, hasClip: true },
+      ],
+    };
+    expect(
+      planNextRunAction(view(base), run({ status: "running", videoShotRev: { a: 1, b: 1 } })),
+    ).toEqual({ kind: "render_videos", shotIds: ["a"] });
+  });
+
+  it("markActionProcessed 只写点名镜头的视频快照", () => {
+    const base = {
+      hasScript: true,
+      characterCount: 1,
+      shots: [
+        { id: "a", rev: 2, hasImage: true, hasClip: true },
+        { id: "b", rev: 1, hasImage: true, hasClip: true },
+      ],
+    };
+    const next = markActionProcessed(run({ videoShotRev: { a: 1, b: 1 } }), view(base), {
+      kind: "render_videos",
+      shotIds: ["a"],
+    });
+    expect(next.videoShotRev).toEqual({ a: 2, b: 1 });
   });
 });
 

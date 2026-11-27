@@ -85,3 +85,22 @@ describe("CharacterCard 卡片信息（ISSUE #5009 后续）", () => {
     expect(onCancelGeneration).toHaveBeenCalledWith(character.id);
   });
 });
+
+describe("CharacterCard 渲染优化（ISSUE #5198）", () => {
+  it("卡片经 memo 包裹，避免角色库全量重渲时逐卡重绘", () => {
+    /* 经 memo 包裹的组件带 React 内部标记 $$typeof；渲染计数在 happy-dom
+     * 下受 batching 影响不稳定，故用形态断言作防回归口径。 */
+    expect("$$typeof" in CharacterCard && CharacterCard.$$typeof).toBe(Symbol.for("react.memo"));
+  });
+
+  it("删除回调上报角色 id 而非整行对象（父组件可直接透传稳定 handler）", () => {
+    const onRemove = vi.fn();
+    render(
+      <TooltipProvider delay={0}>
+        <CharacterCard character={character} onOpenDetail={() => undefined} onRemove={onRemove} />
+      </TooltipProvider>,
+    );
+    fireEvent.click(screen.getByLabelText(`删除角色 ${character.name}`));
+    expect(onRemove).toHaveBeenCalledWith(character.id);
+  });
+});

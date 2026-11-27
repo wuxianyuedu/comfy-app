@@ -13,7 +13,7 @@ import { Gauge, History, RefreshCw, Search, Sparkles, UserPlus, Users, Wand2 } f
 
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
-import { AuroraBackground } from "~/components/ui/aurora-background";
+import { AuroraBackdrop } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -190,7 +190,7 @@ export function CharacterLibrary() {
 
   return (
     <DocumentFrame
-      backdrop={<AuroraBackground />}
+      backdrop={<AuroraBackdrop />}
       className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       width="wide"
     >
@@ -368,15 +368,11 @@ export function CharacterLibrary() {
               cancellingGeneration={c.isCancelBusy(item.id)}
               character={item}
               key={item.id}
-              onCancelGeneration={(id) => {
-                void c.cancelOne(id);
-              }}
+              onCancelGeneration={c.cancelOne}
               onOpenDetail={c.openDetail}
-              onRemove={(target) => {
-                c.openRemove(target.id);
-              }}
+              onRemove={c.openRemove}
               onToggleSelection={c.toggleCharacterSelection}
-              selected={c.selectedCharacterIds.includes(item.id)}
+              selected={c.selectedCharacterIdSet.has(item.id)}
               selectionMode={selectingCharacters}
             />
           ))}

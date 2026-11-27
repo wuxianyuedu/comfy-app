@@ -89,6 +89,14 @@ export type ProductionRun = {
    */
   storyboardScriptDigest: string;
   updatedAt: string;
+  /** 逐镜视频全部就绪的时间（非空=规划器可以进入成片合成阶段）。 */
+  videoDoneAt: string;
+  /** 逐镜视频阶段已建的影片 id（非空=视频在跑/已就绪，成片阶段只等合成）。 */
+  videoFilmId: string;
+  /** 每个镜头「视频已按当前 rev 生成」的快照；rev 变大 → 该镜需重出视频。 */
+  videoShotRev: Record<string, number>;
+  /** 逐镜视频认领时间（非空=本 run 已 kick 过视频，避免重复起管线）。 */
+  videoStartedAt: string;
   videoWorkflowId: string;
 };
 
@@ -101,6 +109,10 @@ export const DEFAULT_PRODUCTION_RUN: ProductionRun = {
   imageWorkflowId: "",
   videoWorkflowId: "",
   filmStartedAt: "",
+  videoFilmId: "",
+  videoStartedAt: "",
+  videoDoneAt: "",
+  videoShotRev: {},
   processedShotRev: {},
   autoReview: false,
   reviewedShotRev: {},
@@ -208,6 +220,10 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
     imageWorkflowId: typeof obj.imageWorkflowId === "string" ? obj.imageWorkflowId : "",
     videoWorkflowId: typeof obj.videoWorkflowId === "string" ? obj.videoWorkflowId : "",
     filmStartedAt: typeof obj.filmStartedAt === "string" ? obj.filmStartedAt : "",
+    videoFilmId: typeof obj.videoFilmId === "string" ? obj.videoFilmId : "",
+    videoStartedAt: typeof obj.videoStartedAt === "string" ? obj.videoStartedAt : "",
+    videoDoneAt: typeof obj.videoDoneAt === "string" ? obj.videoDoneAt : "",
+    videoShotRev: parseRevMap(obj.videoShotRev),
     processedShotRev: parseRevMap(obj.processedShotRev),
     autoReview: obj.autoReview === true,
     reviewedShotRev: parseRevMap(obj.reviewedShotRev),
@@ -318,6 +334,7 @@ export type RunAction =
   | { kind: "plan_storyboard" }
   | { kind: "render_images"; shotIds: Array<string> }
   | { kind: "review_shots"; shotIds: Array<string> }
+  | { kind: "render_videos"; shotIds: Array<string> }
   | { kind: "render_film" };
 
 /**
@@ -425,6 +442,21 @@ export function planNextRunAction(view: ProductionRunView, run: ProductionRun): 
       return { kind: "review_shots", shotIds: needReview };
     }
   }
+  /* 逐镜视频独立于合成（ISSUE #5211）：图齐后先出片段，片段全部就绪才进成片。
+   * 快照缺省 = 还没出过该镜视频；快照落后 = 用户改过镜头，需要重出该镜。 */
+  /* 已 rendered 的旧项目（视频在旧的 render_film 一把梭里出过）不再补视频阶段；
+   * 否则用户改一笔就会被要求重出全部片段。 */
+  const needVideo = view.filmRendered
+    ? []
+    : view.shots
+        .filter((shot) => {
+          const doneRev = run.videoShotRev[shot.id];
+          return doneRev === undefined || doneRev < shot.rev;
+        })
+        .map((shot) => shot.id);
+  if (needVideo.length > 0) {
+    return { kind: "render_videos", shotIds: needVideo };
+  }
   if (!view.filmRendered) {
     return { kind: "render_film" };
   }
@@ -443,8 +475,19 @@ export function markActionProcessed(
   const next: ProductionRun = {
     ...run,
     processedShotRev: { ...run.processedShotRev },
+    videoShotRev: { ...run.videoShotRev },
   };
   switch (action.kind) {
+    case "render_videos": {
+      const revById = new Map(view.shots.map((s) => [s.id, s.rev]));
+      for (const shotId of action.shotIds) {
+        const rev = revById.get(shotId);
+        if (rev !== undefined) {
+          next.videoShotRev[shotId] = rev;
+        }
+      }
+      return next;
+    }
     case "render_images": {
       const revById = new Map(view.shots.map((s) => [s.id, s.rev]));
       for (const shotId of action.shotIds) {

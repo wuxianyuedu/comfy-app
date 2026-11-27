@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 
-import { AuroraBackground } from "~/components/ui/aurora-background";
+import { AuroraBackdrop } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ViewActions } from "~/components/studio/ViewActions";
@@ -356,7 +356,7 @@ export const QueueMonitorView = memo(function QueueMonitorView({
 
   return (
     <DocumentFrame
-      backdrop={<AuroraBackground />}
+      backdrop={<AuroraBackdrop />}
       className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       width="wide"
     >

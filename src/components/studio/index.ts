@@ -40,7 +40,11 @@ export { HistoryList } from "./history/HistoryList";
 export { ToastProvider, useToast } from "./ToastProvider";
 export type { ToastItem } from "./ToastProvider";
 
-export { AuroraBackground } from "~/components/ui/aurora-background";
+export {
+  AuroraBackground,
+  AuroraBackdrop,
+  AuroraBackgroundHost,
+} from "~/components/ui/aurora-background";
 
 export { BrowserStatusBar } from "./BrowserStatusBar";
 

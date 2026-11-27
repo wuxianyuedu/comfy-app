@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   HomePage,
-  AuroraBackground,
+  AuroraBackgroundHost,
   WorksGallery,
   ModelLibrary,
   HistoryList,
@@ -19,6 +19,7 @@ import {
 import type { RecentProject } from "~/components/studio";
 import { ProjectGate } from "~/components/studio/ProjectGate";
 import { HeavyViewGate } from "~/components/studio/HeavyViewGate";
+import { isHeavyView } from "~/components/studio/heavy-view";
 import { isProjectTab } from "~/components/studio/NavItems";
 import type { ModelTestRetryPayload } from "~/components/studio/history/history-detail-derive";
 import {
@@ -45,38 +46,8 @@ import { ViewTabActiveProvider } from "./ViewActions";
 import { ViewOpenReport, ViewOpenedAtContext, type ViewOpenedAtLookup } from "./ViewOpenReport";
 import { startLazyViewPrefetch } from "./lazy-view-prefetch";
 
-/**
- * 非活跃时降级为「DOM 摘除但状态保留」的视图（ISSUE #4677 落地三屏，#4878 扩面）。
- *
- * React Activity 的 hidden 模式让隐藏页签不因页签切换 / 父级状态 / 兄弟屏事件做任何
- * 渲染，同时保留组件内部状态（表单草稿 / 展开态 / 选中）；effects 在切回时重挂，
- * 与既有 `enabled: isTabActive` / `pauseWhenViewHidden` 的轮询门控同一拍。
- *
- * 为什么从三屏扩到除首页 / 项目页之外的全部视图：#4878 的多页签现场 trace 显示
- * 切换时 `jsxDEV` 元素创建 ~892ms、effect 遍历 ~518ms —— 未受闸的 ComfyUI /
- * 工作流库 / 模型适配 / 测试模型 / 模式契约等整棵子树都在重渲染。这些屏的
- * 隐藏期状态没有「必须持续更新」的：ComfyUI 的 SSE、测试模型的轮询本就由
- * `isTabActive` 门控，控制台按设计切走即断流，表单草稿由 Activity 原样保留。
- *
- * 仍然排除的两类：
- *  · `home` —— 默认入口、极轻，常驻省一次切回重挂；
- *  · `project` —— ReactFlow 的视口 / 选中 / 撤销栈都在组件内部，降级要逐状态评估
- *    可丢性（#4677 留的题），风险与收益另算，不在这轮顺手改。
- */
-const HEAVY_VIEWS = new Set<WorkspaceView>([
-  "comfyui",
-  "console",
-  "history",
-  "model-adapters",
-  "model-test",
-  "mode-contract",
-  "models",
-  "queue",
-  "settings",
-  "uiKit",
-  "workflows",
-  "works",
-]);
+/* 非活跃视图降级的判据收在 ./heavy-view（默认降级 + 显式例外）：#5196 起不再
+ * 在栈里手写白名单 —— 那份名单与注册表脱钩，漏掉了后来新增的六个资源库视图。 */
 
 /** 页面侧交给视图栈的全部接线 —— 每一屏要用什么都在这里，栈自己不取数。 */
 export type WorkspaceViewStackProps = {
@@ -299,42 +270,39 @@ export function WorkspaceViewStack({
   );
 
   return (
-    <ViewOpenedAtContext.Provider value={openedAtOf}>
-      {tabs.map((tab) => {
-        const isActive = tab.key === activeKey;
-        const isHome = tab.view === "home";
-        /* 懒加载视图的「界面打开」日志由 `lazyView` 包的内容自己记（它的测量点
-         * 在分块解析后）；即时加载的视图（首页 / 作品库…）在这里补包一层 —— 它
-         * 一激活就挂载，耗时天然接近 0，但「打开了」这件事要记下来。 */
-        const inner = isLazyView(tab.view) ? (
-          renderView(tab)
-        ) : (
-          <ViewOpenReport view={tab.view}>{renderView(tab)}</ViewOpenReport>
-        );
-        /* 重视图非活跃降级（ISSUE #4677）：DOM 摘除、状态保留、隐藏期零渲染。 */
-        const content = HEAVY_VIEWS.has(tab.view) ? (
-          <HeavyViewGate active={isActive}>{inner}</HeavyViewGate>
-        ) : (
-          inner
-        );
-        return (
-          <div
-            aria-hidden={!isActive}
-            className={isActive ? "h-full" : "hidden h-full"}
-            data-view={tab.view}
-            key={tab.key}
-          >
-            {/* 极光背景：暗色基底上浮动的紫/青/品红发光，给非 home 视图加空间纵深感。
-                挂在各自的 wrapper 里（只有非 home 需要）——放在栈外层会让首页也多一层
-                随视图切换重挂的装饰层。 */}
-            {isHome ? null : <AuroraBackground />}
-            {/* 「这一屏是不是当前页」：所有开过的屏都活着、也都会往顶栏的动作槽里
+    <AuroraBackgroundHost visible={activeView !== "home"}>
+      <ViewOpenedAtContext.Provider value={openedAtOf}>
+        {tabs.map((tab) => {
+          const isActive = tab.key === activeKey;
+          /* 懒加载视图的「界面打开」日志由 `lazyView` 包的内容自己记（它的测量点
+           * 在分块解析后）；即时加载的视图（首页 / 作品库…）在这里补包一层 —— 它
+           * 一激活就挂载，耗时天然接近 0，但「打开了」这件事要记下来。 */
+          const inner = isLazyView(tab.view) ? (
+            renderView(tab)
+          ) : (
+            <ViewOpenReport view={tab.view}>{renderView(tab)}</ViewOpenReport>
+          );
+          /* 重视图非活跃降级（ISSUE #4677）：DOM 摘除、状态保留、隐藏期零渲染。 */
+          const content = isHeavyView(tab.view) ? (
+            <HeavyViewGate active={isActive}>{inner}</HeavyViewGate>
+          ) : (
+            inner
+          );
+          return (
+            <div
+              aria-hidden={!isActive}
+              className={isActive ? "h-full" : "hidden h-full"}
+              data-view={tab.view}
+              key={tab.key}
+            >
+              {/* 「这一屏是不是当前页」：所有开过的屏都活着、也都会往顶栏的动作槽里
                 送按钮，不按页签过滤就会「四屏的按钮挤在同一条顶栏里」（见
                 `ViewActions` 里 `ViewTabActiveContext` 那段）。 */}
-            <ViewTabActiveProvider active={isActive}>{content}</ViewTabActiveProvider>
-          </div>
-        );
-      })}
-    </ViewOpenedAtContext.Provider>
+              <ViewTabActiveProvider active={isActive}>{content}</ViewTabActiveProvider>
+            </div>
+          );
+        })}
+      </ViewOpenedAtContext.Provider>
+    </AuroraBackgroundHost>
   );
 }

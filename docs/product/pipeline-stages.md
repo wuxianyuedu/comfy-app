@@ -101,10 +101,10 @@
 | **输入契约** | `Shot.imageUrl`（作首帧）+ 提示词 + `duration` / `motion`；工作流封装支持多参考图与首 / 尾帧端口 |
 | **输出契约** | 回填 `Shot.clipTaskId` / `Shot.clipStatus` / `Shot.clipUrl` |
 | **人的用法** | 工坊阶段⑤：选视频工作流 → 单镜或批量提交 → 轮询状态、看片段 |
-| **AI 的用法** | MCP `workshop_submit_video` / `workshop_poll_video`；自主 run 里**没有独立的视频阶段**——`render_film` 一步把「逐镜视频 + ffmpeg 成片」合并触发 |
+| **AI 的用法** | MCP `workshop_submit_video` / `workshop_poll_video`；自主 run 的 `render_videos` 阶段先起逐镜视频（`startFilm(..., {skipCompose:true})`，片段齐了不自动合成），`render_film` 阶段再对同一份影片显式合成（ISSUE #5211） |
 | **质量验收口径** | ① 首帧确实是 `Shot.imageUrl`（图生视频链路成立，不是文生视频另起一张）；② `clipStatus` 有终态且失败可单独重跑；③ 片段时长与分镜设定一致（差一个数量级 = 参数没传进工作流）；④ 成片前所有镜头的 `clipUrl` 都非空（缺一个都不该进合成） |
-| **当前状态** | 已上线（图生视频，工坊内）；**自主 run 缺独立视频阶段与审批停点**，是 `FR-AG-02` 的头号缺口 |
-| **已知缺口** | 无视频**一致性**机制（同一角色的运动 / 光影跨镜不连续）；无首尾帧跨镜衔接；无片段级审批（人不能在中途否掉一条片段）；批量视频的失败重试口径未成文 |
+| **当前状态** | 已上线（图生视频，工坊内）；自主 run 已有独立 `render_videos` 阶段与按镜头 rev 的定点重出（ISSUE #5211）；`render_film` 只消费已就绪的片段 |
+| **已知缺口** | 片段级审批停点仍借用人工裁决快照、尚未接成独立按钮；无视频**一致性**机制（同一角色的运动 / 光影跨镜不连续）；首尾帧跨镜接力已上线（`Shot.continuityFromShotId` 抽上镜尾帧作本镜首帧，抽帧失败回落定稿图，ISSUE #5212）；批量视频的失败重试口径未成文 |
 | **代码落点** | `src/components/workshop/VideoStudio.tsx`；合并触发 `src/server/agent/run-engine.ts` |
 
 ---
@@ -120,7 +120,7 @@
 | **AI 的用法** | MCP `workshop_compose_final`（写 `data/workshop-compositions`，可选 ffmpeg）；自主 run 的 `render_film` 走服务端 `film` 实体链 |
 | **质量验收口径** | ① 两条链路的**产物与实体不同**这一点在文档与界面上都写清楚（工坊⑥ = 清单；`film` = 真 MP4），不混用；② 服务端合成做了逐镜归一化 + concat + 字幕 + BGM 混音，产出文件能播、时长等于各镜之和（含转场）；③ 合成失败能定位到「哪一镜没就绪」；④ 成片落盘路径可寻址、可打开（`FR-OP-05`） |
 | **当前状态** | 两条链路均**已上线**：服务端 ffmpeg 合成 `FR-OP-04`；工坊⑥清单已上线（`FR-WP-01`） |
-| **已知缺口** | 工坊⑥**不产 MP4**（界面已补「去成片合成 MP4」出口：导出清单后引导跳「成片」视图，该视图能从活跃项目读镜头并一键成片；出口缺失这条缺口已闭环，见 #2476）；MCP 的 `compose_final` 与 `film` 实体链是**两套落盘**，机器面与界面面不能互通；无字幕自动生成与校对；无 BGM 素材管理；无成片**质量校验**（黑帧 / 静音 / 分辨率不符无人判） |
+| **已知缺口** | 工坊⑥**不产 MP4**（界面已补「去成片合成 MP4」出口：导出清单后引导跳「成片」视图，该视图能从活跃项目读镜头并一键成片；出口缺失这条缺口已闭环，见 #2476）；MCP 的 `compose_final` 与 `film` 实体链是**两套落盘**，机器面与界面面不能互通；字幕烧录与导出已同源（以 `Shot.dialogue` 为首选，缺失回落标题/提示词；`film.subtitleSrt` 取同一份 SRT，ISSUE #5210），但字幕**校对界面**仍缺；无 BGM 素材管理；成片质量闸已上线（ffprobe 真数产物：缺片 / 无视频流 / 时长 0 / 分辨率不符硬拦，没量到只记「没量到」；ISSUE #5214），黑帧/静音的逐帧判定仍待接 |
 | **代码落点** | `src/components/workshop/FinalComposer.tsx`（清单）；`src/server/film/orchestrator.ts` + `src/server/film/compose-film.ts`（真合成）；`src/server/workshop/final-compose.ts`（MCP 侧） |
 
 ---

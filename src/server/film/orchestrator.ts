@@ -27,10 +27,13 @@ import { toSizeSpec } from "~/lib/media/size-presets";
 /* 行日志那一份两侧（编排与监看）都要用，所以它在 film-log.ts 这个叶子上。 */
 import { appendFilmLog } from "./film-log";
 import { resolveFilmFirstFrame } from "./first-frame";
+import { extractTailFrameUrl } from "./tail-frame";
 /* 监看（无响应看门狗 / 超时收口 / 重启恢复扫描）在 film-watch.ts，这里只取入口。 */
 import { watchFilm } from "./film-watch";
 
 export type FilmShotInput = {
+  /** 角色台词（工坊 Shot.dialogue）：字幕与后续配音的唯一源，落 params.dialogue。 */
+  dialogue?: string;
   /** 镜头时长（秒，工坊 Shot.duration）；缺省按 frames / fps 折算。 */
   duration?: number;
   /** 工坊阶段④定稿的镜头图（ISSUE #5141）：进 params.firstFrame，视频首帧不再另合成。 */
@@ -41,6 +44,8 @@ export type FilmShotInput = {
   prompt: string;
   /** 关联的统一镜头 id（Phase 5 逐镜回写用）；自由建片（剧本自解析）时无来源，留空。 */
   shotId?: string;
+  /** 跨镜接力的上一镜片段地址（ISSUE #5212）：生成时抽尾帧当本镜首帧。 */
+  tailFrameFrom?: string;
 };
 
 export type CreateFilmInput = {
@@ -235,6 +240,11 @@ async function persistFilmWithShots(args: {
             /* 时长口按秒、帧数口按帧：两种单位都随任务落库（ISSUE #5139），
              * 端口挑自己认的那个，监看侧算 -t / 字幕也用同一份秒值。 */
             duration: shot.duration ?? args.framesPerShot / args.fps,
+            /* 台词随镜头落 params（ISSUE #5210）：字幕烧录与 SRT 导出都读这一份，
+             * 不再让 heading/prompt 冒充对白。 */
+            ...(shot.dialogue === undefined || shot.dialogue === ""
+              ? {}
+              : { dialogue: shot.dialogue }),
             /* 单镜画幅用场景无关档（ISSUE #5138）：出图与视频两侧算出同一组宽高。 */
             size: shotSizeFor(args.sizeSpec),
             videoWorkflowId: args.videoWorkflowId,
@@ -242,6 +252,9 @@ async function persistFilmWithShots(args: {
             ...(shot.firstFrame === undefined || shot.firstFrame === ""
               ? {}
               : { firstFrame: shot.firstFrame }),
+            ...(shot.tailFrameFrom === undefined || shot.tailFrameFrom === ""
+              ? {}
+              : { tailFrameFrom: shot.tailFrameFrom }),
           },
         })),
         tx,
@@ -304,6 +317,8 @@ export type CreateFilmFromProjectInput = {
   imageWorkflowId?: string | null;
   /** 统一项目 id（proj_*）；镜头取自该项目的 production.shots。 */
   projectId: string;
+  /** 只生成指定镜头（逐镜 retake）：缺省 = 全部镜头。 */
+  shotIds?: Array<string>;
   size?: unknown;
   subtitleOn?: boolean;
   title?: string;
@@ -319,7 +334,10 @@ export type CreateFilmFromProjectInput = {
 export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
   const row = await productionRepository.getForUser(input.userId, input.projectId);
   const rawShots = row && isShotArray(row.shots) ? row.shots : [];
-  const shots = [...rawShots].sort((a, b) => a.index - b.index);
+  const only = input.shotIds;
+  const shots = [...rawShots]
+    .filter((shot) => only === undefined || only.includes(shot.id))
+    .sort((a, b) => a.index - b.index);
   if (!shots.length) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -335,10 +353,20 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
     order: i,
     shotId: shot.id,
     heading: shot.sceneHeading || undefined,
+    dialogue: shot.dialogue ?? undefined,
     prompt: shot.prompt,
     negative: shot.negativePrompt || undefined,
     /* 工坊阶段④定稿的镜头图直接接到阶段⑤的首帧输入（ISSUE #5141）。 */
     firstFrame: shot.imageUrl ?? undefined,
+    /* 跨镜接力：上一镜已有片段才带来源，生成时抽尾帧覆盖首帧（ISSUE #5212）。 */
+    tailFrameFrom: (() => {
+      const from = shot.continuityFromShotId;
+      if (typeof from !== "string" || from === "") {
+        return undefined;
+      }
+      const prev = rawShots.find((candidate) => candidate.id === from);
+      return typeof prev?.clipUrl === "string" && prev.clipUrl !== "" ? prev.clipUrl : undefined;
+    })(),
     duration: shot.duration,
   }));
 
@@ -390,6 +418,15 @@ async function generateVideoShot(
   let inputImage: string = typeof rawInputImage === "string" ? rawInputImage : "";
   /* 工坊定稿的分镜图是 `/api/generated/...` 产物地址（ISSUE #5141）：ComfyUI 的
    * LoadImage 只认 input 目录里的文件名，先落盘读字节再上传，换成上传后的名字。 */
+  /* 跨镜接力优先于定稿图（ISSUE #5212）：上一镜片段的尾帧作本镜首帧；
+   * 抽帧失败回落定稿图，不阻断生成。 */
+  const tailFrom = typeof params.tailFrameFrom === "string" ? params.tailFrameFrom : "";
+  if (tailFrom !== "") {
+    const tail = await extractTailFrameUrl(tailFrom);
+    if (tail !== null) {
+      inputImage = tail;
+    }
+  }
   if (inputImage !== "") {
     inputImage = await resolveFilmFirstFrame(inputImage);
   }
@@ -437,7 +474,7 @@ async function generateVideoShot(
 }
 
 // ── start (autopilot) ───────────────────────────────────────
-export async function startFilm(id: string) {
+export async function startFilm(id: string, opts: { skipCompose?: boolean } = {}) {
   const film = await filmRepository.findById(id);
   if (!film) {
     throw new TRPCError({ code: "NOT_FOUND", message: "影片不存在" });
@@ -521,7 +558,7 @@ export async function startFilm(id: string) {
 
   // 后台监看 → 合成（循环 rejection 的就地收口在 watchFilm 里那道 .catch，#4216；
   // 交接重读段的守卫见 watchFilm 开头，#4220 —— 两段合起来 watchFilm 不 reject）。
-  void watchFilm(id);
+  void watchFilm(id, { skipCompose: opts.skipCompose === true });
 }
 
 // ── watch + update：拆到 film-watch.ts（文件行数硬闸，#4595）─────────

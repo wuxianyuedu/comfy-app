@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 const mocks = vi.hoisted(() => ({ fetchProjectActivity: vi.fn() }));
-vi.mock("~/lib/activity/activity-client", () => ({
+vi.mock("~/lib/production/activity-client", () => ({
   fetchProjectActivity: mocks.fetchProjectActivity,
 }));
 

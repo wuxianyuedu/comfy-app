@@ -46,6 +46,17 @@ function referenceValueText(images: Array<string> | undefined): string {
   return `${String(images.length)} 张 · ${valueText(images[0])}`;
 }
 
+/** 参考图组是字符串数组：逐项比即可，避免 JSON.stringify 把 data: 大图整串拼一遍。 */
+function sameReferenceImages(a: Array<string> | undefined, b: Array<string> | undefined): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (a === undefined || b === undefined || a.length !== b.length) {
+    return false;
+  }
+  return a.every((image, index) => image === b[index]);
+}
+
 const statusLabel = {
   cancelled: "已取消",
   failed: "失败",
@@ -73,13 +84,19 @@ export function ModelTestRunHistory({
       unique(compared.flatMap((run) => Object.keys(run.values).filter(isWorkshopInputType))).sort(),
     [compared],
   );
-  const changedCount =
-    parameterKeys.filter(
+  const { changedCount, referenceImagesDiffer } = useMemo(() => {
+    const changedParameters = parameterKeys.filter(
       (key) => (compared[0]?.values[key] ?? "") !== (compared[1]?.values[key] ?? ""),
-    ).length +
-    Number(
-      JSON.stringify(compared[0]?.referenceImages) !== JSON.stringify(compared[1]?.referenceImages),
+    ).length;
+    const referencesDiffer = !sameReferenceImages(
+      compared[0]?.referenceImages,
+      compared[1]?.referenceImages,
     );
+    return {
+      changedCount: changedParameters + Number(referencesDiffer),
+      referenceImagesDiffer: referencesDiffer,
+    };
+  }, [compared, parameterKeys]);
   const toggle = (id: string) => {
     setSelected((previous) =>
       previous.includes(id)
@@ -203,11 +220,7 @@ export function ModelTestRunHistory({
                   );
                 })}
                 <TableRow
-                  className={cn(
-                    "border-border border-t",
-                    JSON.stringify(compared[0]?.referenceImages) !==
-                      JSON.stringify(compared[1]?.referenceImages) && "bg-warning/5",
-                  )}
+                  className={cn("border-border border-t", referenceImagesDiffer && "bg-warning/5")}
                 >
                   <TableCell className="px-3 py-2 font-mono font-medium">参考图组</TableCell>
                   <TableCell className="max-w-64 px-3 py-2 break-all whitespace-pre-wrap">

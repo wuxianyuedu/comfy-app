@@ -257,6 +257,8 @@ describe("tRPC 挂载面：每条 procedure 都要有执行者（台账 E3）", 
  * `skill.create` 原登记的前提是「技能管理的写侧界面还没做」—— 风格库的新建画风接上了它（ISSUE #5069）。
  */
 const ZERO_CONSUMER: Record<string, string> = {
+  "film.subtitleSrt":
+    "成片字幕导出的服务端口已落地（与烧录同源），但界面侧还没有「下载字幕」按钮；先用归属用例覆盖，接成片面板时删掉本登记。",
   "project.get":
     "画布加载目前从 `project.list` 的行里取 nodes/edges（`lib/project-canvas/canvas-store.ts`），这条按 id 的单读口还没有入口用它。要么把画布改成按需单读（比 list 省），要么删口。",
 };

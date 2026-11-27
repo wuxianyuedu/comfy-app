@@ -9,18 +9,16 @@ import { getActiveId } from "~/lib/project-canvas/canvas-store";
 
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import { cancelLocalTask } from "~/lib/workshop/generation-client";
-import { pushServerDraft } from "~/lib/workshop/draft-sync-client";
 import { fetchProductionProgress } from "~/lib/production/production-client";
-import { beginStaleRun } from "~/lib/stale-run";
-import { buildProductionPayload } from "~/lib/production/payload";
 import { errorMessage } from "~/lib/error-message";
-import { useWorkshopServerRevision } from "./use-workshop-server-revision";
+import { beginStaleRun } from "~/lib/stale-run";
 import {
   useWorkshopBootstrapData,
   useWorkshopDraftRestore,
   useWorkshopTaskRecovery,
 } from "./use-workshop-pipeline-effects";
 import { useWorkshopModelSelections } from "./use-workshop-model-selections";
+import { useWorkshopProductionSync } from "./use-workshop-production-sync";
 import {
   DEFAULT_META,
   draftModelSelections,
@@ -361,8 +359,6 @@ export function useWorkshopPipeline(
    *  切换在首页发生 → 重挂载时按新的 getActiveId 读对应草稿。 ── */
   const [activeProjectId] = React.useState<string>(() => getActiveId() ?? "");
 
-  const { push: pushWithRevision } = useWorkshopServerRevision(activeProjectId, setNotice);
-
   // ── 角色定妆照会话（同提取会话：由 controller 常驻，切页签不丢进度；
   //    候选写在角色对象上，随草稿持久化）──
   const [characterPortrait, characterPortraitActions] = useCharacterPortrait({
@@ -399,20 +395,30 @@ export function useWorkshopPipeline(
     [replaceModelSelections],
   );
 
-  /* 最新项目 id / 草稿 / 阶段 / rendered 的 ref：供卸载兜底与异步服务端回填读取最新值（避免闭包捕获陈旧 state）。
-   * `setTabRef` / `controlledTabRef` 同理：挂载回填那一条 effect 只跑一次，经 ref 读到当次的 setTab 与接管方式。 */
+  /* 写穿与挂载对账（#5147 / #4023）沉在 `./use-workshop-production-sync`：
+   * 自动保存只发相对挂载基线的差异、整份快照带版本凭据、挂载时采纳服务端更新的内容。
+   * 主管线只消费它的三个 ref 与两个动作（§12.13 的函数长度闸）。 */
+  /* 解构成局部名再消费（不整包透传）：`persistNow` / `settleRestore` 是稳定的
+   * `useCallback`，可以直接进依赖数组；而整包对象每次渲染都是新的，进依赖会让
+   * 卸载兜底那条 effect 每渲染跑一次。 */
+  const { latestDraftRef, stageRef, restoreSettledRef, persistNow, persistLatest, settleRestore } =
+    useWorkshopProductionSync({
+      activeProjectId,
+      applyDraft,
+      currentDraft,
+      setNotice,
+      setDraftCache: (draft) => {
+        workshopDraftCache = draft;
+      },
+      stage: tab,
+      rendered,
+    });
+  /** 阶段游标的 ref 镜像（progress 恢复那条 effect 读它）。 */
+  const tabRef = stageRef;
+  /* 项目 id 的 ref 镜像（progress 恢复与草稿镜像对账都要读它）。 */
   const activeProjectRef = React.useRef(activeProjectId);
-  const latestDraftRef = React.useRef<WorkshopDraft>(currentDraft());
-  const tabRef = React.useRef(tab);
-  const renderedRef = React.useRef(rendered);
-  /* 服务端镜像对账是否已落定（#4023）：落定前不放行自动保存 / 卸载兜底的写穿，
-   * 否则挂载即 PUT 会把本机较旧的 localStorage 草稿盖到服务端较新镜像上。 */
-  const restoreSettledRef = React.useRef(false);
   React.useEffect(() => {
     activeProjectRef.current = activeProjectId;
-    latestDraftRef.current = currentDraft();
-    tabRef.current = tab;
-    renderedRef.current = rendered;
   });
 
   /** 卸载时让模块级草稿缓存失效，避免组件重挂载时读回旧的当前项目草稿。 */
@@ -427,45 +433,24 @@ export function useWorkshopPipeline(
       return;
     }
     const timer = setTimeout(() => {
-      const draft = currentDraft();
-      /* 盖版本戳（#4023）：本地与服务端镜像各留一份写入时刻，恢复时取较新一侧、
-       * 服务端 PUT 带 ifNewer 拒绝更旧的迟到写。 */
-      const stamped: WorkshopDraft = { ...draft, updatedAt: Date.now() };
-      // localStorage 为即时缓存；同时写穿一份到本地 db.sqlite（防缓存被清丢失）。
-      writeDraft(activeProjectId, stamped);
-      void pushServerDraft(activeProjectId, stamped);
-      void pushWithRevision(activeProjectId, buildProductionPayload(stamped, tab, rendered));
+      persistNow(currentDraft());
     }, 600);
     return () => {
       clearTimeout(timer);
     };
-  }, [activeProjectId, currentDraft, pushWithRevision, rendered, tab]);
+  }, [activeProjectId, currentDraft, tab, rendered, persistNow, restoreSettledRef]);
 
   /* 卸载兜底保存：只靠 600ms 防抖，编辑后立刻切页签时定时器被 clear 来不及落盘；
    * 且模块级草稿缓存只在首次挂载读一次，重挂载会读到旧缓存 —— 两处叠加正是
    *「切页签后剧本内容丢失」的根因。卸载时立即落盘 + 让缓存失效；cleanup 经 ref
-   * 取最新值，避免闭包捕获旧草稿。服务端写穿（pushServerDraft / pushProduction）
-   * 在对账未落定时不发（#4023）：此时本地尚未与服务端比过新旧，迟到 PUT 会把
-   * 本机旧值盖过服务端较新镜像；本地 localStorage **照常落盘**（即时缓存，
-   * 内容未变时与存量相同，不会丢）。 */
+   * 取最新值，避免闭包捕获旧草稿。服务端写穿在对账未落定时不发（#4023）。 */
   React.useEffect(() => {
     return () => {
-      const draft = latestDraftRef.current;
-      writeDraft(activeProjectRef.current, draft);
-      if (!restoreSettledRef.current) {
-        invalidateDraftCache();
-        return;
-      }
-      const stamped: WorkshopDraft = { ...draft, updatedAt: Date.now() };
-      void pushServerDraft(activeProjectRef.current, stamped);
-      void pushWithRevision(
-        activeProjectRef.current,
-        buildProductionPayload(stamped, tabRef.current, renderedRef.current),
-      );
+      persistLatest();
       invalidateDraftCache();
     };
-    // 两个依赖都是稳定函数（useCallback），因此仍只在卸载时执行一次
-  }, [pushWithRevision]);
+    // 仅在卸载时执行一次
+  }, [persistLatest]);
 
   /* 挂载回填的对账（#4023）沉在 `./use-workshop-pipeline-effects` 的
    * `useWorkshopDraftRestore`：本地为空、或服务端镜像比本地**新**（版本对账）时
@@ -479,9 +464,7 @@ export function useWorkshopPipeline(
       // 让模块级草稿缓存也指向恢复后的内容，避免再次重挂载读到旧空草稿。
       workshopDraftCache = draft;
     },
-    onSettled: () => {
-      restoreSettledRef.current = true;
-    },
+    onSettled: settleRestore,
   });
 
   /* Phase 4（设计 §7）：完成状态以 production 表的 progress 为单一持久来源。
@@ -514,7 +497,7 @@ export function useWorkshopPipeline(
     };
     /* 两个 ref 恒稳（镜像在 useWorkshopStageCursor 里逐帧更新），列进来只为
      * 过 exhaustive-deps：effect 仍只在挂载时跑一次。 */
-  }, [controlledTabRef, setTabRef]);
+  }, [controlledTabRef, setTabRef, tabRef]);
 
   /* 首挂载三路拉取（技能列表 / API 通道 / 工作流库清单）——沉在
    * `./use-workshop-pipeline-effects` 的 `useWorkshopBootstrapData`。 */

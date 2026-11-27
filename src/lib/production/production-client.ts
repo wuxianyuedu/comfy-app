@@ -22,8 +22,45 @@ export type ProductionPayload = {
   type: string;
 };
 
-/** 读回的生产数据（与写入载荷同形，另带服务端版本戳供乐观并发比对）。 */
-export type ProductionData = ProductionPayload & { updatedAt?: string };
+/** 一次写入里**实际要落的字段**（ISSUE #5147）：全量载荷的子集。
+ *
+ *  自动保存写的是「用户改了什么」而不是整份草稿 —— 详见
+ *  `~/lib/production/payload` 的 `narrowProductionWrite`。缺键 = 这一列不动。 */
+export type ProductionWrite = Partial<ProductionPayload>;
+
+/**
+ * `PUT /api/production` 的结论（ISSUE #5147）。
+ *
+ * - `written`：服务端已按这份载荷落库（窄写入时只落了其中改过的几列）；
+ * - `stale`：服务端发现库里已被别人改写（或窄写入撞上更新的行）⇒ 这次**没有整片
+ *   覆盖**，调用方据此提示「服务端内容已更新」；
+ * - `failed`：网络 / 服务不可用，什么都没落（下次自动保存再补推）。
+ *
+ * 此前这个函数回 `void`、把三种结局压成同一种静默 —— 而 #5147 的现场正是
+ * 「覆盖发生了，界面却以为保存成功」。冲突必须能被调用方看见。
+ */
+export type ProductionPushResult = "written" | "stale" | "failed";
+
+/** 读回的生产数据（与写入载荷同形，外加服务端版本戳）。 */
+export type ProductionData = ProductionPayload & {
+  /** 服务端这一行的版本时刻（ISO 串，`production.updatedAt` 原值，#5221 / #5147）。
+   *  自动保存把它当 `ifUpdatedAt` 带回去，服务端据此做乐观并发（CAS）。 */
+  updatedAt?: string;
+};
+
+/** 服务端时间戳 → ISO 串：`undefined` / 非法值不参与 CAS。 */
+function toIsoTimestamp(raw: unknown): string | undefined {
+  if (typeof raw === "string" && raw !== "") {
+    return raw;
+  }
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+    return raw.toISOString();
+  }
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return new Date(raw).toISOString();
+  }
+  return undefined;
+}
 
 /**
  * 服务端 production 行的宽松读法：必填字段缺省 / 类型不符按默认兜底，其余键原样保留
@@ -41,25 +78,27 @@ function normalizeProductionData(raw: Record<string, unknown>): ProductionData {
     title: typeof raw.title === "string" ? raw.title : "",
     tone: typeof raw.tone === "string" ? raw.tone : "",
     type: typeof raw.type === "string" ? raw.type : "",
+    updatedAt: toIsoTimestamp(raw.updatedAt),
   };
 }
 
 /**
- * 把某项目的生产数据写穿到服务端 production 表（按 proj_* upsert）。静默失败。
- * `expectedUpdatedAt` 给出上次读到的版本时走乐观并发：服务端发现已被别的检出改写
- * 会回 `stale:true`，此时调 `onStale`（调用方给出可行动提示），不静默覆盖他人改动。
+ * 把某项目的生产数据写穿到服务端 production 表（按 proj_* upsert）。
+ *
+ * `payload` 收成 `ProductionWrite`（全量载荷也满足它）：自动保存只发「用户改过的
+ * 字段」（ISSUE #5147），**没带的键 = 那一列不动**（服务端按同一口径窄写）。
+ *
+ * `opts.expectedUpdatedAt` 走乐观并发（#5221）：服务端发现已被别的检出改写会回
+ * `stale:true`，此时调 `onStale`（调用方给出可行动提示），不静默覆盖他人改动。
+ * 判断也回给调用方（#5147）：`written` / `stale` / `failed` 三态各有处置。
  */
 export async function pushProduction(
   projectId: string,
-  payload: ProductionPayload,
-  opts: {
-    expectedUpdatedAt?: string;
-    onSaved?: (updatedAt: string) => void;
-    onStale?: () => void;
-  } = {},
-): Promise<void> {
+  payload: ProductionWrite,
+  opts: { expectedUpdatedAt?: string; onStale?: () => void } = {},
+): Promise<ProductionPushResult> {
   if (!projectId) {
-    return;
+    return "failed";
   }
   try {
     const res = await fetchWithTimeout("/api/production", {
@@ -68,22 +107,24 @@ export async function pushProduction(
       body: JSON.stringify({
         project: projectId,
         production: payload,
-        ...(opts.expectedUpdatedAt ? { ifUpdatedAt: opts.expectedUpdatedAt } : {}),
+        ...(opts.expectedUpdatedAt === undefined ? {} : { ifUpdatedAt: opts.expectedUpdatedAt }),
       }),
     });
-    if (res.ok) {
-      const body: unknown = await res.json().catch(() => null);
-      if (typeof body === "object" && body !== null) {
-        if ("stale" in body && body.stale === true) {
-          opts.onStale?.();
-        } else if ("updatedAt" in body && typeof body.updatedAt === "string") {
-          /* 保存成功后推进本地基准，否则后续自动保存会拿旧版本被判 stale。 */
-          opts.onSaved?.(body.updatedAt);
-        }
-      }
+    if (!res.ok) {
+      return "failed";
     }
+    const body: unknown = await res.json().catch(() => null);
+    /* `stale` 是服务端的一句读数（「库已被别人改过，整片写我没做」），
+     * HTTP 仍是 200 —— 与草稿镜像 ifNewer 同形状（#4023）。 */
+    const stale = isRecord(body) && body.stale === true;
+    if (stale) {
+      opts.onStale?.();
+      return "stale";
+    }
+    return "written";
   } catch {
     /* 网络/服务不可用时静默降级：localStorage 仍是即时缓存 */
+    return "failed";
   }
 }
 

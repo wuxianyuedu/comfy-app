@@ -364,13 +364,21 @@
 #### FR-WP-05 草稿持久化（本地 + 服务端镜像 + 项目索引）
 
 - 状态：已上线
-- 需求：任何阶段编辑都持久化；清缓存 / 隐私模式 / 存储重置都不丢内容。
+- 需求：任何阶段编辑都持久化；清缓存 / 隐私模式 / 存储重置都不丢内容；
+  人 / AI 共写同一份生产数据时，谁也不整片盖掉对方写的内容。
 - 行为与验收：600ms 防抖写 localStorage（`comfyapp.workshop.draft.<项目id>.v1`）
   与服务端镜像（`workshopDraft` 表）；卸载时立即落盘；切项目先落盘当前再读目标；
   服务端真值优先但只覆盖「本地为空」的项目；**服务端镜像不含**工坊选定的
   `workflowId` / `videoWorkflowId`（本机设备选择，只落本地）。
+  写穿到 `production` 表（画布物化的那一份）时**只发相对挂载基线真改过的字段**：
+  缺键的列不动，于是界面里没有的角色卡 / 场景 / 分镜不会把 AI 侧写入的清空
+  （#5147）。整份快照写入带 `baseUpdatedAt`，库里更新时跳过并回 `stale`
+  （界面提示「服务端内容已更新」）；挂载时若服务端严格更新则采纳其内容
+  （本机设备选择保留）。
 - 落点：`src/lib/workshop/draft-store.ts`、
-  `src/app/api/workshop/draft/route.ts`、`src/server/workshop/draft-repository.ts`
+  `src/app/api/workshop/draft/route.ts`、`src/server/workshop/draft-repository.ts`、
+  `src/lib/production/payload.ts`（窄写入与采纳判据）、
+  `src/app/api/production/route.ts`
 
 #### FR-WP-06 定妆照与镜头参考图上传到 ComfyUI 输入目录
 
@@ -945,6 +953,9 @@
 - 行为与验收：合成走服务端 ffmpeg（`compose-film.ts`）；缺 ffmpeg 时
   **如实提示**「本次仅产出合成清单」，不静默降级；
   BGM 上传 / 选择有独立入口（`/api/film/bgm`）。
+- 字幕同源（ISSUE #5210）：SRT 文本以镜头台词 `dialogue` 为首选，缺失回落标题、
+  再回落提示词；烧录用逐镜 SRT，导出用同一份口径生成的整片 SRT
+  （`film.subtitleSrt` 读 `generated/films/<id>.srt`），两者不会各写一份。
 - 落点：`src/server/film/compose-film.ts`、
   `src/server/film/orchestrator.ts`、`src/app/api/film/bgm/route.ts`
 
@@ -1915,15 +1926,16 @@
 
 #### FR-AG-02 自主编排含独立视频阶段与审批停点
 
-- 状态：计划中
+- 状态：独立视频阶段已上线；三个审批停点中「生视频后」仍待接按钮（ISSUE #5211）
 - 需求：自主成片的计划里有**独立的视频阶段**，并在关键节点有**人工审批停点**；
   AI 能全自动执行，但**不能自己判定质量**。
 - 行为与验收：① 计划步骤里存在独立的 `render_videos`（不是合并进 `render_film` 一步触发）；
   ② 三个停点（生图后 / 生视频后 / 合成前）状态可查，未批准**不自动进入下一阶段**；
   ③ 任一停点可「重出单镜」（`regenerateShot`）而不回退整条链路；
   ④ 视觉评审未实现前，停点**默认停**（不默认放行）。
-- 落点（现状）：`src/lib/production/run-types.ts`（规划步骤）、
-  `src/server/agent/run-engine.ts`（`render_film` 合并触发了逐镜视频 + 合成）、
+- 落点（现状）：`src/lib/production/run-types.ts`（`render_videos` 与 `videoShotRev` 快照）、
+  `src/server/agent/run-engine.ts`（`execVideos` 起片不合成、`execFilm` 对同一份影片合成）、
+  `src/server/film/orchestrator.ts` / `film-watch.ts`（`skipCompose` 透传）、
   `src/server/api/routers/run.ts`（`approve` / `reviewShot` / `regenerateShot`）
 
 #### FR-AG-03 Skill 驱动的阶段策略

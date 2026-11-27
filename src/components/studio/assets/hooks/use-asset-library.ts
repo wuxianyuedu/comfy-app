@@ -152,6 +152,20 @@ export function useAssetLibrary(): AssetLibraryController {
     trpc.asset.detail.queryOptions({ id: detailId ?? "" }, { enabled: detailId !== null }),
   );
 
+  /* 传给 memo 卡片的回调：跨渲染稳定引用（规范 14 C7）。 */
+  const openDetail = useCallback((id: string) => {
+    setDetailId(id);
+  }, []);
+  const closeDetail = useCallback(() => {
+    setDetailId(null);
+  }, []);
+  const openRemove = useCallback((id: string) => {
+    setRemoveTarget(id);
+  }, []);
+  const cancelRemove = useCallback(() => {
+    setRemoveTarget(null);
+  }, []);
+
   const items = useMemo(() => {
     const rows = listQ.data?.items ?? [];
     return rows.map((row) => ({ ...row, createdAt: String(row.createdAt) }));
@@ -176,19 +190,11 @@ export function useAssetLibrary(): AssetLibraryController {
     empty,
     loading: listQ.isPending,
     removeTarget,
-    cancelRemove: () => {
-      setRemoveTarget(null);
-    },
-    openDetail: (id) => {
-      setDetailId(id);
-    },
-    closeDetail: () => {
-      setDetailId(null);
-    },
+    cancelRemove,
+    openDetail,
+    closeDetail,
     detailId,
-    openRemove: (id) => {
-      setRemoveTarget(id);
-    },
+    openRemove,
     q,
     setQ,
     size,
