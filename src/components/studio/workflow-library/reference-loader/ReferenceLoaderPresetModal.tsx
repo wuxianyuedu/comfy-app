@@ -178,7 +178,7 @@ export function ReferenceLoaderPresetModal({ onClose, open }: Props) {
   const searchResults = useMemo(() => {
     const catalog = searchQ.data?.catalog ?? {};
     return Object.keys(catalog).sort();
-  }, [searchQ.data]);
+  }, [searchQ.data?.catalog]);
 
   const patchPreset = (patch: Partial<ReferenceLoaderPreset>) => {
     if (!selected) {

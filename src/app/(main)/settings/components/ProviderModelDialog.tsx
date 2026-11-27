@@ -190,7 +190,7 @@ export function ProviderModelDialog({
                     });
                   }
                 }}
-                options={[...REMOTE_MODEL_KINDS]}
+                options={REMOTE_MODEL_KINDS}
                 popoverMinWidth={160}
                 value={d.modelForm.kind}
               />
@@ -225,7 +225,7 @@ export function ProviderModelDialog({
                       d.patchModelForm({ apiFormat });
                     }
                   }}
-                  options={[...LLM_API_FORMATS]}
+                  options={LLM_API_FORMATS}
                   popoverMinWidth={260}
                   value={d.modelForm.apiFormat}
                 />
@@ -259,7 +259,7 @@ export function ProviderModelDialog({
                   onChange={(next) => {
                     d.patchModelForm({ endpointPath: next });
                   }}
-                  options={[...mediaOptions]}
+                  options={mediaOptions}
                   popoverMinWidth={320}
                   value={d.modelForm.endpointPath}
                 />

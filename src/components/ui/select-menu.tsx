@@ -18,7 +18,7 @@ type SelectMenuGroup = {
   /** 分组标题（渲染成组头，不可选）。 */
   label: string;
   /** 该组内的选项值（与 `options` 同一取值空间）。 */
-  options: Array<string>;
+  options: ReadonlyArray<string>;
 };
 
 type SelectMenuProps = {
@@ -60,7 +60,7 @@ type SelectMenuProps = {
    *  调用方借此在列表即将可见时惰性加载选项。
    */
   onOpenChange?: (open: boolean) => void;
-  options: Array<string>;
+  options: ReadonlyArray<string>;
   placeholder?: string;
   /**
    * 浮层最小宽度（px），默认 480 —— 装饰较丰富的行（圆点 + 名称 + 任务类型 + 本机/在线徽标）在窄触发器里也能舒展。触发器比下限宽时回落 `--anchor-width`，并按视口裁剪 + 左移。

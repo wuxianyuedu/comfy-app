@@ -110,7 +110,7 @@ export function WorkflowLibraryFilters({
             onSourceFilterChange(v);
           }
         }}
-        options={[...SOURCE_OPTIONS]}
+        options={SOURCE_OPTIONS}
         popoverMinWidth={150}
         value={sourceFilter}
       />
@@ -141,7 +141,7 @@ export function WorkflowLibraryFilters({
             onTypeFilterChange(v);
           }
         }}
-        options={[...TYPE_OPTIONS]}
+        options={TYPE_OPTIONS}
         popoverMinWidth={140}
         value={typeFilter}
       />
