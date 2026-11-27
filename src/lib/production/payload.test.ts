@@ -184,6 +184,11 @@ describe("narrowProductionWrite（#5147 窄写入）", () => {
 });
 
 describe("shouldAdoptProduction（#5147 挂载采纳）", () => {
+  /** 本机草稿的写入时刻：2026-01-01T00:00:00.100Z（与服务端那几档同一量级，
+   *  两侧才可比 —— 混着用 epoch 毫秒与 ISO 串会让判据看起来在工作、实际在比 apples
+   *  and oranges）。 */
+  const LOCAL_AT = Date.parse("2026-01-01T00:00:00.100Z");
+
   const filled = {
     title: "AI 的项目",
     type: "short_video",
@@ -198,10 +203,10 @@ describe("shouldAdoptProduction（#5147 挂载采纳）", () => {
   it("服务端没有实质内容 → 不采纳（没有东西可采纳）", () => {
     expect(
       shouldAdoptProduction({
-        draftUpdatedAt: 1,
+        draftUpdatedAt: LOCAL_AT,
         localEmpty: true,
         production: { ...filled, scriptMarkdown: "", scenes: [], characters: [], shots: [] },
-        productionUpdatedAt: 9,
+        productionUpdatedAt: "2026-01-01T00:00:09.000Z",
       }),
     ).toBe(false);
   });
@@ -223,7 +228,7 @@ describe("shouldAdoptProduction（#5147 挂载采纳）", () => {
         draftUpdatedAt: undefined,
         localEmpty: true,
         production: filled,
-        productionUpdatedAt: 9,
+        productionUpdatedAt: "2026-01-01T00:00:09.000Z",
       }),
     ).toBe(true);
   });
@@ -231,19 +236,19 @@ describe("shouldAdoptProduction（#5147 挂载采纳）", () => {
   it("服务端严格更新 → 采纳（AI 在界面挂载之后写的内容）", () => {
     expect(
       shouldAdoptProduction({
-        draftUpdatedAt: 100,
+        draftUpdatedAt: LOCAL_AT,
         localEmpty: false,
         production: filled,
-        productionUpdatedAt: 200,
+        productionUpdatedAt: "2026-01-01T00:00:00.200Z",
       }),
     ).toBe(true);
   });
 
   it("本机更新 / 两侧同时刻 → 不采纳（保持本机优先，同 #3905）", () => {
-    for (const productionUpdatedAt of [99, 100]) {
+    for (const productionUpdatedAt of ["2026-01-01T00:00:00.099Z", "2026-01-01T00:00:00.100Z"]) {
       expect(
         shouldAdoptProduction({
-          draftUpdatedAt: 100,
+          draftUpdatedAt: LOCAL_AT,
           localEmpty: false,
           production: filled,
           productionUpdatedAt,
@@ -258,12 +263,12 @@ describe("shouldAdoptProduction（#5147 挂载采纳）", () => {
         draftUpdatedAt: undefined,
         localEmpty: false,
         production: filled,
-        productionUpdatedAt: 200,
+        productionUpdatedAt: "2026-01-01T00:00:00.200Z",
       }),
     ).toBe(false);
     expect(
       shouldAdoptProduction({
-        draftUpdatedAt: 100,
+        draftUpdatedAt: LOCAL_AT,
         localEmpty: false,
         production: filled,
         productionUpdatedAt: undefined,

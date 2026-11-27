@@ -67,18 +67,59 @@ describe("PUT /api/production", () => {
       }),
     );
     expect(res.status).toBe(200);
-    /* 应答在 `ok` 之外带 `stale` 与 `updatedAt` 两枚读数（ISSUE #5147）：
-     * 前者说「这次是不是基于更旧的副本」，后者给客户端推进写入基线。 */
+    /* 应答在 `ok` / `stale` 之外带 `updatedAt`（ISSUE #5147）：客户端据它推进
+     * 写入基线，下一次保存的 `ifUpdatedAt` 才指向最新那一版。 */
     const body: unknown = await res.json();
     if (!isPlainRecord(body)) {
       throw new TypeError(`响应不是对象：${JSON.stringify(body)}`);
     }
     expect(body.ok).toBe(true);
     expect(body.stale).toBe(false);
+    expect(typeof body.updatedAt).toBe("string");
     const got = await productionRepository.getForUser("u1", "proj_1");
     expect(got?.title).toBe("我的短剧");
     expect(got?.shots).toEqual([{ id: "s1", prompt: "p" }]);
     expect(got?.progress).toEqual({ stage: "storyboard", rendered: false });
+  });
+
+  it("ifUpdatedAt 与当前版本不符 → 回 stale:true 且不覆盖他人写入（ISSUE #5208）", async () => {
+    await productionRepository.upsertForUser("u1", {
+      id: "proj_1",
+      title: "第一版",
+      shots: [{ id: "s1" }],
+    });
+    const before = await productionRepository.getForUser("u1", "proj_1");
+    const res = await PUT(
+      putRequest({
+        project: "proj_1",
+        /* 整份快照（八条内容列全在）：CAS 只拦这一形，窄写入照写。 */
+        production: {
+          title: "旧版本覆盖",
+          type: "short_video",
+          tone: "",
+          logline: "",
+          scriptMarkdown: "",
+          scenes: [],
+          characters: [],
+          shots: [{ id: "bad" }],
+        },
+        ifUpdatedAt: "2000-01-01T00:00:00.000Z",
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    if (!isPlainRecord(body)) {
+      throw new TypeError(`响应不是对象：${JSON.stringify(body)}`);
+    }
+    /* `stale` 仍是那一枚读数；`updatedAt` / `production` 是 #5147 加的现值回传
+       （界面据此提示「服务端内容已更新，是否采用」）。 */
+    expect(body.ok).toBe(true);
+    expect(body.stale).toBe(true);
+    expect(body.updatedAt).toBe(before?.updatedAt?.toISOString());
+    const after = await productionRepository.getForUser("u1", "proj_1");
+    expect(after?.title).toBe("第一版");
+    expect(after?.shots).toEqual([{ id: "s1" }]);
+    expect(after?.updatedAt?.toISOString()).toBe(before?.updatedAt?.toISOString());
   });
 
   it("目标 project 已归属他人时返回 403 且不覆盖", async () => {
@@ -201,18 +242,18 @@ describe("PUT /api/production 窄字段写入（#5147）", () => {
     expect(got?.characters).toEqual([{ id: "ch1" }]);
   });
 
-  it("整份快照 + 库已被别人写过（baseUpdatedAt 更旧）→ 跳过写入并回 stale + 现值", async () => {
+  it("整份快照 + 库已被别人写过（ifUpdatedAt 更旧）→ 跳过写入并回 stale + 现值", async () => {
     await seedAiContent();
     const before = await productionRepository.getForUser("u1", "proj_1");
     if (!before) {
       throw new Error("前置条件不成立：库内应有行");
     }
     /* 界面挂载在「一小时前」：它基于的那一版远早于库里此刻的 updatedAt。 */
-    const staleBase = before.updatedAt.getTime() - 3_600_000;
+    const staleBase = new Date(before.updatedAt.getTime() - 3_600_000).toISOString();
     const res = await PUT(
       putRequest({
         project: "proj_1",
-        baseUpdatedAt: staleBase,
+        ifUpdatedAt: staleBase,
         production: {
           title: "未命名项目",
           type: "short_video",
@@ -254,7 +295,7 @@ describe("PUT /api/production 窄字段写入（#5147）", () => {
     const res = await PUT(
       putRequest({
         project: "proj_1",
-        baseUpdatedAt: before.updatedAt.getTime(),
+        ifUpdatedAt: before.updatedAt.toISOString(),
         production: {
           title: "用户整份覆盖",
           type: "short_video",
@@ -279,7 +320,7 @@ describe("PUT /api/production 窄字段写入（#5147）", () => {
     expect(after?.scenes).toEqual([]);
   });
 
-  it("整份快照但不带 baseUpdatedAt → 不参与版本闸（旧调用方行为不变）", async () => {
+  it("整份快照但不带 ifUpdatedAt → 不参与版本闸（旧调用方行为不变）", async () => {
     await seedAiContent();
     const res = await PUT(
       putRequest({
@@ -310,7 +351,7 @@ describe("PUT /api/production 窄字段写入（#5147）", () => {
     const res = await PUT(
       putRequest({
         project: "proj_1",
-        baseUpdatedAt: before.updatedAt.getTime() - 3_600_000,
+        ifUpdatedAt: new Date(before.updatedAt.getTime() - 3_600_000).toISOString(),
         production: { scriptMarkdown: "# 用户改的" },
       }),
     );
@@ -331,9 +372,11 @@ describe("PUT /api/production 窄字段写入（#5147）", () => {
     const res = await PUT(putRequest({ project: "proj_1", production: { title: "T" } }));
     expect(res.status).toBe(200);
     const body: unknown = await res.json();
-    if (!isPlainRecord(body) || typeof body.updatedAt !== "number") {
-      throw new TypeError(`应答应带数值 updatedAt：${JSON.stringify(body)}`);
+    /* ISO 串（`production.updatedAt` 原值）：客户端把它原样当 `ifUpdatedAt`
+     * 带回去做乐观并发 —— 换格式会让 CAS 永远对不上（#5221 的判据）。 */
+    if (!isPlainRecord(body) || typeof body.updatedAt !== "string") {
+      throw new TypeError(`应答应带 ISO 串 updatedAt：${JSON.stringify(body)}`);
     }
-    expect(Number.isFinite(body.updatedAt)).toBe(true);
+    expect(Number.isNaN(Date.parse(body.updatedAt))).toBe(false);
   });
 });

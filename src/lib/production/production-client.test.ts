@@ -123,6 +123,19 @@ describe("pushProduction", () => {
     expect(JSON.parse(body)).toEqual({ project: "proj_1", production: payload });
   });
 
+  it("旧版本被服务端拒绝（stale:true）→ 触发可行动提示，不静默覆盖（ISSUE #5208）", async () => {
+    const onStale = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response('{"ok":true,"stale":true}', { status: 200 }))),
+    );
+    await pushProduction("proj_1", payload, {
+      expectedUpdatedAt: "2026-11-27T00:00:00.000Z",
+      onStale,
+    });
+    expect(onStale).toHaveBeenCalledTimes(1);
+  });
+
   it("空 projectId → 不发请求（草稿本地缓存就是全部）", async () => {
     const spy = vi.fn();
     vi.stubGlobal("fetch", spy);
@@ -161,18 +174,26 @@ describe("pushProduction 的三态结论（#5147）", () => {
       Promise.resolve(new Response(JSON.stringify({ ok: true, updatedAt: 42 }), { status: 200 })),
     );
     vi.stubGlobal("fetch", spy);
-    await expect(pushProduction("proj_1", patch, 7)).resolves.toBe("written");
+    await expect(
+      pushProduction("proj_1", patch, { expectedUpdatedAt: "2026-01-01T00:00:00.000Z" }),
+    ).resolves.toBe("written");
     const init = spy.mock.calls[0]?.[1];
     const raw: unknown = init?.body;
     if (typeof raw !== "string") {
       throw new TypeError(`body 应当是 JSON 串，实际是 ${typeof raw}`);
     }
-    expect(JSON.parse(raw)).toEqual({ project: "proj_1", production: patch, baseUpdatedAt: 7 });
+    expect(JSON.parse(raw)).toEqual({
+      project: "proj_1",
+      production: patch,
+      ifUpdatedAt: "2026-01-01T00:00:00.000Z",
+    });
   });
 
   it("服务端回 stale:true → stale（库没被覆盖，界面据此提示「采用服务端内容」）", async () => {
     stubResponse(200, { ok: true, stale: true, updatedAt: 42, production: { title: "AI 的" } });
-    await expect(pushProduction("proj_1", patch, 7)).resolves.toBe("stale");
+    await expect(
+      pushProduction("proj_1", patch, { expectedUpdatedAt: "2026-01-01T00:00:00.000Z" }),
+    ).resolves.toBe("stale");
   });
 
   it("4xx / 5xx → failed（没有落地证明，不许读成 saved）", async () => {

@@ -98,7 +98,7 @@ export function useWorkshopProductionSync(
   productionBaseRef.current ??= buildProductionPayload(currentDraft(), stage, rendered);
   /* 基线对应的服务端版本时刻：窄写入把它当 `baseUpdatedAt` 带回去。
    * 挂载对账读到行之后填上（缺省 = 旧行 / 没读到，不参与版本闸）。 */
-  const productionBaseAtRef = React.useRef<number | undefined>(undefined);
+  const productionBaseAtRef = React.useRef<string | undefined>(undefined);
 
   React.useEffect(() => {
     activeProjectRef.current = activeProjectId;
@@ -124,7 +124,9 @@ export function useWorkshopProductionSync(
        * `failed` 不推进 —— 下一拍自动保存会带着同一批差异重试。
        * `stale` 说明有人在这份基线之后写过库；窄写入本身是安全的（只覆盖用户改过的
        * 那几个字段），所以照旧推进基线，不把用户的改动卡在重试里。 */
-      void pushProduction(projectId, patch, productionBaseAtRef.current).then((result) => {
+      void pushProduction(projectId, patch, {
+        expectedUpdatedAt: productionBaseAtRef.current,
+      }).then((result) => {
         if (result !== "failed") {
           productionBaseRef.current = next;
         }

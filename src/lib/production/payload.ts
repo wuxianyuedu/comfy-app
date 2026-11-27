@@ -150,8 +150,9 @@ export function shouldAdoptProduction(input: {
   /** 本机草稿是否为空（没有任何内容）。 */
   localEmpty: boolean;
   production: ProductionContent | null;
-  /** 服务端这一行的版本时刻（epoch ms，缺失 = 旧行）。 */
-  productionUpdatedAt: number | undefined;
+  /** 服务端这一行的版本时刻（ISO 串：`production.updatedAt` 的原值，
+   *  与乐观并发用的那一枚同一出处；缺失 / 解析不出 = 旧行）。 */
+  productionUpdatedAt: string | undefined;
 }): boolean {
   const { draftUpdatedAt, localEmpty, production, productionUpdatedAt } = input;
   if (production === null || !hasProductionContent(production)) {
@@ -160,10 +161,10 @@ export function shouldAdoptProduction(input: {
   if (localEmpty) {
     return true;
   }
+  const serverAt =
+    typeof productionUpdatedAt === "string" ? Date.parse(productionUpdatedAt) : Number.NaN;
   return (
-    typeof draftUpdatedAt === "number" &&
-    typeof productionUpdatedAt === "number" &&
-    productionUpdatedAt > draftUpdatedAt
+    typeof draftUpdatedAt === "number" && Number.isFinite(serverAt) && serverAt > draftUpdatedAt
   );
 }
 

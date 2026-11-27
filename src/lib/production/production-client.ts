@@ -31,9 +31,9 @@ export type ProductionWrite = Partial<ProductionPayload>;
 /**
  * `PUT /api/production` 的结论（ISSUE #5147）。
  *
- * - `written`：服务端已按这份载荷落库（可能只是其中一部分字段）；
- * - `stale`：服务端版本比载荷带来的 `baseUpdatedAt` 更新 ⇒ 这次写入被拒，
- *   库里的内容没有被覆盖（调用方据此提示「服务端内容已更新」）；
+ * - `written`：服务端已按这份载荷落库（窄写入时只落了其中改过的几列）；
+ * - `stale`：服务端发现库里已被别人改写（或窄写入撞上更新的行）⇒ 这次**没有整片
+ *   覆盖**，调用方据此提示「服务端内容已更新」；
  * - `failed`：网络 / 服务不可用，什么都没落（下次自动保存再补推）。
  *
  * 此前这个函数回 `void`、把三种结局压成同一种静默 —— 而 #5147 的现场正是
@@ -43,20 +43,21 @@ export type ProductionPushResult = "written" | "stale" | "failed";
 
 /** 读回的生产数据（与写入载荷同形，外加服务端版本戳）。 */
 export type ProductionData = ProductionPayload & {
-  /** 服务端这一行的版本时刻（epoch ms，ISSUE #5147）：自动保存的窄写入把它
-   *  当作 `baseUpdatedAt` 带回去，服务端据此拒绝迟到写。
-   *  缺省（旧行 / 读不到）= 不参与版本闸，行为与此前一致。 */
-  updatedAt?: number;
+  /** 服务端这一行的版本时刻（ISO 串，`production.updatedAt` 原值，#5221 / #5147）。
+   *  自动保存把它当 `ifUpdatedAt` 带回去，服务端据此做乐观并发（CAS）。 */
+  updatedAt?: string;
 };
 
-/** 服务端时间戳 → epoch ms：drizzle 行经 JSON 序列化后是 ISO 串，也接受数字。 */
-function toEpochMs(raw: unknown): number | undefined {
-  if (typeof raw === "number" && Number.isFinite(raw)) {
+/** 服务端时间戳 → ISO 串：`undefined` / 非法值不参与 CAS。 */
+function toIsoTimestamp(raw: unknown): string | undefined {
+  if (typeof raw === "string" && raw !== "") {
     return raw;
   }
-  if (typeof raw === "string" && raw !== "") {
-    const parsed = Date.parse(raw);
-    return Number.isNaN(parsed) ? undefined : parsed;
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+    return raw.toISOString();
+  }
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return new Date(raw).toISOString();
   }
   return undefined;
 }
@@ -77,26 +78,24 @@ function normalizeProductionData(raw: Record<string, unknown>): ProductionData {
     title: typeof raw.title === "string" ? raw.title : "",
     tone: typeof raw.tone === "string" ? raw.tone : "",
     type: typeof raw.type === "string" ? raw.type : "",
-    updatedAt: toEpochMs(raw.updatedAt),
+    updatedAt: toIsoTimestamp(raw.updatedAt),
   };
 }
 
 /**
  * 把某项目的生产数据写穿到服务端 production 表（按 proj_* upsert）。
  *
- * `payload` 刻意收成 `ProductionWrite`（全量载荷也满足它）：自动保存要能只发
- * 「用户改过的字段」（ISSUE #5147），而不是把整份旧草稿整片盖上去。
- * **没带的键 = 那一列不动**（服务端按同一口径窄写）。
+ * `payload` 收成 `ProductionWrite`（全量载荷也满足它）：自动保存只发「用户改过的
+ * 字段」（ISSUE #5147），**没带的键 = 那一列不动**（服务端按同一口径窄写）。
  *
- * `baseUpdatedAt` 是「我这份内容基于服务端哪个版本」的凭据（epoch ms，取自
- * 上一次读到的 `updatedAt`）：只对**整份快照**生效 —— 服务端发现库里比它更新时
- * 跳过这次整片写入并回 `stale`，界面据此提示「服务端内容已更新，是否采用」，
- * 而不是静默互相覆盖。
+ * `opts.expectedUpdatedAt` 走乐观并发（#5221）：服务端发现已被别的检出改写会回
+ * `stale:true`，此时调 `onStale`（调用方给出可行动提示），不静默覆盖他人改动。
+ * 判断也回给调用方（#5147）：`written` / `stale` / `failed` 三态各有处置。
  */
 export async function pushProduction(
   projectId: string,
   payload: ProductionWrite,
-  baseUpdatedAt?: number,
+  opts: { expectedUpdatedAt?: string; onStale?: () => void } = {},
 ): Promise<ProductionPushResult> {
   if (!projectId) {
     return "failed";
@@ -108,16 +107,21 @@ export async function pushProduction(
       body: JSON.stringify({
         project: projectId,
         production: payload,
-        ...(baseUpdatedAt === undefined ? {} : { baseUpdatedAt }),
+        ...(opts.expectedUpdatedAt === undefined ? {} : { ifUpdatedAt: opts.expectedUpdatedAt }),
       }),
     });
     if (!res.ok) {
       return "failed";
     }
-    /* `stale` 是服务端的一句读数（「你基于的那版旧了，库没被我覆盖」），
-     * 不是失败：HTTP 仍是 200（与草稿镜像 ifNewer 同形状，#4023）。 */
-    const body: unknown = await res.json();
-    return isRecord(body) && body.stale === true ? "stale" : "written";
+    const body: unknown = await res.json().catch(() => null);
+    /* `stale` 是服务端的一句读数（「库已被别人改过，整片写我没做」），
+     * HTTP 仍是 200 —— 与草稿镜像 ifNewer 同形状（#4023）。 */
+    const stale = isRecord(body) && body.stale === true;
+    if (stale) {
+      opts.onStale?.();
+      return "stale";
+    }
+    return "written";
   } catch {
     /* 网络/服务不可用时静默降级：localStorage 仍是即时缓存 */
     return "failed";
