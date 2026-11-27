@@ -111,8 +111,8 @@ function useAutoFillPrompts(
           return shot;
         }
         const scene = scenes.find((sc) => sc.id === shot.sceneId);
-        const charIds = new Set(shot.characterIds);
-        const chars = characters.filter((c) => charIds.has(c.id));
+        const characterIds = new Set(shot.characterIds);
+        const chars = characters.filter((c) => characterIds.has(c.id));
         const style = styles.find((st) => st.slug === shot.skillSlug);
         return {
           ...shot,
@@ -283,8 +283,9 @@ export function ShotStudio({
          * 没有可执行的图。见 generateShot 入口的门禁。 */
         /* 角色 LoRA（FR-QA-02③ · #2622）：出场角色里第一个绑定的生效
          * （多角色链式加载另立）；工作流没连 lora 口 → unmatched 提示。 */
+        const characterIds = new Set(shot.characterIds);
         const loraChar = characters
-          .filter((c) => shot.characterIds.includes(c.id))
+          .filter((c) => characterIds.has(c.id))
           .find((c) => c.loraName !== undefined && c.loraName !== "");
         const loraName = loraChar?.loraName;
         const loraStrength = loraChar?.loraStrength;

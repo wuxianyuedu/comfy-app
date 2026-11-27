@@ -80,7 +80,8 @@ export function rebuildShotPrompts(
 ): Array<Shot> {
   return shots.map((shot) => {
     const scene = scenes.find((s) => s.id === shot.sceneId);
-    const linked = characters.filter((c) => shot.characterIds.includes(c.id));
+    const characterIds = new Set(shot.characterIds);
+    const linked = characters.filter((c) => characterIds.has(c.id));
     return {
       ...shot,
       prompt: buildShotPrompt(shot, scene, linked),

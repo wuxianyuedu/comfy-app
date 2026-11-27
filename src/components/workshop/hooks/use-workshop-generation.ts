@@ -90,8 +90,9 @@ export function useWorkshopGeneration({
       }
       /* 角色 LoRA（FR-QA-02③ · #2622）：出场角色里第一个绑定的生效；
        * 工作流没连 lora 口 → unmatched 提示（describeUnmatchedInputs）。 */
+      const characterIds = new Set(shot.characterIds);
       const loraChar = characters
-        .filter((c) => shot.characterIds.includes(c.id))
+        .filter((c) => characterIds.has(c.id))
         .find((c) => c.loraName !== undefined && c.loraName !== "");
       const loraName = loraChar?.loraName;
       const loraStrength = loraChar?.loraStrength;

@@ -46,8 +46,13 @@ export function ModelCascadeSelect({
    * 不抢在取数前改父级状态。 */
   const mode = selection.mode === "" ? defaultModeForKind(kind) : selection.mode;
   const candidates = catalog.candidates;
-  const modeTabs =
-    modes === undefined ? catalog.modeTabs : catalog.modeTabs.filter((t) => modes.includes(t.mode));
+  const modeTabs = useMemo(() => {
+    if (modes === undefined) {
+      return catalog.modeTabs;
+    }
+    const allowed = new Set(modes);
+    return catalog.modeTabs.filter((t) => allowed.has(t.mode));
+  }, [catalog.modeTabs, modes]);
 
   const groups = useMemo(
     () =>

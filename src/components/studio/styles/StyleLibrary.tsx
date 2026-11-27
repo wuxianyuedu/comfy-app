@@ -192,7 +192,8 @@ function NewStyleForm({
 
 export function StyleLibrary() {
   const c = useStyleLibrary();
-  const chosen = c.styles.filter((style) => c.selectedSlugs.includes(style.slug));
+  const selectedSlugs = new Set(c.selectedSlugs);
+  const chosen = c.styles.filter((style) => selectedSlugs.has(style.slug));
   const [libraryTarget, setLibraryTarget] = useState<ResearchLibraryTarget>(null);
 
   const addToLibrary = (result: StyleResult) => {
