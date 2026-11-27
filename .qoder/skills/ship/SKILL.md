@@ -46,6 +46,9 @@ pnpm ship --release 2187                         # 结束：评论「开发结�
 pnpm ship --release 2187 --misclaim              # 误领释放（#3809）：评论「误领释放…」+ 撤 `处理人:` 与 `参与人:` 两枚（领错单的快速恢复出口）
 pnpm ship --claims                               # 列出自己领取中（state=open）的单子
 pnpm ship --branches                             # 只读：逐条本地分支给「落地了没有」（判据只有 PR 的 `is_merged`）—— 一次也不删，与任何显式动作同行退 2
+pnpm ship:branch-clean <分支名> [--yes]          # 单独删一条已落地分支（ISSUE #5166）：复用 --branches 的
+                                                   # is_merged 判据 + ship 的删除链；不带 --yes 只念判定不删，
+                                                   # 当前检出占着时先 checkout --detach <sha> 打出恢复线
 pnpm ship --status [<PR号|分支名>]                # 只读：PR / CI 绿红 / 合并 / 关单 / 上一次跑的结论摆到同一张屏（ISSUE #3811，替掉手敲 grep 翻日志）。目标缺省 = 当前分支（主干上回落上一次跑的 PR）；红不深挖（--diagnose 的事）。退码 0 绿/已合并 · 1 CI红或没提过PR · 2 没结论 · 3 冲突 · 4 CI无终态；一次也不写平台，与显式动作同行退 2
 pnpm ship --result                  # 只读：本机 .git/ship-result.json 的状态快照 + 事件时间线（ISSUE #3923）。后台跑 ship 时轮询它取「走到哪了 / 结论」，不 sleep + grep 运行日志；--result=json 出原始 JSON。只读口自己不落盘，不覆盖后台那一跑的活读数
 pnpm ship:wait                      # 确定性等待：轮询上一格那份读数直到 ship 出终态（短间隔 + 明确终止条件 + 总上限；坏消息立即返回，不等满上限；超上限退 4）。等的是 status=running 的那一跑（念出 startedAt / 阶段，ISSUE #4510）；期间别的跑的结论不冒充终态。能立即返回就绝不 sleep —— 命令之间禁止插无意义 sleep（ISSUE #4118 / AGENTS 硬规则 32）

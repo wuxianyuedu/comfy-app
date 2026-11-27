@@ -11968,6 +11968,12 @@ Rust / PowerShell 侧的锁引用仍在同一趟里判。判决本身是纯函�
 `--branches --merge` 同行不退到主流程，并反向钉住「一次也不写 ref」（`branch -D` / `git push` /
 `merge-pull` 一条都不许出现在调用清单里）。
 
+**删的执行面**（ISSUE #5166）：`pnpm ship:branch-clean <分支名> [--yes]` 把上面这条读数接上删除 ——
+落地判据仍是 `branchLandingRows` 的 PR `is_merged`（窗口没取到退 2、未合并退 1），
+删与两边回读直接复用 `ship-platform.mjs` 的 `cleanBranch`，当前检出占着分支时删前
+`checkout --detach <sha>` 并打出恢复线；不带 `--yes` 只念判定，一次不删，显式拒绝批量。
+判据在 `tests/branch-clean.test.ts`。
+
 ### 13.7 换行符与提交噪声（LF，对齐主规范 §11.2）
 
 - **仓库统一 LF**（2026-08-27 起）。历史 CRLF 文件随下次改动一并转 LF，禁止增量混用（同一文件部分行 CRLF、部分 LF）。
