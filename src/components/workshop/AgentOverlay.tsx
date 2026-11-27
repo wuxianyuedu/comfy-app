@@ -132,7 +132,7 @@ export function AgentOverlay({
 
   return (
     <div
-      className={`border-border bg-panel-deep/95 ${zClass("popup")} fixed flex w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl`}
+      className={`border-border bg-panel-deep ${zClass("popup")} fixed flex w-[min(440px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border shadow-2xl`}
       /* 面板位置**只由入口那一个来源派生**（`right` 再加上图标直径与间距）——
        * 此前两者各写一处固定偏移，用户拖动入口后面板会跳回右下角、跟入口脱节。
        * 纵向由 `panelPlacement()` 判一次，高度收口交给 CSS 的 `max-height`／`top`／

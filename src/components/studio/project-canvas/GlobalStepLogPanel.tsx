@@ -150,7 +150,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
       {/* 浮动触发按钮 —— 仅调试模式开启时渲染。 */}
       <Hint label="打开执行日志">
         <Button
-          className="bg-panel/90 border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max text-2xs pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 font-medium shadow-lg backdrop-blur-sm"
+          className="bg-panel border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-canvas-max text-2xs pointer-events-auto fixed top-16 right-3 h-auto items-center gap-1.5 rounded-md border px-2.5 py-1.5 font-medium shadow-lg"
           data-testid="step-log-trigger"
           onClick={() => {
             setOpen(true);
