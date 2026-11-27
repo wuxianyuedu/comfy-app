@@ -140,3 +140,15 @@ pnpm exec tsc --noEmit 2>&1 | grep -i "你改的文件名"
 pnpm exec eslint src/path/to/File.tsx
 pnpm check
 ```
+
+## 9. 统一只读入口（ISSUE #5168 / #5169 / #5170 / #5171）
+
+散落的现场事实与本地复现入口已经收成有名字的命令，优先用它们，不再手拼一长串：
+
+```bash
+pnpm status:checkout              # HEAD / 脏文件 / stash / worktree / 上次 ship 结论 / 本检出实例（缺省零网络，--fetch 只刷新引用）
+pnpm inspect:runtime [--json]     # 解析端口（含 +1/+2）→ 监听 PID → own/session/foreign 归属 → 探活四态；只读，不回收
+pnpm test:affected --report       # 本地跑「受影响用例」那一格；改动面走 stdin，空面退 2 不跑成全量
+pnpm db:inspect                   # db.sqlite 绝对路径 / integrity_check / 表数与行数 / schema 指纹；只接受只读 SELECT
+pnpm ship --find-issues "关键词"  # 开工前查重单；取不满报「没取到」退 2，不读成「没有」
+```
