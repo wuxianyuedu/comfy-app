@@ -38,6 +38,18 @@ import {
 } from "../queue-monitor-config";
 import { queueTaskParamRows } from "../queue-task-params";
 
+/** summary 四个计数的内容判等：轮询每轮都给新对象，值没变就不该换引用，
+ *  否则 stats 一变、整张队列视图跟着重渲（#5158）。 */
+export function sameStats(prev: QueueStats | null, next: QueueStats): boolean {
+  return (
+    prev !== null &&
+    prev.failedToday === next.failedToday &&
+    prev.queued === next.queued &&
+    prev.running === next.running &&
+    prev.succeededToday === next.succeededToday
+  );
+}
+
 const QUEUE_PAGE_SIZE = 60;
 const QUEUE_STATUS_QUERY: Record<QueueStatusFilter, string | undefined> = {
   active: "QUEUED,RUNNING",
@@ -151,10 +163,27 @@ export function useQueueMonitor(): QueueMonitorController {
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const midnight = new Date();
   midnight.setHours(0, 0, 0, 0);
+  /* select 稳定 stats 引用（#5158）：后端每轮 COUNT 重算给出新对象，但四个
+   * 数字往往一字未变；沿用旧对象就不会让统计卡与整表跟着重渲。 */
+  const [statsHolder] = useState<{ value: QueueStats | null }>(() => ({ value: null }));
+  const selectSummary = useCallback(
+    (data: QueueStats) => {
+      if (sameStats(statsHolder.value, data)) {
+        return statsHolder.value ?? data;
+      }
+      statsHolder.value = data;
+      return data;
+    },
+    [statsHolder],
+  );
   const summaryQ = useQuery(
     trpc.task.summary.queryOptions(
       { todayStartedAt: midnight.toISOString() },
-      { refetchInterval: COMFY_QUEUE_POLL_MS, enabled: isTabActive },
+      {
+        refetchInterval: COMFY_QUEUE_POLL_MS,
+        enabled: isTabActive,
+        select: selectSummary,
+      },
     ),
   );
 
@@ -461,7 +490,9 @@ export function useQueueMonitor(): QueueMonitorController {
     paramRows,
     isBusy,
     refresh,
-    refreshing: refreshingComfy || listQ.isFetching || summaryQ.isFetching,
+    /* 后台 summary 轮询不再进 refreshing（#5158）：每轮 isFetching 抖动两次
+     * 会让视图连渲两次，而「刷新中」只该由用户主动动作驱动。 */
+    refreshing: refreshingComfy || listQ.isFetching,
     search,
     setSearch,
     statusFilter,
