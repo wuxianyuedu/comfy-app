@@ -4,6 +4,8 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { displayValue } from "~/lib/display-value";
+import { asRecord } from "~/lib/is-record";
+import { normalizeReviewVerdict } from "~/lib/production/review-types";
 import type { Shot } from "~/lib/workshop/types";
 
 import { shotFrameView } from "./shot-status-config";
@@ -31,6 +33,11 @@ export function ShotFilmStrip({
 
   const doneCount = shots.filter((shot) => shot.status === "done").length;
   const failedCount = shots.filter((shot) => shot.status === "failed").length;
+  /* 评审状态复用已有的 shot.review（不新增第二套状态类型，也不加 DB 列）：
+   * 共享 DB 下另一个检出审过的镜头，这里一眼可见。 */
+  const reviewedCount = shots.filter(
+    (shot) => normalizeReviewVerdict(asRecord(shot)?.review)?.pass === true,
+  ).length;
 
   return (
     <section
@@ -45,6 +52,7 @@ export function ShotFilmStrip({
         <span className="text-ink-fainter text-2xs tabular-nums">
           {doneCount}/{shots.length} 镜成图
           {failedCount > 0 ? ` · ${failedCount} 镜失败` : ""}
+          {reviewedCount > 0 ? ` · 评审通过 ${reviewedCount} 镜` : ""}
         </span>
       </div>
 
