@@ -6,7 +6,7 @@
  * 纯展示：只消费 controller 的 `theme` 与 `setTheme`。
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Moon, Sun } from "lucide-react";
 
@@ -339,7 +339,7 @@ function FontRow({
   const isDefault = normalizeFontStack(value) === normalizeFontStack(defaultValue);
   /* 按部分分组陈列 + 每部分一种字体的输入（ISSUE #3784 与补充意见）：
      默认栈里有哪些字体、各排在第几位一眼可见；每个可配部分各填一种。 */
-  const groups = fontGroupsOf(value, tier);
+  const groups = useMemo(() => fontGroupsOf(value, tier), [value, tier]);
   /* 平台视图（ISSUE #4700）：栈给各平台各留了回退项，陈列默认只显示运行平台
      会用到的字面，其他平台经下拉切换查看。平台在挂载后判（SSR 无 navigator），
      挂载前不滤 —— 服务端与客户端首帧一致，避免水合错位。 */
@@ -356,13 +356,17 @@ function FontRow({
     };
   }, []);
   const platformOptions = fontPlatformViewOptions(platform);
-  const visibleGroups = groups.map((group) => ({
-    ...group,
-    items:
-      platform === null
-        ? group.items
-        : group.items.filter((item) => fontPartInView(item, platformView, platform)),
-  }));
+  const visibleGroups = useMemo(
+    () =>
+      groups.map((group) => ({
+        ...group,
+        items:
+          platform === null
+            ? group.items
+            : group.items.filter((item) => fontPartInView(item, platformView, platform)),
+      })),
+    [groups, platform, platformView],
+  );
   return (
     <div className="mt-5">
       <div className="mb-2 flex flex-wrap items-center gap-2">

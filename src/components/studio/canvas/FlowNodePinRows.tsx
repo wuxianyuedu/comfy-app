@@ -2,6 +2,7 @@
 /* 顶部针脚区：纯连接型输入（左）与输出（右）按位置配对到同一行，
  * 一行 22px 同时装下两者，较长一侧多出的部分独占后续行。
  * 句柄始终渲染，无论连线状态（「圆点常显」）。 */
+import { useCallback } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
 import { friendlyInputName } from "~/lib/comfyui/node-titles";
@@ -39,16 +40,19 @@ export function FlowNodePinRows({
   const portFocusActive = data[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
   /* 一行两端的 Handle id 不同（输入名 / `out:<输出名>`），但观感要一致：两端的
    * 级别合成一档 —— focused > related > 「都无关」压暗。 */
-  const toneOf = (...handles: Array<string | undefined>): PortRowTone => {
-    const roles = handles.map((handle) => readPortFocusRole(data, handle));
-    for (const role of roles) {
-      const tone = resolvePortRowTone({ role, hasSelection: true });
-      if (tone === "focused" || tone === "related") {
-        return tone;
+  const toneOf = useCallback(
+    (...handles: Array<string | undefined>): PortRowTone => {
+      const roles = handles.map((handle) => readPortFocusRole(data, handle));
+      for (const role of roles) {
+        const tone = resolvePortRowTone({ role, hasSelection: true });
+        if (tone === "focused" || tone === "related") {
+          return tone;
+        }
       }
-    }
-    return resolvePortRowTone({ role: "none", hasSelection: portFocusActive });
-  };
+      return resolvePortRowTone({ role: "none", hasSelection: portFocusActive });
+    },
+    [data, portFocusActive],
+  );
   return (
     <div
       className="border-border-strong border-b py-0.5"

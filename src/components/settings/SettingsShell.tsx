@@ -257,11 +257,26 @@ function SettingsSectionNav({
   onSelect: (section: Section) => void;
   section: Section;
 }) {
+  /* 分组的 sections 与分区项都收成查表：includes 在 map 里是 O(组×项)，
+   * 分区项清单是模块级常量、渲染期只按组查一次。 */
+  const groupSections = useMemo(
+    () => new Map(TREE_GROUPS.map((group) => [group.label, new Set(group.sections)])),
+    [],
+  );
+  const itemsByGroup = useMemo(
+    () =>
+      new Map(
+        TREE_GROUPS.map((group) => [
+          group.label,
+          SETTINGS_SECTIONS.filter((item) => groupSections.get(group.label)?.has(item.id)),
+        ]),
+      ),
+    [groupSections],
+  );
   return (
     <nav aria-label="设置分区" className="custom-scrollbar w-40 shrink-0 overflow-y-auto pr-2 pb-2">
       {TREE_GROUPS.map((group) => {
-        const groupIds = new Set(group.sections);
-        const items = SETTINGS_SECTIONS.filter((item) => groupIds.has(item.id));
+        const items = itemsByGroup.get(group.label) ?? [];
         if (items.length === 0) {
           return null;
         }

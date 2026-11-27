@@ -102,24 +102,29 @@ export function FlowNodeCollapsedAnchors({
   // （字符串/数字，见 allEntries 的装配），不会是连线元组 —— 只按 `Array.isArray`
   // 挑「已连线」会把这些输入整批漏掉，折叠态下它们没有 Handle，落在这类输入上的
   // 边被 React Flow 静默丢弃（error#008），画布上表现为「连线消失」（ISSUE #4548）。
-  /* raw_inputs 按名字索引，折叠态每次父级重渲都会重算这张 Map；
-   * rawInputs 引用稳定时这个索引不变，缓存起来避免逐节点重复建表。 */
   const rawByName = useMemo(
     () => new Map((data.rawInputs ?? []).map((raw) => [raw.name, raw])),
     [data.rawInputs],
   );
-  const connectedInputs = orderedEntries.filter(([k, v]) => {
-    if (Array.isArray(v)) {
-      return true;
-    }
-    const meta = rawByName.get(k);
-    return (
-      meta?.isConnection === true ||
-      meta?.isBoundary === true ||
-      data.boundaryInputs?.has(k) === true
-    );
-  });
-  const connectedOutputs = outputs.filter(([n]) => data.connectedOutputs?.has(n) === true);
+  const connectedInputs = useMemo(
+    () =>
+      orderedEntries.filter(([k, v]) => {
+        if (Array.isArray(v)) {
+          return true;
+        }
+        const meta = rawByName.get(k);
+        return (
+          meta?.isConnection === true ||
+          meta?.isBoundary === true ||
+          data.boundaryInputs?.has(k) === true
+        );
+      }),
+    [orderedEntries, rawByName, data.boundaryInputs],
+  );
+  const connectedOutputs = useMemo(
+    () => outputs.filter(([n]) => data.connectedOutputs?.has(n) === true),
+    [outputs, data.connectedOutputs],
+  );
   /* 锚柱（收起时的端口载体）跟主题联动：浅色下白描白会让锚柱整个消失。 */
   const { resolvedTheme } = useTheme();
   const anchor = resolveAnchorCylinder(resolvedTheme);

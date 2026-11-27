@@ -1199,6 +1199,10 @@
       `tests/trpc-surface-executors.test.ts`、`src/lib/workshop/generation-client.ts`
       （`fetchWorkshopStyles`）+ `src/lib/workshop/generation-client.styles.test.ts`、
       `vitest.config.ts`（素材那组从三条减成两条）。
+      **登记面上调（ISSUE #5215）**：系列跨集资产的 8 条 procedure 先落服务层，
+      「跨集资产」面板尚未接；按 E3′「写明谁将来接它」逐条登记，`MAX_ZERO_CONSUMER`
+      从 3 上调到 10。这是**明确记账的欠账**（每条都写了接哪个面板时删登记），不是放宽判据：
+      判据本身（每条口要有消费方、登记表双向不陈旧）一字未动。面板接上后按条撤登记并把上限降回去。
 - [x] **E3‴ 客户端写的 REST 地址有 3 条真请求没有落点（实测 404，界面按空态吞掉），另有 1 条 URL 形状的假地址（本批修复 + 判据）**：
       复现口径是**实测**而不是读代码：起本机服务逐条 curl ——
       `GET /api/skills`、`GET /api/images?filename=…`、`GET /api/file/x.png` **全部 404**，

@@ -155,8 +155,69 @@ export const episodeCharacter = sqliteTable(
   ],
 );
 
+/** 跨集资产的种类（ISSUE #5215）：风格锚 / 场景 / 镜头模板。词表与 router 的 zod 同源。 */
+export const SERIES_ASSET_KINDS = ["style", "scene", "shot"] as const;
+
+/**
+ * 系列级可复用资产（ISSUE #5215 / FR-SR-03）：风格锚、场景、镜头模板从 JSON 列实体化，
+ * 按系列归属、可被多集引用。`version` 在正文变更时递增，`refCount` 由集关联增删维护，
+ * 两者都只是展示口径（变更提示 / 「被 N 集引用」），真值来自 `episode_asset` 关联行。
+ */
+export const seriesAsset = sqliteTable(
+  "seriesAsset",
+  {
+    id: cuid(),
+    seriesId: text("seriesId")
+      .notNull()
+      .references(() => series.id, { onDelete: "cascade" }),
+    /** 见 SERIES_ASSET_KINDS。 */
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    /** 别名 / 变体名（同义引用，创作时用任一名字指到同一资产）。 */
+    alias: text("alias"),
+    /** 资产正文：风格锚配置 / 场景设定 / 镜头模板（外来 JSON，逐字段消费时校验）。 */
+    data: text("data", { mode: "json" }).notNull().default("{}"),
+    version: integer("version").notNull().default(1),
+    refCount: integer("refCount").notNull().default(0),
+    createdAt: dateNotNull("createdAt")
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: dateNotNull("updatedAt")
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index("series_asset_series_idx").on(t.seriesId),
+    uniqueIndex("series_asset_series_kind_name_uniq").on(t.seriesId, t.kind, t.name),
+  ],
+);
+
+/** 集 ↔ 系列资产 引用（ISSUE #5215）：引用而非拷贝，删集只清关联不动资产。 */
+export const episodeAsset = sqliteTable(
+  "episode_asset",
+  {
+    id: cuid(),
+    episodeId: text("episodeId")
+      .notNull()
+      .references(() => episode.id, { onDelete: "cascade" }),
+    assetId: text("assetId")
+      .notNull()
+      .references(() => seriesAsset.id, { onDelete: "cascade" }),
+    createdAt: dateNotNull("createdAt")
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    index("episode_asset_episode_idx").on(t.episodeId),
+    index("episode_asset_asset_idx").on(t.assetId),
+    uniqueIndex("episode_asset_uniq").on(t.episodeId, t.assetId),
+  ],
+);
+
 export const seriesRelations = relations(series, ({ many }) => ({
   seasons: many(season),
+  assets: many(seriesAsset),
 }));
 export const seasonRelations = relations(season, ({ one, many }) => ({
   series: one(series, { fields: [season.seriesId], references: [series.id] }),
@@ -165,6 +226,7 @@ export const seasonRelations = relations(season, ({ one, many }) => ({
 export const episodeRelations = relations(episode, ({ one, many }) => ({
   season: one(season, { fields: [episode.seasonId], references: [season.id] }),
   characters: many(episodeCharacter),
+  assets: many(episodeAsset),
 }));
 export const characterRelations = relations(character, ({ many }) => ({
   episodeLinks: many(episodeCharacter),
@@ -180,6 +242,15 @@ export const episodeCharacterRelations = relations(episodeCharacter, ({ one }) =
   }),
 }));
 
+export const seriesAssetRelations = relations(seriesAsset, ({ one, many }) => ({
+  series: one(series, { fields: [seriesAsset.seriesId], references: [series.id] }),
+  episodeLinks: many(episodeAsset),
+}));
+export const episodeAssetRelations = relations(episodeAsset, ({ one }) => ({
+  episode: one(episode, { fields: [episodeAsset.episodeId], references: [episode.id] }),
+  asset: one(seriesAsset, { fields: [episodeAsset.assetId], references: [seriesAsset.id] }),
+}));
+
 export type Series = InferSelectModel<typeof series>;
 export type Season = InferSelectModel<typeof season>;
 export type Episode = InferSelectModel<typeof episode>;
@@ -190,3 +261,7 @@ export type SeasonInsert = InferInsertModel<typeof season>;
 export type EpisodeInsert = InferInsertModel<typeof episode>;
 export type CharacterEntityInsert = InferInsertModel<typeof character>;
 export type EpisodeCharacterInsert = InferInsertModel<typeof episodeCharacter>;
+export type SeriesAsset = InferSelectModel<typeof seriesAsset>;
+export type EpisodeAsset = InferSelectModel<typeof episodeAsset>;
+export type SeriesAssetInsert = InferInsertModel<typeof seriesAsset>;
+export type EpisodeAssetInsert = InferInsertModel<typeof episodeAsset>;

@@ -5,7 +5,7 @@
  *   · 「尺寸表」入口与当前场景提示（两个子控件脚注共用）。
  * 抽出来只为让两个子控件各自独立成文件，行为与拆前完全一致。 */
 
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
@@ -60,7 +60,7 @@ export function RequiredChips({
   /** IO 编辑态：按该模式解析可见性（undefined 不渲染 👁）。 */
   visibilityMode?: string | null;
 }) {
-  const live = pins.filter((pin): pin is EnrichedWidget => !!pin);
+  const live = useMemo(() => pins.filter((pin): pin is EnrichedWidget => !!pin), [pins]);
   const showAny =
     !!onRequiredChange ||
     (!!onVisibilityChange &&
