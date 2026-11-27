@@ -14,6 +14,7 @@ import {
   INPUT_RES,
   SKELETON,
   judgeProduct,
+  rootNeedles,
   judgeTypedocTail,
   matchedInputs,
   walk,
@@ -195,6 +196,57 @@ describe("judgeProduct：骨架齐全 + 可移植（ISSUE #2231 的新判据）"
     );
     const posix = productFixture({ "modules/leak.html": "<p>/repo/src/lib/x.ts</p>" });
     expect(judgeProduct(posix, "/repo", {}).problems.join("\n")).toContain("本机绝对路径");
+  });
+
+  /* ISSUE #5163：旧版拿裸 root 做 `text.includes()`，root 恰好是源码里常见的路径片段
+   * （容器里的 `/workspace` 命中 `app/workspace/page.tsx`）时必然假红。正控仍要报真泄漏，
+   * 负控必须放过"root 只是子串"的相对路径片段 —— 这是这一族误报的根因。 */
+  it("短 root：散文里以 root 同名路径片段开头的相对路径不误报（ISSUE #5163 负控）", () => {
+    const dir = productFixture({
+      "modules/leak.html":
+        "<p>容器（<code>app/workspace/page.tsx</code>）里的页面，引用了同目录的其它文件</p>",
+    });
+    const got = judgeProduct(dir, "/workspace", {});
+    expect(got.problems).toEqual([]);
+  });
+
+  it("短 root 的其它子串形态也不误报（前缀 / 连字符后缀 / Windows 分隔符）", () => {
+    for (const body of [
+      "<p>x/workspace/src/lib/x.ts 不是本机路径</p>",
+      "<p>/workspace-extra/src/x.ts 是另一处目录</p>",
+      String.raw`<p>app\workspace\page.tsx 只是相对片段</p>`,
+    ]) {
+      const dir = productFixture({ "modules/leak.html": body });
+      expect(judgeProduct(dir, "/workspace", {}).problems, body).toEqual([]);
+    }
+  });
+
+  it("短 root 仍报真泄漏：root 作为完整路径前缀 / 独立 token（ISSUE #5163 正控）", () => {
+    for (const body of [
+      "<p>/workspace/src/lib/x.ts</p>",
+      'href="/workspace/src/x.ts"',
+      'href="/workspace"',
+      "<p>/workspace 是本仓根</p>",
+    ]) {
+      const dir = productFixture({ "modules/leak.html": body });
+      expect(judgeProduct(dir, "/workspace", {}).problems.join("\n"), body).toContain(
+        "本机绝对路径",
+      );
+    }
+  });
+
+  it("rootNeedles：三种分隔符形态都收，Windows 根的反斜杠形态也报（#5163 正控）", () => {
+    const needles = rootNeedles(String.raw`C:\repo`);
+    expect(needles.length).toBe(2); // 原样 + 全 `/`（本例里全 `\` 与原样相同）
+    expect(needles.some((re) => re.test(String.raw`<p>C:\repo\src\x.ts</p>`))).toBe(true);
+    expect(needles.some((re) => re.test("<p>C:/repo/src/x.ts</p>"))).toBe(true);
+    expect(needles.some((re) => re.test(String.raw`app\repo\src\x.ts`))).toBe(false);
+  });
+
+  it("rootNeedles：root 里的正则元字符按字面量匹配（不是被当成正则）", () => {
+    const needles = rootNeedles("/repo.v1");
+    expect(needles.some((re) => re.test("/repo.v1/src/x.ts"))).toBe(true);
+    expect(needles.some((re) => re.test("/repoXv1/src/x.ts"))).toBe(false);
   });
 
   it("typedoc.json 把 cleanOutputDir 关了 ⇒ 报出来（孤儿页面会留在这一轮里）", () => {
