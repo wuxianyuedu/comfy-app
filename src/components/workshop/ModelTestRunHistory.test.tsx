@@ -95,6 +95,45 @@ describe("ModelTestRunHistory", () => {
     expect(onRetry).toHaveBeenCalledWith(newer);
   });
 
+  it("参考图组差异判定每次渲染只做一次，且与差异计数共用同一结果", () => {
+    const older = { ...run("old", "same"), referenceImages: ["data:image/png;base64,old"] };
+    const newer = { ...run("new", "same"), referenceImages: ["data:image/png;base64,new"] };
+    const stringify = vi.spyOn(JSON, "stringify");
+    const { rerender } = render(
+      <ModelTestRunHistory
+        generating={false}
+        onClear={vi.fn()}
+        onRetry={vi.fn()}
+        runs={[newer, older]}
+      />,
+    );
+    for (const box of screen.getAllByRole("checkbox").slice(0, 2)) {
+      fireEvent.click(box);
+    }
+    const afterSelection = stringify.mock.calls.length;
+    // 参考图组是字符串数组，逐项比较不应产生任何 JSON.stringify；其它展示逻辑也不该序列化它。
+    expect(
+      stringify.mock.calls.some(
+        ([value]) => Array.isArray(value) && value.includes("data:image/png;base64,old"),
+      ),
+    ).toBe(false);
+    stringify.mockClear();
+    rerender(
+      <ModelTestRunHistory
+        generating={false}
+        onClear={vi.fn()}
+        onRetry={vi.fn()}
+        runs={[newer, older]}
+      />,
+    );
+    // 同一组 props 重渲染时派生布尔仍由 useMemo 缓存，不重复计算。
+    expect(stringify.mock.calls.length).toBe(0);
+    expect(afterSelection).toBe(0);
+    expect(screen.getByText(/A \/ B 参数对比 · 1 项不同/)).toBeTruthy();
+    expect(screen.getByText("参考图组").closest("tr")?.className).toContain("bg-warning/5");
+    stringify.mockRestore();
+  });
+
   it("最多保留两个对比项，并支持按历史参数重跑与清空", () => {
     const onRetry = vi.fn();
     const onClear = vi.fn();
