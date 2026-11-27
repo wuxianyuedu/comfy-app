@@ -21,7 +21,9 @@ function Consumer() {
 
 function Wrapper() {
   const [, setTick] = useState(0);
-  bump = () => setTick((t) => t + 1);
+  bump = () => {
+    setTick((t) => t + 1);
+  };
   return (
     <ToastProvider>
       <Consumer />
