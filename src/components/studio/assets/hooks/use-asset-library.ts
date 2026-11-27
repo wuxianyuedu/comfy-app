@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { readStorageJson, writeStorageJson } from "~/lib/browser-storage";
 import { runAsyncAction } from "~/lib/async-action";
 import type { RouterOutputs } from "~/trpc/react";
+import { useDebouncedValue } from "~/components/ui/use-debounced-value";
 
 import { useToast } from "../../ToastProvider";
 import { useTRPC } from "~/trpc/react";
@@ -26,6 +27,9 @@ const SIZE_STORAGE_KEY = "comfyapp:asset-grid-size:v1";
 
 /** 尺寸档的默认档：与设计稿主视图一致（4 列）。 */
 const DEFAULT_SIZE: AssetSizeKey = "standard";
+
+/** 搜索词防抖：输入框显示即时，喂给列表查询的值降频（#5205 / 规范 16 值侧唯一出口）。 */
+const SEARCH_DEBOUNCE_MS = 250;
 
 function readStoredSize(): AssetSizeKey {
   const stored = readStorageJson<string>(SIZE_STORAGE_KEY, DEFAULT_SIZE);
@@ -98,6 +102,8 @@ export function useAssetLibrary(): AssetLibraryController {
   const [category, setCategory] = useState<AssetCategoryKey>("reference");
   const [subdirPath, setSubdirPath] = useState<string | null>(null);
   const [q, setQ] = useState<string>("");
+  /* 显示即时、请求滞后：q 给输入框，debouncedQ 喂列表查询与空态（#5205）。 */
+  const debouncedQ = useDebouncedValue(q, SEARCH_DEBOUNCE_MS);
   const [size, setSize] = useState<AssetSizeKey>(DEFAULT_SIZE);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
@@ -118,7 +124,7 @@ export function useAssetLibrary(): AssetLibraryController {
       scope,
       category,
       mediaType: "all",
-      q: q.trim() === "" ? undefined : q.trim(),
+      q: debouncedQ.trim() === "" ? undefined : debouncedQ.trim(),
       ...(subdirPath === null ? {} : { subdirPrefix: subdirPath }),
     }),
   );
@@ -172,14 +178,14 @@ export function useAssetLibrary(): AssetLibraryController {
   }, [listQ.data]);
 
   const empty = useMemo(() => {
-    if (q.trim() !== "" || subdirPath !== null || scope !== "public") {
+    if (debouncedQ.trim() !== "" || subdirPath !== null || scope !== "public") {
       return { title: "没有符合条件的资产", hint: "换个目录或关键词，或先把生成结果加入资产库。" };
     }
     return {
       title: "资产库还是空的",
       hint: "到「历史」页把满意的生成结果「加入资产库」，或直接上传文件——它们会带着完整生成参数沉淀在这里。",
     };
-  }, [q, subdirPath, scope]);
+  }, [debouncedQ, subdirPath, scope]);
 
   return {
     category,

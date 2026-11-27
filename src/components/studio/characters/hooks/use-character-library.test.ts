@@ -13,6 +13,8 @@ import { useCharacterLibrary } from "./use-character-library";
 
 const syncMutate = vi.fn<(input?: unknown) => Promise<void>>();
 const toast = { error: vi.fn(), info: vi.fn(), success: vi.fn() };
+/** 每次列表查询实际喂给 queryOptions 的入参（#5205 防抖断言用）。 */
+const listQueryInputs: Array<{ q: string }> = [];
 const cancelTaskMock = vi.hoisted(() => vi.fn());
 
 let items: Array<{
@@ -27,7 +29,12 @@ vi.mock("~/components/studio/ToastProvider", () => ({ useToast: () => toast }));
 
 const stableTrpc = {
   characterLibrary: {
-    list: { queryOptions: () => ({ queryKey: ["characterLibrary", "list"] }) },
+    list: {
+      queryOptions: (input: { q: string }) => {
+        listQueryInputs.push(input);
+        return { queryKey: ["characterLibrary", "list"] };
+      },
+    },
     detail: { queryOptions: () => ({ queryKey: ["characterLibrary", "detail"] }) },
     history: { queryOptions: () => ({ queryKey: ["characterLibrary", "history"] }) },
     syncGeneration: {
@@ -108,6 +115,7 @@ const mockedCancel = vi.mocked(cancelTask);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  listQueryInputs.length = 0;
   syncMutate.mockResolvedValue(undefined);
   cancelTaskMock.mockResolvedValue(undefined);
   items = [
@@ -182,5 +190,34 @@ describe("useCharacterLibrary 传给 memo 卡片的引用稳定性（ISSUE #5198
       result.current.toggleCharacterSelection("char-1");
     });
     expect(result.current.selectedCharacterIdSet.has("char-1")).toBe(false);
+  });
+});
+
+describe("useCharacterLibrary 搜索防抖（ISSUE #5205）", () => {
+  it("输入框即时更新，但喂给 list 查询的 q 在防抖窗口内保持旧值、窗口后才跟上", async () => {
+    const { result } = renderHook(() => useCharacterLibrary());
+    /* 首帧用空 q 查过一次。 */
+    expect(listQueryInputs.at(-1)?.q).toBe("");
+
+    act(() => {
+      result.current.setQ("赛");
+    });
+    /* 输入框即时；请求参数还没动。 */
+    expect(result.current.q).toBe("赛");
+    expect(listQueryInputs.at(-1)?.q).toBe("");
+
+    /* 窗口内连续敲完，仍不得发起新 q 的查询。 */
+    act(() => {
+      result.current.setQ("赛博");
+      result.current.setQ("赛博朋");
+      result.current.setQ("赛博朋克");
+    });
+    expect(result.current.q).toBe("赛博朋克");
+    expect(listQueryInputs.at(-1)?.q).toBe("");
+
+    /* 停止变化达 250ms 后，最后那一次才落到列表查询。 */
+    await expect
+      .poll(() => listQueryInputs.at(-1)?.q, { message: "防抖窗口后列表查询应只拿到最后一次 q" })
+      .toBe("赛博朋克");
   });
 });
