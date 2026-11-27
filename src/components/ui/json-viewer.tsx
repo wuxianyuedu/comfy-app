@@ -188,19 +188,20 @@ function clearPreviousHighlights(body: HTMLElement) {
   body.normalize();
 }
 
-/** 把 hits 注入 DOM (行级 + substring) */
-function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number, query: string) {
+/**
+ * 把 query 对应的全部子串高亮一次性注入 DOM，返回注入顺序的 <mark> 列表。
+ * 只有 query / data 变化（命中集本身变了）才需要整轮重建；hitIndex 的导航
+ * 走 {@link setActiveMark} 的 O(1) 属性切换，不再每次全树拆 <mark>。
+ */
+function applyHighlights(body: HTMLElement, query: string): Array<HTMLElement> {
   clearPreviousHighlights(body);
-  if (!query || hits.length === 0) {
-    return;
+  if (!query) {
+    return [];
   }
 
   const q = query.toLowerCase();
-  // 提前统计每个 primitive text-node 的命中数, 用于将全局 activeIdx 映射到
-  // 当前活跃的那个 <mark>. 这要在 fragment 替换之前先知道数量.
-  // 我们用一次"dry walk" 收集所有 lenArray (per textnode) 然后再 walk 替换.
 
-  // ── 收集所有叶子 textNode 的命中数 (顺序 = 命中顺序) ──
+  // ── 收集所有叶子 textNode 的命中数（顺序 = 命中顺序）──
   const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement;
@@ -224,49 +225,18 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
     },
   });
 
-  type HitNode = { count: number; node: Text };
+  type HitNode = { node: Text };
   const targets: Array<HitNode> = [];
   let cur = walker.nextNode();
   while (cur) {
-    if (cur instanceof Text) {
-      const text = cur.textContent || "";
-      if (text.toLowerCase().includes(q)) {
-        // 估算该 textNode 内出现次数 (大小写不敏感)
-        const lower = text.toLowerCase();
-        let count = 0;
-        let p = 0;
-        let j = lower.indexOf(q, p);
-        while (j !== -1) {
-          count += 1;
-          p = j + q.length;
-          j = lower.indexOf(q, p);
-        }
-        if (count > 0) {
-          targets.push({ node: cur, count });
-        }
-      }
+    if (cur instanceof Text && (cur.textContent || "").toLowerCase().includes(q)) {
+      targets.push({ node: cur });
     }
     cur = walker.nextNode();
   }
 
-  // ── 把 hitIndex 映射回"textnode + 该 node 内第几个" ──
-  // 假设 leaf textNodes 的命中数合计 <= hits.length (后者含 key 命中, 前者只看 primitive 节点).
-  // 如果对不上, 我们只能尽力 fallback — 高亮能标多少算多少.
-  const totalLeafHits = targets.reduce((sum, target) => sum + target.count, 0);
-  let activeCursor = hitIndex;
-  let activeNode: Text | null = null;
-  if (activeCursor < totalLeafHits) {
-    for (const t of targets) {
-      if (activeCursor < t.count) {
-        activeNode = t.node;
-        break;
-      }
-      activeCursor -= t.count;
-    }
-  }
-
-  // ── 替换: 每个 textnode 拆成 Text/Text/<mark>/.../Text ──
-  let globalIdx = 0;
+  // ── 替换：每个 textnode 拆成 Text/Text/<mark>/.../Text ──
+  const marks: Array<HTMLElement> = [];
   for (const t of targets) {
     const orig = t.node.textContent || "";
     const lower = orig.toLowerCase();
@@ -281,19 +251,32 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
       if (j > i) {
         frag.append(document.createTextNode(orig.slice(i, j)));
       }
-      const isActive = activeNode === t.node && globalIdx === hitIndex;
       const mark = document.createElement("mark");
       mark.className = "jv-hit-sub";
-      if (isActive) {
-        mark.dataset.jvActiveHit = "true";
-      }
       mark.textContent = orig.slice(j, j + q.length);
       frag.append(mark);
-      globalIdx += 1;
+      marks.push(mark);
       i = j + q.length;
     }
     t.node.parentNode?.replaceChild(frag, t.node);
   }
+  return marks;
+}
+
+/** 把 active 状态从旧 mark 挪到新 mark —— 导航时只碰两个节点的属性。 */
+function setActiveMark(
+  marks: Array<HTMLElement>,
+  activeIndex: number,
+  prevIndex: number,
+): HTMLElement | null {
+  if (prevIndex >= 0 && prevIndex < marks.length && prevIndex !== activeIndex) {
+    delete marks[prevIndex]?.dataset.jvActiveHit;
+  }
+  const active = marks[activeIndex] ?? null;
+  if (active) {
+    active.dataset.jvActiveHit = "true";
+  }
+  return active;
 }
 
 // ─── 外层组件 ──────────────────────────────────────────────────────────────
@@ -333,14 +316,16 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
     setHitIndex(0);
   }
 
-  /* 上一轮是否真的往 DOM 里写过高亮标记。`applyHighlights` 的头一件事是
-   * `clearPreviousHighlights`（对整棵子树 querySelectorAll ×2 + normalize()），
-   * 没在搜索时它纯粹是白扫一遍 —— 而本 effect 会随 `data` / `hits` / `query`
-   * 的身份变化重跑（轮询刷新、父级重渲染都算）。记一笔「有没有写过」，从没写过
-   * 就直接跳过整轮 DOM 后处理。 */
+  /* 全文高亮的 <mark> 按注入顺序缓存：query / data 变化才整轮重建，
+   * hitIndex 的 Enter/箭头导航只切换两个节点的 active 属性（O(1)），
+   * 不再对整棵子树 querySelectorAll ×2 + normalize() + 逐 textNode 拆 <mark>。 */
+  const marksRef = useRef<Array<HTMLElement>>([]);
+  const activeRef = useRef(-1);
   const paintedRef = useRef(false);
+  const lastDataRef = useRef<unknown>(undefined);
+  const lastNeedleRef = useRef("");
 
-  // ── DOM 后处理: query / hitIndex / data 变化时重新注入高亮 ──
+  // ── DOM 后处理：重建（query/data 变）与 active 切换（hitIndex 变）合并一档 ──
   useEffect(() => {
     ensureHighlightCss();
     const body = bodyRef.current;
@@ -348,7 +333,8 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
       return;
     }
     const needle = debouncedQuery.trim();
-    if (!needle && !paintedRef.current) {
+    const needsRebuild = lastDataRef.current !== data || lastNeedleRef.current !== needle;
+    if (!needle && !paintedRef.current && !needsRebuild) {
       return;
     }
     // 折叠 state 引发的 DOM 变化先 settle, 再扫
@@ -356,24 +342,20 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
       if (!bodyRef.current) {
         return;
       }
-      applyHighlights(bodyRef.current, hits, hitIndex, needle);
-      paintedRef.current = needle.length > 0 && hits.length > 0;
-    });
-  }, [debouncedQuery, hits, hitIndex, data]);
-
-  // ── active hit 居中滚动 ──
-  useEffect(() => {
-    if (!bodyRef.current || hits.length === 0) {
-      return;
-    }
-    return onNextFrame(() => {
-      const el = bodyRef.current?.querySelector("mark.jv-hit-sub[data-jv-active-hit]");
-      if (!(el instanceof HTMLElement)) {
-        return;
+      if (needsRebuild) {
+        marksRef.current = applyHighlights(bodyRef.current, needle);
+        lastDataRef.current = data;
+        lastNeedleRef.current = needle;
+        activeRef.current = -1;
+        paintedRef.current = needle.length > 0 && marksRef.current.length > 0;
       }
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      const active = setActiveMark(marksRef.current, hitIndex, activeRef.current);
+      activeRef.current = hitIndex;
+      if (active) {
+        active.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
     });
-  }, [hitIndex, hits]);
+  }, [debouncedQuery, data, hitIndex]);
 
   // ── ⌘/Ctrl+F 快捷键 ──
   const focusSearch = useCallback(() => {
