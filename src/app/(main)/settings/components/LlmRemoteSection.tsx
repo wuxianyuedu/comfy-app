@@ -9,6 +9,8 @@
  * 本组件只渲染，不拼请求、不判字段。
  */
 
+import { useMemo } from "react";
+
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { Hint } from "~/components/ui/hint";
@@ -28,6 +30,20 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
   const p = useSettingsProviders();
   const d = useProviderModelDialogs(p);
   const usage = useUsageTestDialogs(c);
+
+  /* 供应商清单里的「已启用 x/y」读数：按供应商分组、启用数一次算齐，避免逐行扫描。 */
+  const providerStats = useMemo(() => {
+    const table = new Map<string | null, { enabled: number; owned: number }>();
+    for (const model of p.models) {
+      const stat = table.get(model.providerId) ?? { enabled: 0, owned: 0 };
+      stat.owned += 1;
+      if (model.enabled) {
+        stat.enabled += 1;
+      }
+      table.set(model.providerId, stat);
+    }
+    return table;
+  }, [p.models]);
 
   return (
     <>
@@ -53,8 +69,10 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
             <aside aria-label="供应商列表" className="flex min-w-0 flex-col gap-1.5">
               {p.providers.map((provider) => {
                 const active = p.selected?.id === provider.id;
-                const owned = p.models.filter((model) => model.providerId === provider.id);
-                const enabledCount = owned.filter((model) => model.enabled).length;
+                const { owned, enabled: enabledCount } = providerStats.get(provider.id) ?? {
+                  enabled: 0,
+                  owned: 0,
+                };
                 return (
                   <Button
                     aria-current={active ? "true" : undefined}
@@ -83,12 +101,10 @@ export function LlmRemoteSection({ c }: { c: ReadySettingsPageController }) {
                         {provider.name}
                       </TruncatedText>
                       <Hint
-                        label={`${owned.length === 0 ? "暂无模型" : `已启用 ${enabledCount}/${owned.length}`}${provider.hasApiKey ? " · 已配密钥" : ""}`}
+                        label={`${owned === 0 ? "暂无模型" : `已启用 ${enabledCount}/${owned}`}${provider.hasApiKey ? " · 已配密钥" : ""}`}
                       >
                         <span className="text-muted-foreground text-2xs block truncate">
-                          {owned.length === 0
-                            ? "暂无模型"
-                            : `已启用 ${enabledCount}/${owned.length}`}
+                          {owned === 0 ? "暂无模型" : `已启用 ${enabledCount}/${owned}`}
                           {provider.hasApiKey ? " · 已配密钥" : ""}
                         </span>
                       </Hint>

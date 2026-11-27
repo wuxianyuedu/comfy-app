@@ -99,11 +99,18 @@ export function VideoStudio({
     tabActiveRef.current = isTabActive;
   }, [isTabActive]);
 
-  const doneCount = shots.filter((s) => s.clipUrl !== undefined && s.clipUrl !== "").length;
-  const pending = shots.filter(
-    (s) =>
-      (s.clipUrl === undefined || s.clipUrl === "") &&
-      (!s.clipStatus || s.clipStatus === "idle" || s.clipStatus === "failed"),
+  const doneCount = React.useMemo(
+    () => shots.filter((s) => s.clipUrl !== undefined && s.clipUrl !== "").length,
+    [shots],
+  );
+  const pending = React.useMemo(
+    () =>
+      shots.filter(
+        (s) =>
+          (s.clipUrl === undefined || s.clipUrl === "") &&
+          (!s.clipStatus || s.clipStatus === "idle" || s.clipStatus === "failed"),
+      ),
+    [shots],
   );
 
   function patchShot(id: string, p: Partial<Shot>) {

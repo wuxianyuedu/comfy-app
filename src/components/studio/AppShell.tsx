@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { LayoutGrid, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
@@ -415,7 +415,7 @@ export function AppShell({
   const shellActiveTabId = useShellTabs((s) => s.activeTabId);
   const activateShellTab = useShellTabs((s) => s.activateTab);
   const closeShellTab = useShellTabs((s) => s.closeTab);
-  const iframeTabs = shellTabs.filter((tab) => tab.id !== MAIN_TAB_ID);
+  const iframeTabs = useMemo(() => shellTabs.filter((tab) => tab.id !== MAIN_TAB_ID), [shellTabs]);
   /* iframe 页签激活 = 主应用内容整体让位（CSS 隐藏、保持挂载）。侧栏不在让位
      之列 —— 它是页签切换器的宿主（#4770），藏掉它用户就切不回主应用了
      （ISSUE #4898 的现场）。 */

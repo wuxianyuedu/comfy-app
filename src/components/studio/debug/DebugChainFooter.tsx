@@ -6,7 +6,7 @@
  * 弹窗可复制路径/源码，hover title 显示完整相对路径；阻断 pointer/mouse 冒泡以免触发节点拖动。
  * `modules` 传 getWorkflowRenderChainModules(classType) 的结果。 */
 
-import { useCallback, useState, type CSSProperties } from "react";
+import { useCallback, useMemo, useState, type CSSProperties } from "react";
 import { CodeBlock, extToLanguage } from "~/components/ui/code-block";
 import { Hint } from "~/components/ui/hint";
 import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedback";
@@ -131,13 +131,19 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
     void openSource(module.file);
   };
 
+  /* 按 画布级/节点级 分组展示（scope 缺省视为 node）。hook 放在早返回之前。 */
+  const canvasModules = useMemo(
+    () => modules.filter((m) => (m.scope ?? "node") === "canvas"),
+    [modules],
+  );
+  const nodeModules = useMemo(
+    () => modules.filter((m) => (m.scope ?? "node") === "node"),
+    [modules],
+  );
+
   if (!debugMode || modules.length === 0) {
     return null;
   }
-
-  /* 按 画布级/节点级 分组展示（scope 缺省视为 node） */
-  const canvasModules = modules.filter((m) => (m.scope ?? "node") === "canvas");
-  const nodeModules = modules.filter((m) => (m.scope ?? "node") === "node");
 
   const renderGroup = (title: string, group: Array<RenderChainModule>) => {
     if (group.length === 0) {

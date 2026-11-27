@@ -165,12 +165,22 @@ export function ShotStudio({
   /** 提示词被用户手改过的镜头 —— 自动预填不得覆盖。 */
   const editedRef = React.useRef<Set<string>>(new Set());
 
-  const busyCount = shots.filter((s) => s.status === "running").length;
-  const doneCount = shots.filter((s) => s.imageUrl !== undefined && s.imageUrl !== "").length;
-  const pending = shots.filter(
-    (s) =>
-      (s.imageUrl === undefined || s.imageUrl === "") &&
-      (s.status === "idle" || s.status === "failed"),
+  const busyCount = React.useMemo(
+    () => shots.filter((s) => s.status === "running").length,
+    [shots],
+  );
+  const doneCount = React.useMemo(
+    () => shots.filter((s) => s.imageUrl !== undefined && s.imageUrl !== "").length,
+    [shots],
+  );
+  const pending = React.useMemo(
+    () =>
+      shots.filter(
+        (s) =>
+          (s.imageUrl === undefined || s.imageUrl === "") &&
+          (s.status === "idle" || s.status === "failed"),
+      ),
+    [shots],
   );
 
   // ── 自动预填：分镜输出 → 图片提示词（逻辑收在 useAutoFillPrompts）──
