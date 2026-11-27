@@ -199,21 +199,21 @@ Next 路由只有登录与三个历史挂载点（§4.3）。
 | 作品 | **集** Episode       | 一集 = 一次完整创作链路 + 一部可交付成片             | ✅ 有（`episode` 表，`FR-SR-02` 容器层 #2477：季号 / 集号 / 单集目标时长 / 状态，经 `projectId` 外链项目承载创作链路）    |
 | 内容 | **剧本** Script      | `scriptMarkdown` + 拆出的 `Scene[]`                  | ⚠️ 列（`production` / `workshopSession` / `workshopDraft` 的 `scriptMarkdown`）                                           |
 | 内容 | **角色** Character   | 角色卡 + 定妆照（一致性锚点）                        | ✅ 有（`character` 实体 + `episode_character` 集引用，#2508；项目级 `production.characters` JSON 仍在，与系列库双向同步） |
-| 内容 | **分镜 / 镜头** Shot | 镜头表：景别 / 描述 / 提示词 / 运动 / 时长 / 转场    | ⚠️ JSON 列（`shots`）；成片链另有独立 `filmShot` 表                                                                       |
+| 内容 | **分镜 / 镜头** Shot | 镜头表：景别 / 描述 / 提示词 / 运动 / 时长 / 转场    | ⚠️ 项目内仍是 JSON 列（`shots`）；系列级镜头模板已实体化（`seriesAsset` kind=shot，ISSUE #5215），成片链另有 `filmShot` 表 |
 | 素材 | **镜图** Image       | 镜头的关键帧                                         | ✅ 产物侧有 `task` / `taskImage`（含 seed、宽高）                                                                         |
 | 素材 | **镜视频** Clip      | 镜头片段                                             | ⚠️ 任务侧有 `task`，镜头侧只是 `Shot.clipUrl` 字段                                                                        |
 | 交付 | **成片** Film        | 可播放的 MP4                                         | ✅ `filmProject` / `filmShot` + 服务端 ffmpeg                                                                             |
 
-**这张表最关键的缺口是「分镜 / 风格 / 场景仍未实体化」**：跨集复用与版本管理要求资产
-是**可被引用、可被索引**的实体，而不是躺在某一行 JSON 里的对象。角色已实体化
-（#2508：集经 `episode_character` 引用系列角色库，跨集引用可查可提示）；分镜 / 风格锚 /
-场景库的实体化由 `FR-SR-03` 承接（角色库部分已达标，其余待做）。
+**分镜 / 风格 / 场景的系列级实体化已上线**（ISSUE #5215）：`seriesAsset` 表按风格锚 /
+场景 / 镜头模板三种 kind 存实体，集经 `episode_asset` 引用而非拷贝，带版本号与引用计数，
+反向查询可列「被哪些集引用」。项目内 `production` 的 JSON 列保留（逐项录入即可迁移）；
+成片链另有独立 `filmShot` 表。`FR-SR-03` 的角色库部分见 #2508 / #2801。
 
 ## 6. 数据与账号
 
 - **数据库**：SQLite（Drizzle ORM），schema 唯一出处
-  `src/server/db/schema.ts` —— 共 **31 张表**：better-auth 4 张
-  （`user` / `session` / `account` / `verification`）+ 业务 27 张。
+  `src/server/db/schema.ts` —— 共 **33 张表**：better-auth 4 张
+  （`user` / `session` / `account` / `verification`）+ 业务 29 张。
   业务表按域分五组：
   - 任务与产物：`task` / `taskImage` / `taskLog`；
   - 工作流族：`workflowTemplate` / `workflowModelTag` /
@@ -221,7 +221,8 @@ Next 路由只有登录与三个历史挂载点（§4.3）。
   - 创作族：`project` / `production` / `filmProject` / `filmShot` /
     `workshopSession` / `workshopDraft` / `skill` / `asset`（#4868 资产库）；
   - 系列与剧集族：`series` / `season` / `episode` / `character` /
-    `episodeCharacter`（#2477 容器层 + #2508 系列角色库）；
+    `episodeCharacter` / `seriesAsset` / `episodeAsset`（#2477 容器层 + #2508 系列角色库 +
+    #5215 跨集资产实体）；
   - 模型与配置族：`model` / `userModelConfig` / `favorite` / `llmConfig` /
     `llmProvider` / `remoteModel` / `auditLog` / `post`（脚手架示例表：其 tRPC 口已按
     零消费治理退役，仓储层仍在）。
