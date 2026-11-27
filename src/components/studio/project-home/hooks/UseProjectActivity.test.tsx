@@ -1,4 +1,3 @@
-// @vitest-environment happy-dom
 /** 活动流轮询（ISSUE #5251）：挂载即取、30s 再取、无项目不装表。 */
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
