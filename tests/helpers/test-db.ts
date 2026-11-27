@@ -227,7 +227,7 @@ CREATE TABLE IF NOT EXISTS season (
 CREATE TABLE IF NOT EXISTS episode (
   id TEXT PRIMARY KEY, seasonId TEXT NOT NULL, projectId TEXT, episodeNumber INTEGER NOT NULL DEFAULT 1,
   title TEXT NOT NULL DEFAULT '', synopsis TEXT NOT NULL DEFAULT '', coverUrl TEXT,
-  targetDurationSec INTEGER, status TEXT NOT NULL DEFAULT 'draft',
+  targetDurationSec INTEGER, delivery TEXT, status TEXT NOT NULL DEFAULT 'draft',
   createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS "character" (

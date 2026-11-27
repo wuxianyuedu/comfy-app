@@ -237,6 +237,8 @@ export const seriesRouter = createTRPCRouter({
         title: z.string().max(120).optional(),
         synopsis: z.string().max(4000).optional(),
         targetDurationSec: z.number().int().positive().optional(),
+        /** 集级交付清单（ISSUE #5217）：外来 JSON，读侧逐字段收窄。 */
+        delivery: z.unknown().optional(),
         status: z.enum(EPISODE_STATUSES).optional(),
       }),
     )
@@ -257,6 +259,9 @@ export const seriesRouter = createTRPCRouter({
       }
       if (input.targetDurationSec !== undefined) {
         patch.targetDurationSec = input.targetDurationSec;
+      }
+      if (input.delivery !== undefined) {
+        patch.delivery = input.delivery;
       }
       if (input.status !== undefined) {
         patch.status = input.status;
