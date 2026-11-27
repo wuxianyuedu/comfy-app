@@ -9,6 +9,17 @@ import {
 } from "./error-advice";
 
 describe("adviseOnError", () => {
+  it("HostBuffer 权重切片失败：给出内存 / 量化版本的行动建议（ISSUE #5144）", () => {
+    const advice = adviseOnError(
+      "MiniMaxH3ImageConditioning (node 23:5): HostBuffer.read_file_slice failed",
+    );
+    expect(advice).toBeTruthy();
+    expect(advice).toContain("内存");
+    expect(advice).toContain("nvfp4");
+    expect(shouldAutoExpandError("HostBuffer.read_file_slice failed")).toBe(true);
+    expect(adviseWithFallback("HostBuffer.read_file_slice failed")).not.toBe(GENERIC_ERROR_ADVICE);
+  });
+
   it("显存不足：两处旧词表各自给一句，收口后只有一句", () => {
     /* 收口前历史卡说「降低 batch size / 分辨率」、画布面板说「拆成更小的
      * 批次 / 关闭其他任务」—— 同一句报错在两处给出不同建议。 */

@@ -43,6 +43,7 @@ import type {
   TaskType,
   LLMTool,
 } from "./types";
+import { ERR_NO_EFFECTIVE_MODEL, llmFailureMessage } from "./config-health";
 
 const PROVIDER_TYPES: ReadonlyArray<LLMProviderType> = ["local", "remote"];
 
@@ -464,7 +465,9 @@ async function upstreamChat(
     const detail = await res.text().catch(() => "");
     // 401/403 大概率是 Key 无效 / 未授权 —— 给个更明确的提示，而不是只给状态码。
     const hint =
-      res.status === 401 || res.status === 403 ? "（API Key 无效或未授权，请检查后重试）" : "";
+      res.status === 401 || res.status === 403
+        ? llmFailureMessage({ cfg, status: res.status })
+        : "";
     const snippet = detail.trim()
       ? `：${clampText(detail, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`
       : "";
@@ -475,8 +478,7 @@ async function upstreamChat(
 
 /** 模型未配置（空）时给调用方的统一出口文案 —— 不再兜底默认模型，
  *  避免用空的 model 打到后端拿一个「model not found」的含糊错误。 */
-const ERR_MODEL_UNCONFIGURED =
-  "尚未配置生效模型：请先在「设置 → 本地模型/远程模型」中选择或填写要使用的模型名";
+const ERR_MODEL_UNCONFIGURED = ERR_NO_EFFECTIVE_MODEL;
 /** 上游不是 SSE 流的统一出口文案（#4340）：指到可动作作（查 baseUrl / 上游健康），
  *  不报一句含糊的「解析失败」。 */
 const ERR_UPSTREAM_NOT_SSE =
