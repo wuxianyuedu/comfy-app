@@ -38,6 +38,7 @@ import { runRerunCiStage } from "./ship-local.mjs";
 import { runResultQuery } from "./ship-result.mjs";
 import { runFetchIssue } from "./ship-fetch-issue.mjs";
 import { runFindIssues } from "./ship-find-issues.mjs";
+import { runScreenshotReply } from "./ship-screenshot-reply.mjs";
 import { whoamiLines } from "./ship-ticket.mjs";
 
 /**
@@ -100,6 +101,12 @@ function namedActions(opt, self) {
     ["status", opt.status, "--status"],
     ["result", opt.result, "--result"],
     ["fetchIssue", opt.fetchIssue !== null && opt.fetchIssue !== undefined, "--fetch-issue"],
+    [
+      "screenshotReply",
+      (opt.screenshotReply !== null && opt.screenshotReply !== undefined) ||
+        opt.screenshotReplyBad.length > 0,
+      "--screenshot-reply",
+    ],
     [
       "findIssues",
       (opt.findIssues !== null && opt.findIssues !== undefined) || opt.findIssuesBad.length > 0,
@@ -500,6 +507,51 @@ export async function runStandaloneAction(io) {
     return {
       handled: true,
       code: settle([runFetchIssue({ run, log, slug, number: opt.fetchIssue, root })]),
+    };
+  }
+
+  /* ── `--screenshot-reply`：截图上传 + 回帖一步（ISSUE #5191）────── */
+  if (opt.screenshotReply !== null || opt.screenshotReplyBad.length > 0) {
+    /* `--body-file` 是这一格的可选文案输入，不算互斥动作。 */
+    const clashes = namedActions(opt, "screenshotReply").filter((l) => l !== "--body-file");
+    if (clashes.length > 0) {
+      log(`[ship] [ERROR] --screenshot-reply 一次只做一张：不与 ${clashes.join(" / ")} 同跑。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (opt.screenshotReplyBad.length > 0 || opt.screenshotReply === null) {
+      log(
+        `[ship] [ERROR] --screenshot-reply 收的是 issue 号：${opt.screenshotReplyBad.join(" / ") || "(缺号)"} ⇒ 这一格没有结论。`,
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (!opt.screenshotFile) {
+      log(
+        "[ship] [ERROR] --screenshot-reply 要跟 --file <png>（截图文件）；正文用 --body-file，可不给。",
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (!cnbOk || !slug) {
+      log(
+        `[screenshot-reply] 没有执行者（${cnbOk ? "仓库 slug 取不到" : "cnb 不在"}）⇒ 没有结论。`,
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    return {
+      handled: true,
+      code: settle([
+        runScreenshotReply({
+          run,
+          log,
+          slug,
+          number: opt.screenshotReply,
+          file: opt.screenshotFile,
+          bodyFile: opt.bodyFile,
+          root,
+          handle,
+          mkTmp,
+          dryRun: opt.dryRun,
+        }),
+      ]),
     };
   }
 

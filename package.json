@@ -50,6 +50,7 @@
     "test:coverage:dry": "node scripts/affected-tests/full-suite-run.mjs --dry-run",
     "target:prune": "node scripts/build/target-prune.mjs",
     "package:portable": "node scripts/build/package-desktop-portable.mjs",
+    "publish:bundle": "node scripts/build/publish-bundle-cli.mjs",
     "fetch:daily-shell": "node scripts/devtools/fetch-daily-shell.mjs",
     "screenshot": "node scripts/devtools/screenshot.mjs",
     "status:checkout": "node scripts/devtools/checkout-status.mjs",
