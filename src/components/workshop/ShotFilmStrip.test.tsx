@@ -122,4 +122,12 @@ describe("ShotFilmStrip", () => {
     const { container } = render(<ShotFilmStrip onJump={vi.fn()} shots={[]} />);
     expect(container.innerHTML).toBe("");
   });
+
+  it("复用 shot.review 显示评审通过数，不新增状态类型（ISSUE #5208）", () => {
+    const reviewed: Shot = Object.assign(shot({ index: 1, id: "r1" }), {
+      review: { pass: true, rev: 1 },
+    });
+    render(<ShotFilmStrip onJump={vi.fn()} shots={[reviewed]} />);
+    expect(screen.getByText(/评审通过 1 镜/)).toBeTruthy();
+  });
 });
