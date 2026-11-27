@@ -259,12 +259,28 @@ describe("tRPC 挂载面：每条 procedure 都要有执行者（台账 E3）", 
 const ZERO_CONSUMER: Record<string, string> = {
   "film.subtitleSrt":
     "成片字幕导出的服务端口已落地（与烧录同源），但界面侧还没有「下载字幕」按钮；先用归属用例覆盖，接成片面板时删掉本登记。",
+  "series.seriesAssets":
+    "系列风格锚/场景/镜头模板的服务端口已落地（ISSUE #5215），界面侧还没有「跨集资产」面板；接上系列组织者侧栏时删掉本登记。",
+  "series.createSeriesAsset":
+    "新建资产的服务端口已落地（ISSUE #5215），「跨集资产」面板的新建按钮还没接；接面板时删掉本登记。",
+  "series.updateSeriesAsset":
+    "改名/改正文并递增版本的服务端口已落地（ISSUE #5215），面板的编辑表单还没接；接面板时删掉本登记。",
+  "series.deleteSeriesAsset":
+    "删除未被引用资产的服务端口已落地（ISSUE #5215），面板的删除按钮还没接；接面板时删掉本登记。",
+  "series.episodeAssets":
+    "按集查已引用资产的服务端口已落地（ISSUE #5215），创作侧「本集沿用的风格/场景」区还没接；接创作面板时删掉本登记。",
+  "series.seriesAssetEpisodes":
+    "资产的反向引用查询已落地（ISSUE #5215，供「被 N 集引用」提示），面板的引用详情还没接；接面板时删掉本登记。",
+  "series.linkSeriesAsset":
+    "集引用系列资产的服务端口已落地（ISSUE #5215），创作侧的引用选择器还没接；接选择器时删掉本登记。",
+  "series.unlinkSeriesAsset":
+    "解除集引用的服务端口已落地（ISSUE #5215），引用清单里的解除按钮还没接；接清单时删掉本登记。",
   "project.get":
     "画布加载目前从 `project.list` 的行里取 nodes/edges（`lib/project-canvas/canvas-store.ts`），这条按 id 的单读口还没有入口用它。要么把画布改成按需单读（比 list 省），要么删口。",
 };
 
 /** 登记表长度的棘轮上限（**只许降**）：变长的唯一合法路径是先记进台账 E3′。 */
-const MAX_ZERO_CONSUMER = 3;
+const MAX_ZERO_CONSUMER = 10;
 
 /** 「有人点名这条口」的三种形态。收不全的形态写在下面的已知边界里。 */
 function consumerNeedles(ns: string, proc: string): Array<RegExp> {

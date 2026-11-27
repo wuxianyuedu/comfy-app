@@ -17,6 +17,7 @@ import {
   loadSeries,
 } from "./series-shared";
 import { seriesCharacterProcedures } from "./series-character";
+import { seriesAssetProcedures } from "./series-assets";
 import { EPISODE_STATUSES, episode, season, series } from "~/server/db/schema";
 
 export const seriesRouter = createTRPCRouter({
@@ -337,4 +338,7 @@ export const seriesRouter = createTRPCRouter({
 
   // ────────────────── 系列角色库 (FR-SR-03，拆分件见 series-character.ts) ──────────────────
   ...seriesCharacterProcedures,
+
+  // ────────────────── 跨集资产 (FR-SR-03，拆分件见 series-assets.ts) ──────────────────
+  ...seriesAssetProcedures,
 });

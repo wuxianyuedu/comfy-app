@@ -101,6 +101,9 @@ const REQUIRED_UNIQUE_KEYS: Record<string, Array<{ columns: Array<string> }>> = 
   character: [{ columns: ["seriesId", "name"] }],
   season: [{ columns: ["seriesId", "seasonNumber"] }],
   characterProfile: [{ columns: ["userId", "name"] }],
+  // 跨集资产实体（ISSUE #5215）：系列内同名同类资产、同集同资产都不能重复引用。
+  seriesAsset: [{ columns: ["seriesId", "kind", "name"] }],
+  episodeAsset: [{ columns: ["episodeId", "assetId"] }],
 };
 
 const sorted = (cols: Array<string>): string => [...cols].sort().join("+");
