@@ -361,6 +361,22 @@ describe("characterLibrary.enqueueGeneration —— 批量生图入队", () => {
     });
     expect(rerun.enqueued).toBe(1);
   });
+
+  it("批内角色并发派发（#5199）：单角色内仍是先建任务再标记生成中，任务与角色一一对应", async () => {
+    await caller().seed({ count: 12, seed: 11 });
+    const res = await caller().enqueueGeneration({ workflowId: "wf-1", limit: 12 });
+    expect(res.enqueued).toBe(12);
+
+    /* 每个角色恰有一个 QUEUED 任务且状态为 generating：并发只错开角色之间，
+     * 没有把「建任务 → 标记生成中」这两步拆散（那会留下 STATUS=draft 的孤儿）。 */
+    const tasks = await db.select().from(task);
+    expect(tasks).toHaveLength(12);
+    const list = await caller().list({ status: "generating" });
+    expect(list.items).toHaveLength(12);
+    for (const row of list.items) {
+      expect(tasks.some((t) => t.id === row.taskId)).toBe(true);
+    }
+  });
 });
 
 describe("characterLibrary.syncGeneration —— 生成对账回写", () => {
