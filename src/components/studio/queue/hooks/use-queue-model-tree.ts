@@ -74,14 +74,19 @@ export function useQueueModelTree(): QueueModelTreeController {
     return entry?.label ?? null;
   }, [selection, tree.entries]);
 
-  return {
-    activeLabel,
-    clear,
-    entries: tree.entries,
-    filterIds,
-    filterRows,
-    loading: tree.loading,
-    select,
-    selection,
-  };
+  /* 引用恒定：视图的 keepIds useMemo 以本对象为依赖，现造对象会让它每次渲染
+   * 重算整份行 id 集合（队列 700 行时是一笔可观的 O(n) 开销）。 */
+  return useMemo(
+    () => ({
+      activeLabel,
+      clear,
+      entries: tree.entries,
+      filterIds,
+      filterRows,
+      loading: tree.loading,
+      select,
+      selection,
+    }),
+    [activeLabel, clear, tree.entries, filterIds, filterRows, tree.loading, select, selection],
+  );
 }

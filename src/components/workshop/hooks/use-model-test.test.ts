@@ -44,8 +44,12 @@ const apiGenerateImageMock =
       opts?: { onDebug?: (rows: Array<ApiCallDebugRow>) => void; signal?: AbortSignal },
     ) => Promise<string>
   >();
+const apiSubmitVideoMock =
+  vi.fn<(req: unknown, opts?: { signal?: AbortSignal }) => Promise<unknown>>();
+const pollVideoUntilDoneMock = vi.fn<(opts: { signal?: AbortSignal }) => Promise<unknown>>();
 /** tRPC mutation 的统一替身：对话测试（#4080）与外链打开都走它，按需给返回值。 */
-const mutateAsyncSpy = vi.fn<(input: unknown) => Promise<unknown>>();
+const mutateAsyncSpy =
+  vi.fn<(input: unknown, opts?: { signal?: AbortSignal }) => Promise<unknown>>();
 
 /* 工作流候选（#4080 评论 4）的测试态：fetchWorkshopWorkflows 的读数走 useQuery
  * 替身的 workshop 分支；本地通道的四个执行者各自给替身。 */
@@ -94,6 +98,13 @@ vi.mock("~/trpc/react", () => ({
       },
     },
   }),
+  useTRPCClient: () => ({
+    llm: {
+      chatTest: {
+        mutate: (input: unknown, opts?: { signal?: AbortSignal }) => mutateAsyncSpy(input, opts),
+      },
+    },
+  }),
 }));
 
 vi.mock("~/lib/workshop/generation-client", () => ({
@@ -104,9 +115,9 @@ vi.mock("~/lib/workshop/generation-client", () => ({
   apiPollVideo: vi.fn(),
   apiPreviewRequest: (body: Record<string, unknown>, kind: "image" | "video") =>
     apiPreviewRequestMock(body, kind),
-  apiSubmitVideo: vi.fn(),
+  apiSubmitVideo: (req: unknown, opts?: { signal?: AbortSignal }) => apiSubmitVideoMock(req, opts),
   fetchWorkshopWorkflows: () => Promise.resolve(workflowsData),
-  pollVideoUntilDone: vi.fn(),
+  pollVideoUntilDone: (opts: { signal?: AbortSignal }) => pollVideoUntilDoneMock(opts),
   buildLibraryWorkflowInput: (
     workflowId: string,
     values: unknown,
@@ -215,6 +226,8 @@ beforeEach(() => {
   upstreamPreview = [];
   apiPreviewRequestMock.mockReset();
   apiGenerateImageMock.mockReset();
+  apiSubmitVideoMock.mockReset();
+  pollVideoUntilDoneMock.mockReset();
   mutateAsyncSpy.mockReset();
   buildLibraryWorkflowInputMock.mockReset();
   startLocalGenerateMock.mockReset();
@@ -319,6 +332,95 @@ describe("useModelTest：生成前的请求预览（ISSUE #3995）", () => {
     expect(result.current.responseRows).toHaveLength(1);
     expect(result.current.responseRows[0]).toEqual(UPSTREAM_ROW);
   });
+  it("历史重跑固定当次参数与参考图快照，不读取后来修改的表单", async () => {
+    apiGenerateImageMock.mockResolvedValue("https://img.example/x.png");
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.selectModel("agnes-image");
+    });
+    const historicalValues = { prompt: "历史提示词", image: "表单里的旧图" };
+    const historicalImages = ["data:image/png;base64,history-a", "data:image/png;base64,history-b"];
+
+    await act(async () => {
+      await result.current.generate(undefined, historicalValues, historicalImages);
+    });
+    expect(result.current.runs[0]?.referenceImages).toEqual(historicalImages);
+
+    act(() => {
+      result.current.patchValue("prompt", "后来修改的提示词");
+      result.current.patchValue("image", "data:image/png;base64,current");
+    });
+    const historicalRun = result.current.runs[0];
+    expect(historicalRun).toBeDefined();
+    await act(async () => {
+      await result.current.generate(
+        historicalRun?.sessionKey,
+        historicalRun?.values,
+        historicalRun?.referenceImages,
+      );
+    });
+
+    expect(apiGenerateImageMock).toHaveBeenCalledTimes(2);
+    expect(apiGenerateImageMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        image: historicalImages[0],
+        images: historicalImages,
+        prompt: "历史提示词",
+      }),
+      expect.anything(),
+    );
+    expect(result.current.runs[0]?.values).toEqual(historicalValues);
+    expect(result.current.runs[0]?.referenceImages).toEqual(historicalImages);
+  });
+  it.for(["image", "video"] as const)("%s 取消后迟到成功不写结果", async (kind) => {
+    configData = {
+      config: {
+        extraModels: [
+          kind === "image"
+            ? { baseUrl: "https://a/v1", kind, name: "agnes-image" }
+            : { baseUrl: "https://a/v1", kind, name: "agnes-video" },
+        ],
+      },
+    };
+    adaptersAll = {
+      "agnes-image": [{ mode: "T2I" }],
+      "agnes-video": [{ mode: "T2V" }],
+    };
+    let settle!: () => void;
+    const pending = new Promise<string>((resolve) => {
+      settle = () => {
+        resolve("https://media.example/late.png");
+      };
+    });
+    const requestMock = kind === "image" ? apiGenerateImageMock : apiSubmitVideoMock;
+    requestMock.mockReturnValue(pending);
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.setKind(kind);
+      result.current.selectModel(kind === "image" ? "agnes-image" : "agnes-video");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "测试提示词");
+    });
+
+    let generation!: Promise<void>;
+    act(() => {
+      generation = result.current.generate();
+    });
+    const signal = requestMock.mock.calls[0]?.[1]?.signal;
+    act(() => {
+      result.current.cancelGenerate();
+    });
+    expect(signal?.aborted).toBe(true);
+    await act(async () => {
+      settle();
+      await generation;
+    });
+
+    expect(result.current.error).toBe("已取消生成");
+    expect(result.current.result).toBeNull();
+    expect(result.current.runs[0]).toMatchObject({ error: "已取消生成", status: "cancelled" });
+  });
 });
 
 describe("useModelTest：本地模型与对话测试（ISSUE #4080）", () => {
@@ -364,12 +466,18 @@ describe("useModelTest：本地模型与对话测试（ISSUE #4080）", () => {
       await result.current.generate();
     });
 
-    expect(mutateAsyncSpy).toHaveBeenCalledWith({
-      name: "qwen3-8b",
-      local: true,
-      prompt: "ping",
-    });
+    expect(mutateAsyncSpy).toHaveBeenCalledTimes(1);
+    const [chatInput, chatOptions] = mutateAsyncSpy.mock.calls[0] ?? [];
+    expect(chatInput).toEqual({ name: "qwen3-8b", local: true, prompt: "ping" });
+    expect(chatOptions?.signal).toBeInstanceOf(AbortSignal);
     expect(result.current.result).toEqual({ kind: "chat", text: "pong" });
+    expect(result.current.runs).toHaveLength(1);
+    const recorded = result.current.runs[0];
+    expect(recorded?.endpoint).toBe("http://127.0.0.1:11434/v1/chat/completions");
+    expect(recorded?.model).toBe("qwen3-8b");
+    expect(recorded?.result).toEqual({ kind: "chat", text: "pong" });
+    expect(recorded?.status).toBe("succeeded");
+    expect(recorded?.values.prompt).toBe("ping");
     expect(result.current.generating).toBe(false);
     /* 请求行保留（对话的本地提交预览），真实读数单独进响应区（#4080 评论 13）。 */
     expect(result.current.requestRows).toHaveLength(1);
@@ -384,6 +492,60 @@ describe("useModelTest：本地模型与对话测试（ISSUE #4080）", () => {
     expect(chatRow?.durationMs).toBe(1234);
     expect(chatRow?.excerpt).toBe("pong");
     expect(chatRow?.body).toMatchObject({ kind: "chat", model: "qwen3-8b", prompt: "ping" });
+  });
+
+  it("对话测试取消：信号传到执行层，迟到回复不回写当前格", async () => {
+    configData = { config: { extraModels: ["qwen3-8b"] } };
+    let settle: (() => void) | undefined;
+    mutateAsyncSpy.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          settle = () => {
+            resolve({
+              reply: "迟到的回复",
+              durationMs: 9999,
+              endpoint: "http://127.0.0.1:11434/v1/chat/completions",
+              model: "qwen3-8b",
+            });
+          };
+        }),
+    );
+    const { result } = renderModelTest();
+    act(() => {
+      result.current.setKind("chat");
+    });
+    act(() => {
+      result.current.selectModel("qwen3-8b");
+    });
+    act(() => {
+      result.current.patchValue("prompt", "ping");
+    });
+
+    let generation: Promise<void> | undefined;
+    act(() => {
+      generation = result.current.generate();
+    });
+    expect(result.current.generating).toBe(true);
+    const signal = mutateAsyncSpy.mock.calls[0]?.[1]?.signal;
+    act(() => {
+      result.current.cancelGenerate();
+    });
+    expect(signal?.aborted).toBe(true);
+
+    await act(async () => {
+      settle?.();
+      await generation;
+    });
+    expect(mutateAsyncSpy).toHaveBeenCalledTimes(1);
+    const [chatInput, chatOptions] = mutateAsyncSpy.mock.calls[0] ?? [];
+    expect(chatInput).toEqual({ name: "qwen3-8b", local: true, prompt: "ping" });
+    expect(chatOptions?.signal).toBeInstanceOf(AbortSignal);
+    expect(result.current.error).toBe("已取消生成");
+    expect(result.current.result).toBeNull();
+    expect(result.current.responseRows).toEqual([]);
+    expect(result.current.generating).toBe(false);
+    expect(result.current.runs).toHaveLength(1);
+    expect(result.current.runs[0]).toMatchObject({ error: "已取消生成", status: "cancelled" });
   });
 });
 
@@ -462,7 +624,10 @@ describe("useModelTest：对话候选的主模型兜底（ISSUE #4823）", () =>
     await act(async () => {
       await result.current.generate();
     });
-    expect(mutateAsyncSpy).toHaveBeenCalledWith({ name: "gpt-x", local: false, prompt: "ping" });
+    expect(mutateAsyncSpy).toHaveBeenCalledTimes(1);
+    const [chatInput, chatOptions] = mutateAsyncSpy.mock.calls[0] ?? [];
+    expect(chatInput).toEqual({ name: "gpt-x", local: false, prompt: "ping" });
+    expect(chatOptions?.signal).toBeInstanceOf(AbortSignal);
     expect(result.current.result).toEqual({ kind: "chat", text: "pong" });
   });
 
@@ -1004,19 +1169,20 @@ describe("useModelTest：JSON 输入模式（ISSUE #4769）", () => {
     act(() => {
       result.current.selectModel("agnes-image");
     });
-    /* 没先 patchValue：提示词只存在于解析结果里。覆盖值随 generate 显式给 ——
-       这正是 JSON 模式「粘贴后同一次点击重跑」的通路。 */
-    let values: Record<string, string> = {};
+    /* 没先 patchValue：提示词只存在于解析结果里。解析与 generate 必须在同一个
+       同步事件里完成 —— 中间一旦 act flush，React 已提交新闭包，旧缺陷会被藏住。 */
+    let generation: Promise<void> | undefined;
     act(() => {
       const res = result.current.applyJsonValues(
         JSON.stringify({ mode: "T2I", inputs: { prompt: "历史那次的提示词", seed: "42" } }),
       );
       if (res.ok) {
-        values = res.values;
+        generation = result.current.generate(undefined, res.values);
       }
     });
+    expect(generation).toBeDefined();
     await act(async () => {
-      await result.current.generate(undefined, values);
+      await generation;
     });
     expect(apiGenerateImageMock).toHaveBeenCalledWith(
       expect.objectContaining({ mode: "T2I", model: "agnes-image", prompt: "历史那次的提示词" }),

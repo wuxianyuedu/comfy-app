@@ -34,7 +34,6 @@ vi.mock("fs/promises", async (importOriginal) => ({
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { taskRouter } from "~/server/api/routers/task";
-import { taskRepository } from "~/lib/core/repository";
 import { logger } from "~/lib/core/logger";
 import { generatedRoot } from "~/lib/media/output-paths";
 import {
@@ -60,11 +59,141 @@ const COVER = (id: string, localPath: string, mediaType = "image"): Row => ({
   sortIndex: 0,
 });
 
+/** 写侧形状的封面地址：删除 / 打开侧现在从它反推目录。 */
+const coverOf = (taskId: string): Row =>
+  COVER(`img-${taskId}`, `/api/generated/image/TestModel/T2I/${taskId}/img_0.png`);
+const outputDirOf = (taskId: string): string =>
+  path.resolve(generatedRoot(), "image", "TestModel", "T2I", taskId);
+
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
   seedUser(tdb, { id: "user-a", email: "a@test.dev" });
   seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+});
+
+// ─────────────────────────────────── summary ───────────────────────────────────
+
+describe("task.summary", () => {
+  const todayStartedAt = new Date("2026-11-19T00:00:00.000Z");
+  const yesterday = new Date("2026-11-18T23:59:59.999Z");
+  const today = new Date("2026-11-19T12:00:00.000Z");
+
+  it("昨天创建、今天完成计今日完成；今天创建、昨天完成不计", async () => {
+    seedTask(tdb, {
+      id: "finished-today",
+      userId: "user-a",
+      status: "SUCCEEDED",
+      createdAt: yesterday,
+      finishedAt: today,
+    });
+    seedTask(tdb, {
+      id: "created-today-finished-yesterday",
+      userId: "user-a",
+      status: "SUCCEEDED",
+      createdAt: today,
+      finishedAt: yesterday,
+    });
+
+    const res = await createCaller(makeCtx()).summary({
+      todayStartedAt: todayStartedAt.toISOString(),
+    });
+
+    expect(res).toEqual({ failedToday: 0, queued: 0, running: 0, succeededToday: 1 });
+  });
+
+  it("今日 FAILED 计失败；历史失败与今日 CANCELLED 不计完成或失败", async () => {
+    seedTask(tdb, {
+      id: "failed-today",
+      userId: "user-a",
+      status: "FAILED",
+      createdAt: yesterday,
+      finishedAt: today,
+    });
+    seedTask(tdb, {
+      id: "failed-before-today",
+      userId: "user-a",
+      status: "FAILED",
+      createdAt: yesterday,
+      finishedAt: yesterday,
+    });
+    seedTask(tdb, {
+      id: "cancelled-today",
+      userId: "user-a",
+      status: "CANCELLED",
+      createdAt: today,
+      finishedAt: today,
+    });
+
+    const res = await createCaller(makeCtx()).summary({
+      todayStartedAt: todayStartedAt.toISOString(),
+    });
+
+    expect(res).toEqual({ failedToday: 1, queued: 0, running: 0, succeededToday: 0 });
+  });
+
+  it("QUEUED/RUNNING 跨日期与项目计数，且其他用户不计入", async () => {
+    seedTask(tdb, {
+      id: "queued-yesterday",
+      userId: "user-a",
+      status: "QUEUED",
+      createdAt: yesterday,
+    });
+    seedTask(tdb, {
+      id: "queued-today",
+      userId: "user-a",
+      status: "QUEUED",
+      projectId: "project-a",
+      createdAt: today,
+    });
+    seedTask(tdb, {
+      id: "paused",
+      userId: "user-a",
+      status: "PAUSED_BY_HUMAN",
+      createdAt: yesterday,
+    });
+    seedTask(tdb, {
+      id: "running-today",
+      userId: "user-a",
+      status: "RUNNING",
+      projectId: "project-a",
+      claimedAt: today,
+      createdAt: yesterday,
+    });
+    seedTask(tdb, {
+      id: "other-queued",
+      userId: "user-b",
+      status: "QUEUED",
+      createdAt: today,
+    });
+    seedTask(tdb, {
+      id: "other-running",
+      userId: "user-b",
+      status: "RUNNING",
+      claimedAt: today,
+      createdAt: today,
+    });
+    seedTask(tdb, {
+      id: "other-finished",
+      userId: "user-b",
+      status: "SUCCEEDED",
+      finishedAt: today,
+      createdAt: today,
+    });
+    seedTask(tdb, {
+      id: "other-failed",
+      userId: "user-b",
+      status: "FAILED",
+      finishedAt: today,
+      createdAt: today,
+    });
+
+    const res = await createCaller(makeCtx()).summary({
+      todayStartedAt: todayStartedAt.toISOString(),
+    });
+
+    expect(res).toEqual({ failedToday: 0, queued: 3, running: 1, succeededToday: 0 });
+  });
 });
 
 // ───────────────────────────────────── list ─────────────────────────────────────
@@ -73,6 +202,57 @@ describe("task.list", () => {
   it("空库返回空列表", async () => {
     const res = await createCaller(makeCtx()).list({});
     expect(res.tasks).toEqual([]);
+  });
+
+  it("statusCounts / todayCounts 是全量计数，不受 take 截断（#5073）", async () => {
+    seedTask(tdb, {
+      id: "q-old",
+      userId: "user-a",
+      status: "QUEUED",
+      createdAt: new Date("2020-01-01T00:00:00Z"),
+    });
+    seedTask(tdb, {
+      id: "q-today",
+      userId: "user-a",
+      status: "QUEUED",
+      createdAt: new Date(),
+    });
+    seedTask(tdb, {
+      id: "ok-today",
+      userId: "user-a",
+      status: "SUCCEEDED",
+      createdAt: new Date(),
+    });
+    const res = await createCaller(makeCtx()).list({ take: 1 });
+    expect(res.tasks).toHaveLength(1);
+    expect(res.statusCounts.QUEUED).toBe(2);
+    expect(res.todayCounts.QUEUED).toBe(1);
+    expect(res.todayCounts.SUCCEEDED).toBe(1);
+  });
+
+  it("投影带回 finishedAt / claimedAt；countStatus 与行 status 解耦（#5076）", async () => {
+    seedTask(tdb, {
+      id: "old-failed",
+      userId: "user-a",
+      status: "FAILED",
+      createdAt: new Date("2020-01-01T00:00:00Z"),
+      finishedAt: new Date(),
+    });
+    seedTask(tdb, {
+      id: "new-ok",
+      userId: "user-a",
+      status: "SUCCEEDED",
+      createdAt: new Date(),
+    });
+    const res = await createCaller(makeCtx()).list({
+      take: 10,
+      status: "FAILED",
+      countStatus: "SUCCEEDED,FAILED,CANCELLED",
+    });
+    expect(res.tasks.map((t) => t.id)).toEqual(["old-failed"]);
+    expect(res.tasks[0]?.finishedAt).toBeInstanceOf(Date);
+    expect(res.statusCounts.FAILED).toBe(1);
+    expect(res.statusCounts.SUCCEEDED).toBe(1);
   });
 
   it("返回封面/进度/checkpoint 投影，mediaType 按封面与 taskType 推断，createdAt 倒序", async () => {
@@ -229,6 +409,118 @@ describe("task.list", () => {
     expect(cursor).toBe(6);
   });
 
+  it("超过 60 条仍按完整队列定位：新到旧分页不改变提交序", async () => {
+    for (let i = 0; i < 65; i += 1) {
+      seedTask(tdb, {
+        id: `queued-${String(i + 1).padStart(2, "0")}`,
+        userId: "user-a",
+        status: "QUEUED",
+        createdAt: new Date(Date.UTC(2026, 10, 19, 0, 0, i)),
+      });
+    }
+    const caller = createCaller(makeCtx());
+    const first = await caller.list({ take: 60, status: "QUEUED" });
+    const second = await caller.list({
+      take: 60,
+      cursor: first.nextScanCursor,
+      status: "QUEUED",
+    });
+
+    expect(first.tasks).toHaveLength(60);
+    expect(first.hasMore).toBe(true);
+    expect(first.nextScanCursor).toBe(60);
+    expect(second.tasks).toHaveLength(5);
+    expect(second.hasMore).toBe(false);
+    expect(new Set([...first.tasks, ...second.tasks].map((task) => task.id)).size).toBe(65);
+    const positions = [...first.tasks, ...second.tasks].map((task) => task.queuePosition);
+    expect(positions).toHaveLength(65);
+    expect([...positions].sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual(
+      Array.from({ length: 65 }, (_unused, index) => index + 1),
+    );
+    expect(first.tasks[0]?.queuePosition).toBe(65);
+    expect(first.tasks.at(-1)?.queuePosition).toBe(6);
+    expect(second.tasks[0]?.queuePosition).toBe(5);
+    expect(second.tasks.at(-1)?.queuePosition).toBe(1);
+  });
+
+  it("非 QUEUED 的 queuePosition 为 null，并保留 RUNNING 的 claimedAt", async () => {
+    const claimedAt = new Date("2026-11-19T12:00:00.000Z");
+    seedTask(tdb, { id: "queued", userId: "user-a", status: "QUEUED" });
+    seedTask(tdb, {
+      id: "running",
+      userId: "user-a",
+      status: "RUNNING",
+      claimedAt,
+    });
+    seedTask(tdb, { id: "succeeded", userId: "user-a", status: "SUCCEEDED" });
+    seedTask(tdb, { id: "failed", userId: "user-a", status: "FAILED" });
+    seedTask(tdb, { id: "cancelled", userId: "user-a", status: "CANCELLED" });
+
+    const res = await createCaller(makeCtx()).list({});
+    const byId = new Map(res.tasks.map((task) => [task.id, task]));
+
+    expect(byId.get("queued")?.queuePosition).toBe(1);
+    for (const id of ["running", "succeeded", "failed", "cancelled"]) {
+      expect(byId.get(id)?.queuePosition).toBeNull();
+    }
+    expect(byId.get("running")?.claimedAt).toEqual(claimedAt);
+  });
+
+  it("其他用户的队列不改变当前用户的位次", async () => {
+    seedTask(tdb, {
+      id: "other-before",
+      userId: "user-b",
+      status: "QUEUED",
+      createdAt: new Date("2026-11-19T09:00:00.000Z"),
+    });
+    seedTask(tdb, {
+      id: "mine-earlier",
+      userId: "user-a",
+      status: "QUEUED",
+      createdAt: new Date("2026-11-19T10:00:00.000Z"),
+    });
+    seedTask(tdb, {
+      id: "other-between",
+      userId: "user-b",
+      status: "QUEUED",
+      createdAt: new Date("2026-11-19T11:00:00.000Z"),
+    });
+    seedTask(tdb, {
+      id: "mine-later",
+      userId: "user-a",
+      status: "QUEUED",
+      createdAt: new Date("2026-11-19T12:00:00.000Z"),
+    });
+    seedTask(tdb, {
+      id: "other-after",
+      userId: "user-b",
+      status: "QUEUED",
+      createdAt: new Date("2026-11-19T13:00:00.000Z"),
+    });
+
+    const res = await createCaller(makeCtx()).list({ status: "QUEUED" });
+
+    expect(res.tasks.map(({ id, queuePosition }) => ({ id, queuePosition }))).toEqual([
+      { id: "mine-later", queuePosition: 2 },
+      { id: "mine-earlier", queuePosition: 1 },
+    ]);
+  });
+
+  it("createdAt 相同时按 id 稳定排序并分配队列位次", async () => {
+    const createdAt = new Date("2026-11-19T12:00:00.000Z");
+    for (const id of ["queue-c", "queue-a", "queue-b"]) {
+      seedTask(tdb, { id, userId: "user-a", status: "QUEUED", createdAt });
+    }
+
+    const res = await createCaller(makeCtx()).list({ status: "QUEUED" });
+
+    expect(res.tasks.map(({ id, queuePosition }) => ({ id, queuePosition }))).toEqual([
+      { id: "queue-c", queuePosition: 3 },
+      { id: "queue-b", queuePosition: 2 },
+      { id: "queue-a", queuePosition: 1 },
+    ]);
+  });
+
   it("Zod 校验：take 越界 / 非法 media → BAD_REQUEST", async () => {
     const caller = createCaller(makeCtx());
     await expect(caller.list({ take: 0 })).rejects.toMatchObject({
@@ -360,6 +652,74 @@ describe("task.cancelAll", () => {
   });
 });
 
+// ──────────────────────────────── reorder ────────────────────────────────
+
+describe("task.reorder", () => {
+  it("把排队行提前到队首：只改 sortOrder，不动 createdAt / 他人行；列表顺序跟着变", async () => {
+    const first = new Date("2026-01-01T00:00:00Z");
+    seedTask(tdb, {
+      id: "head",
+      userId: "user-a",
+      status: "QUEUED",
+      sortOrder: 0,
+      createdAt: first,
+    });
+    seedTask(tdb, {
+      id: "target",
+      userId: "user-a",
+      status: "QUEUED",
+      sortOrder: 0,
+      createdAt: new Date(first.getTime() + 1000),
+    });
+    seedTask(tdb, { id: "foreign", userId: "user-b", status: "QUEUED", sortOrder: 0 });
+
+    const caller = createCaller(makeCtx());
+    expect(await caller.reorder({ id: "target" })).toEqual({
+      ok: true,
+      detail: "已提前到队首，下一轮就轮到它",
+    });
+    const target = tdb.$tables.tasks.find((t) => t.id === "target")!;
+    expect(target.sortOrder).toBe(-1);
+    expect(target.createdAt).toEqual(new Date(first.getTime() + 1000));
+    expect(tdb.$tables.tasks.find((t) => t.id === "head")!.sortOrder).toBe(0);
+    expect(tdb.$tables.tasks.find((t) => t.id === "foreign")!.sortOrder).toBe(0);
+    /* 列表按 sortOrder 倒序：target 在末尾 = 队列页反转后的第 1 位。 */
+    expect((await caller.list({ take: 10 })).tasks.map((t) => t.id)).toEqual(["head", "target"]);
+  });
+
+  it("运行中 / 终态 / 他人行 / 不存在的行都不可重排：回 ok:false 并落日志", async () => {
+    seedTask(tdb, { id: "head", userId: "user-a", status: "QUEUED" });
+    seedTask(tdb, { id: "running", userId: "user-a", status: "RUNNING" });
+    seedTask(tdb, { id: "done", userId: "user-a", status: "SUCCEEDED" });
+    seedTask(tdb, { id: "foreign", userId: "user-b", status: "QUEUED" });
+
+    const caller = createCaller(makeCtx());
+    for (const id of ["running", "done", "foreign", "nope"]) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例逐轮 await 以保持断言顺序与桩状态
+      const res = await caller.reorder({ id });
+      expect(res).toEqual({ ok: false, detail: "这条已开跑或已结束，无法调整顺序" });
+      /* 不存在的行取不到 sortOrder，按 0 兜底即可（这条用例判的是没被改过）。 */
+      expect(tdb.$tables.tasks.find((t) => t.id === id)?.sortOrder ?? 0).toBe(0);
+    }
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("task.reorder"));
+    expect((await caller.list({ take: 10 })).tasks.map((t) => t.id).sort()).toEqual([
+      "done",
+      "head",
+      "running",
+    ]);
+  });
+
+  it("已经是队首时幂等回报，不写入新的 sortOrder", async () => {
+    seedTask(tdb, { id: "head", userId: "user-a", status: "QUEUED", sortOrder: -5 });
+    seedTask(tdb, { id: "tail", userId: "user-a", status: "QUEUED", sortOrder: 0 });
+    expect(await createCaller(makeCtx()).reorder({ id: "head" })).toEqual({
+      ok: true,
+      detail: "这条已经在队首了",
+    });
+    expect(tdb.$tables.tasks.find((t) => t.id === "head")!.sortOrder).toBe(-5);
+  });
+});
+
 // ─────────────────────────────── workflow snapshot ───────────────────────────────
 
 describe("task.workflow", () => {
@@ -381,16 +741,17 @@ describe("task.workflow", () => {
     });
   });
 
-  it("两次查询之间那一行没了 → 仍回 NOT_FOUND（防御分支不是死码）", async () => {
-    // `workflow` 先按 `findByIdWithImages` 判归属、再按 `findSnapshotById` 取快照。
-    // 两查之间被删（并发删除 / 库被换）时，第二条查不到必须走**同一个 404**，
-    // 而不是把 undefined 往下传成一次 500。
-    seedTask(tdb, { id: "task-1", userId: "user-a" });
-    const snap = vi.spyOn(taskRepository, "findSnapshotById").mockResolvedValue(null);
+  it("归属与快照同查：查不到 / 他人任务都走同一个 NOT_FOUND", async () => {
+    /* #5124：workflow 此前先 `findByIdWithImages` 判归属（整行重列）再
+     * `findSnapshotById` 读快照，同一 MB 列读两遍。现在一条窄投影同时取
+     * userId 与快照；查不到与越权必须仍不可区分。 */
+    seedTask(tdb, { id: "task-1", userId: "user-b" });
     await expect(createCaller(makeCtx()).workflow({ id: "task-1" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    snap.mockRestore();
+    await expect(createCaller(makeCtx()).workflow({ id: "nope" })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+    });
   });
 
   it("快照为 null → 全 null；任务不存在 → 抛错", async () => {
@@ -432,23 +793,27 @@ describe("task.workflow", () => {
 // ─────────────────────────────────── openFolder ───────────────────────────────────
 
 describe("task.openFolder", () => {
-  it("projectId 路径穿越 → FORBIDDEN（目录白名单）", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "../../evil" });
+  it("localPath 路径穿越 → FORBIDDEN（目录白名单）", async () => {
+    seedTask(tdb, {
+      id: "task-1",
+      userId: "user-a",
+      images: [COVER("img-1", "/api/generated/../../outside/x.png")],
+    });
     await expect(createCaller(makeCtx()).openFolder({ id: "task-1" })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });
 
   it("目录不存在 → { opened: false, reason: '该任务尚未生成文件目录' }", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "proj-1" });
+    seedTask(tdb, { id: "task-1", userId: "user-a", images: [coverOf("task-1")] });
     const res = await createCaller(makeCtx()).openFolder({ id: "task-1" });
     expect(res.opened).toBe(false);
     expect(res.reason).toBe("该任务尚未生成文件目录");
-    expect(res.absolutePath).toContain("projects");
+    expect(res.absolutePath).toBe(outputDirOf("task-1"));
   });
 
   it("目录存在（stat mock）→ { opened: true, comfyappUrl }", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "proj-1" });
+    seedTask(tdb, { id: "task-1", userId: "user-a", images: [coverOf("task-1")] });
     statMock.mockResolvedValueOnce({ isDirectory: () => true });
     const res = await createCaller(makeCtx()).openFolder({ id: "task-1" });
     expect(res.opened).toBe(true);
@@ -470,28 +835,30 @@ describe("task.delete（rateLimitedProcedure）", () => {
     seedTask(tdb, {
       id: "task-1",
       userId: "user-a",
-      images: [COVER("img-1", "/api/generated/task-1/1.png")],
+      images: [coverOf("task-1")],
     });
     expect(await createCaller(makeCtx()).delete({ id: "task-1" })).toEqual({
       ok: true,
     });
-    expect(rmMock).toHaveBeenCalledWith(path.resolve(generatedRoot(), "task-1"), {
+    expect(rmMock).toHaveBeenCalledWith(outputDirOf("task-1"), {
       recursive: true,
       force: true,
     });
     expect(tdb.$tables.tasks.find((t) => t.id === "task-1")).toBeUndefined();
   });
 
-  it("项目任务的产物目录按 projects/<pid>/<tid> 删（与落盘侧同一布局，台账 A8）", async () => {
+  it("产物目录从库里的 localPath 反推（与落盘侧同一布局），项目任务同走一条", async () => {
     /* 旧写法在这里只拼 `public/generated/<taskId>`，而 executor-finalize 对
-     * 项目任务落的是 `projects/<pid>/<tid>` —— 「在画布里删任务」于是永远删不到
-     * 目录，磁盘单调增长，且失败被 .catch 吞掉、日志里一个字都没有。 */
-    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "proj-1" });
+     * 项目任务落的是另一层 —— 「在画布里删任务」于是永远删不到目录，磁盘单调
+     * 增长，且失败被 .catch 吞掉、日志里一个字都没有。现在地址就是落盘事实。 */
+    seedTask(tdb, {
+      id: "task-1",
+      userId: "user-a",
+      projectId: "proj-1",
+      images: [coverOf("task-1")],
+    });
     await createCaller(makeCtx()).delete({ id: "task-1" });
-    expect(rmMock).toHaveBeenCalledWith(
-      path.resolve(generatedRoot(), "projects", "proj-1", "task-1"),
-      { recursive: true, force: true },
-    );
+    expect(rmMock).toHaveBeenCalledWith(outputDirOf("task-1"), { recursive: true, force: true });
   });
 
   it("id 形状越界 → 不动磁盘、只删库行，并把原因落日志（台账 A8 的另一半）", async () => {
@@ -499,7 +866,11 @@ describe("task.delete（rateLimitedProcedure）", () => {
      * 判据不许依赖「上游生成不了坏形状」这一条口头保证 —— `fs.rm(..., recursive)`
      * 拿到根外路径就是整目录级别的破坏。 */
     const evil = path.join("..", "..", "outside");
-    seedTask(tdb, { id: evil, userId: "user-a" });
+    seedTask(tdb, {
+      id: evil,
+      userId: "user-a",
+      images: [COVER("img-evil", "/api/generated/../../outside/x.png")],
+    });
     expect(await createCaller(makeCtx()).delete({ id: evil })).toEqual({
       ok: true,
     });
@@ -509,7 +880,7 @@ describe("task.delete（rateLimitedProcedure）", () => {
   });
 
   it("磁盘删不掉不阻塞删库，但失败原因必须可见（硬规则 4）", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a" });
+    seedTask(tdb, { id: "task-1", userId: "user-a", images: [coverOf("task-1")] });
     rmMock.mockRejectedValueOnce(new Error("EBUSY: resource busy"));
     expect(await createCaller(makeCtx()).delete({ id: "task-1" })).toEqual({
       ok: true,

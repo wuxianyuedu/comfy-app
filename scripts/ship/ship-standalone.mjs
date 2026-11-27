@@ -29,6 +29,7 @@ import { runStatus } from "./ship-status.mjs";
 import { closeIssues } from "./ship-close.mjs";
 import { runIssueAction } from "./ship-claim.mjs";
 import { runIssueComment, runNewIssue } from "./ship-issue-new.mjs";
+import { runEditIssue } from "./ship-issue-edit.mjs";
 import { runDiagnose } from "./ship-diagnose.mjs";
 import { resolveGhRepo, resolveGhToken, runGhLogs } from "./ship-gh-logs.mjs";
 import { runGhPrs } from "./ship-gh-prs.mjs";
@@ -36,6 +37,8 @@ import { runStageLog } from "./ship-stage-log.mjs";
 import { runRerunCiStage } from "./ship-local.mjs";
 import { runResultQuery } from "./ship-result.mjs";
 import { runFetchIssue } from "./ship-fetch-issue.mjs";
+import { runFindIssues } from "./ship-find-issues.mjs";
+import { runScreenshotReply } from "./ship-screenshot-reply.mjs";
 import { whoamiLines } from "./ship-ticket.mjs";
 
 /**
@@ -99,6 +102,17 @@ function namedActions(opt, self) {
     ["result", opt.result, "--result"],
     ["fetchIssue", opt.fetchIssue !== null && opt.fetchIssue !== undefined, "--fetch-issue"],
     [
+      "screenshotReply",
+      (opt.screenshotReply !== null && opt.screenshotReply !== undefined) ||
+        opt.screenshotReplyBad.length > 0,
+      "--screenshot-reply",
+    ],
+    [
+      "findIssues",
+      (opt.findIssues !== null && opt.findIssues !== undefined) || opt.findIssuesBad.length > 0,
+      "--find-issues",
+    ],
+    [
       "newIssue",
       (opt.newIssue !== null && opt.newIssue !== undefined) || opt.newIssueBad.length > 0,
       "--new-issue",
@@ -107,6 +121,11 @@ function namedActions(opt, self) {
       "comment",
       (opt.comment !== null && opt.comment !== undefined) || opt.commentBad.length > 0,
       "--comment",
+    ],
+    [
+      "editIssue",
+      (opt.editIssue !== null && opt.editIssue !== undefined) || opt.editIssueBad.length > 0,
+      "--edit-issue",
     ],
     ["bodyFile", opt.bodyFile !== null && opt.bodyFile !== undefined, "--body-file"],
     /* `--pr-body-file` 是主流程那一段的输入（建 / 复用 PR 时注入正文），只读那几条
@@ -365,16 +384,20 @@ export async function runStandaloneAction(io) {
       ]),
     };
   }
-  /* `--issue-body-file` / `--priority` 是 --new-issue 的两格输入。单独给它们等于
-   * 「想建单却漏了旗标」—— 静默忽略会让这一跑退回主流程，而人以为单子建好了。 */
+  /* `--issue-body-file` / `--priority` 是 --new-issue 的两格输入，也服务 --edit-issue
+   * （ISSUE #5165：改单子正文的正文只从文件进）。单独给它们等于「想建 / 想改却漏了旗标」
+   * —— 静默忽略会让这一跑退回主流程，而人以为单子已经动了。 */
+  const wantsEditIssue =
+    (opt.editIssue !== null && opt.editIssue !== undefined) || opt.editIssueBad.length > 0;
   if (
     (opt.issueBodyFile !== null || opt.priority !== null) &&
     (opt.newIssue === null || opt.newIssue === undefined) &&
-    opt.newIssueBad.length === 0
+    opt.newIssueBad.length === 0 &&
+    !wantsEditIssue
   ) {
     log(
-      "[ship] [ERROR] --issue-body-file / --priority 只跟 --new-issue 一起用；" +
-        "单独给它们不会建任何单子。",
+      "[ship] [ERROR] --issue-body-file / --priority 只跟 --new-issue / --edit-issue 一起用；" +
+        "单独给它们不会建或改任何单子。",
     );
     return { handled: true, code: CODE.NOT_RUN };
   }
@@ -487,6 +510,84 @@ export async function runStandaloneAction(io) {
     };
   }
 
+  /* ── `--screenshot-reply`：截图上传 + 回帖一步（ISSUE #5191）────── */
+  if (opt.screenshotReply !== null || opt.screenshotReplyBad.length > 0) {
+    /* `--body-file` 是这一格的可选文案输入，不算互斥动作。 */
+    const clashes = namedActions(opt, "screenshotReply").filter((l) => l !== "--body-file");
+    if (clashes.length > 0) {
+      log(`[ship] [ERROR] --screenshot-reply 一次只做一张：不与 ${clashes.join(" / ")} 同跑。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (opt.screenshotReplyBad.length > 0 || opt.screenshotReply === null) {
+      log(
+        `[ship] [ERROR] --screenshot-reply 收的是 issue 号：${opt.screenshotReplyBad.join(" / ") || "(缺号)"} ⇒ 这一格没有结论。`,
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (!opt.screenshotFile) {
+      log(
+        "[ship] [ERROR] --screenshot-reply 要跟 --file <png>（截图文件）；正文用 --body-file，可不给。",
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (!cnbOk || !slug) {
+      log(
+        `[screenshot-reply] 没有执行者（${cnbOk ? "仓库 slug 取不到" : "cnb 不在"}）⇒ 没有结论。`,
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    return {
+      handled: true,
+      code: settle([
+        runScreenshotReply({
+          run,
+          log,
+          slug,
+          number: opt.screenshotReply,
+          file: opt.screenshotFile,
+          bodyFile: opt.bodyFile,
+          root,
+          handle,
+          mkTmp,
+          dryRun: opt.dryRun,
+        }),
+      ]),
+    };
+  }
+
+  /* ── `--find-issues`：查重单的只读入口（ISSUE #5167）──────────────
+   * 与 `--fetch-issue` 同一档：只读、一次只做一件事、不 probe 之外的动作。 */
+  if (opt.findIssues !== null || opt.findIssuesBad.length > 0) {
+    const clashes = namedActions(opt, "findIssues");
+    if (clashes.length > 0) {
+      log(`[ship] [ERROR] --find-issues 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (opt.findIssuesBad.length > 0 || opt.findIssues === null) {
+      log(
+        `[ship] [ERROR] --find-issues 收的是关键词（自由文本）：${opt.findIssuesBad.join(" / ") || "(缺关键词)"} ⇒ 这一格没有结论。`,
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (!cnbOk || !slug) {
+      log(`[find-issues] 没有执行者（${cnbOk ? "仓库 slug 取不到" : "cnb 不在"}）⇒ 没有结论。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    return {
+      handled: true,
+      code: settle([
+        runFindIssues({
+          run,
+          log,
+          slug,
+          keyword: opt.findIssues,
+          state: opt.findState ?? "all",
+          label: opt.findLabel,
+        }),
+      ]),
+    };
+  }
+
   /* ── 单子的领取 / 结束 / 列表（规范 §13.10.11）──────────────────
    * 三条动作都**独立于主流程**：领一张单不需要干净工作树，也不该顺手合并什么。
    * 互斥与前置（cnb / slug / 留痕）在 `runIssueAction` 里判；这里只做分派，
@@ -497,11 +598,13 @@ export async function runStandaloneAction(io) {
     opt.claims ||
     (opt.newIssue !== null && opt.newIssue !== undefined) ||
     (opt.comment !== null && opt.comment !== undefined) ||
+    (opt.editIssue !== null && opt.editIssue !== undefined) ||
     (opt.bodyFile !== null && opt.bodyFile !== undefined) ||
     opt.claimBad.length > 0 ||
     opt.releaseBad.length > 0 ||
     opt.newIssueBad.length > 0 ||
-    opt.commentBad.length > 0
+    opt.commentBad.length > 0 ||
+    opt.editIssueBad.length > 0
   ) {
     return {
       handled: true,
@@ -519,6 +622,7 @@ export async function runStandaloneAction(io) {
           mkTmp,
           createIssue: runNewIssue,
           commentIssue: runIssueComment,
+          editIssue: runEditIssue,
           dryRun: opt.dryRun,
         }),
       ]),

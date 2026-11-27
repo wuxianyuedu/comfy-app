@@ -22,6 +22,7 @@ import {
   resolveParamLabel,
   taskWorkflowId,
   workflowInputsOf,
+  workflowIOOfDetailFull,
 } from "./history-detail-derive";
 import type { TaskDetail } from "./history-types";
 
@@ -41,6 +42,7 @@ const TASK_DETAIL_BASE: TaskDetail = {
   referenceImages: null,
   parentId: null,
   status: "SUCCEEDED",
+  sortOrder: 0,
   promptId: null,
   progress: 0,
   resultImages: null,
@@ -942,5 +944,71 @@ describe("deriveWorkshopParams 参考图口吃推导清单（ISSUE #4910）", ()
     const rows = deriveWorkshopParams(detail, "I2I", contracts, null);
     expect(rows.find((r) => r.id === "reference-image")?.value).toBe("workshop-ref-aaa.png");
     expect(rows.find((r) => r.id === "reference-image-2")?.value).toBe("workshop-ref-bbb.png");
+  });
+});
+
+describe("workflowIOOfDetailFull（ISSUE #5118：与 IO 预览同一套参数名）", () => {
+  it("富化后的 label 优先：replace → prompt、aspect_ratio → 宽高比", () => {
+    const enriched = {
+      workflowIO: {
+        "6::widget::replace": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "6",
+          name: "replace",
+          label: "prompt",
+          defaultValue: "默认提示词",
+        },
+        "14::widget::aspect_ratio": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "14",
+          name: "aspect_ratio",
+          label: "宽高比",
+          defaultValue: "1:1 (Square)",
+        },
+        "7::widget::enable_PE": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "7",
+          name: "enable_PE",
+          label: "启用 PE",
+          defaultValue: true,
+        },
+      },
+    };
+    const io = workflowIOOfDetailFull(enriched);
+    expect(Object.keys(io)).toHaveLength(3);
+    const detail = makeDetail({ workflow: "w" });
+    expect(deriveWorkflowParams(detail, io).rows.map((row) => row.label)).toEqual([
+      "prompt",
+      "宽高比",
+      "启用 PE",
+    ]);
+    /* 连没提交值的端口也在，值取 IO 默认值且标成 default。 */
+    expect(deriveWorkflowParams(detail, io).rows.map((row) => row.source)).toEqual([
+      "default",
+      "default",
+      "default",
+    ]);
+    expect(deriveWorkflowParams(detail, io).rows[1]?.value).toBe("1:1 (Square)");
+  });
+
+  it("详情未回 / 只有原始列时如实回落，不编 label", () => {
+    expect(Object.keys(workflowIOOfDetailFull(null))).toHaveLength(0);
+    const raw = {
+      template: {
+        workflowIO: {
+          "6::widget::replace": {
+            direction: "input",
+            kind: "widget",
+            nodeId: "6",
+            name: "replace",
+          },
+        },
+      },
+    };
+    expect(workflowIOOfDetailFull(raw)["6::widget::replace"]?.label).toBeUndefined();
+    expect(workflowIOOfDetailFull(raw)["6::widget::replace"]?.name).toBe("replace");
   });
 });

@@ -638,7 +638,7 @@ export function looksNewlineMangled(msg) {
  * ⚠️ 它**不**保证恒退 0：dry-run 免掉的是「执行写动作」，不免掉「报出阻塞」。正在
  * `master` 上、或缺 `changelog.d/` 碎片时照样退 1 —— 一个会藏掉阻塞事实的预览比不预览更糟。
  *
- * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,noCommit?:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,comment?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,fetchIssue?:number|string|null,createBranch?:string|null,remote?:string|null,baseBranch?:string|null,prBodyFile?:boolean}} st 当前状态
+ * @param {{branch:string,sha:string,slug:string,adds:string[],hasMessage:boolean,merge:boolean,noCommit?:boolean,closeIssue?:boolean,asMerged?:number|null,cleanBranch?:boolean,reap?:boolean,handle?:string|null,claim?:number|null,release?:number|null,claims?:boolean,comment?:boolean,branches?:boolean,newIssue?:boolean,diagnose?:boolean,stageLog?:boolean,fetchIssue?:number|string|null,screenshotReply?:number|null,createBranch?:string|null,remote?:string|null,baseBranch?:string|null,prBodyFile?:boolean}} st 当前状态
  * @returns {string[]} 逐条命令
  */
 export function planCommands(st) {
@@ -760,6 +760,11 @@ export function planCommands(st) {
     p.push(
       `cnb pulls list-pull-comments --repo ${st.slug} --number <号> --sort -created --page-size 100 -v`,
     );
+  }
+  /* 截图回帖（ISSUE #5191）：上传是这一格独有的 cnb 工具，计划里必须有对应行；
+   * 回帖与回读与 `--comment` 共用原语，集合去重后不会多出条目。 */
+  if (st.screenshotReply !== null && st.screenshotReply !== undefined) {
+    p.push(`cnb issues upload-image --repo ${st.slug} --number <号> --file <png> -v`);
   }
   /* 分支落地读数（ISSUE #2427）：计划里连翻带 git 的取数一起念出来 ——
    * `--dry-run` 教的执行面要和真跑的一样大，否则它教的是另一件事。 */

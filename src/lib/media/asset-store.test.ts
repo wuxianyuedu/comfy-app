@@ -13,7 +13,7 @@ vi.mock("~/lib/core/logger", () => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 
-import { copyIntoAssetStore } from "./asset-store";
+import { copyIntoAssetStore, writeBufferIntoAssetStore } from "./asset-store";
 
 /** 模块加载时的 cwd（= 检出根）；每个用例结束切回来再清理。 */
 const ORIGINAL_CWD = process.cwd();
@@ -34,6 +34,22 @@ beforeEach(async () => {
 afterEach(async () => {
   process.chdir(ORIGINAL_CWD);
   await fs.rm(tempRoot, { recursive: true, force: true });
+});
+
+describe("writeBufferIntoAssetStore（ISSUE #5114）", () => {
+  it("远端图片缓冲写进 generated/assets/<assetId>/，返回同形状产物地址", async () => {
+    const url = await writeBufferIntoAssetStore(Buffer.from("png-bytes"), "asset-r1", "png");
+    expect(url).toBe("/api/generated/assets/asset-r1/remote.png");
+    const file = path.join(tempRoot, "generated", "assets", "asset-r1", "remote.png");
+    expect(await fs.readFile(file, "utf8")).toBe("png-bytes");
+  });
+
+  it("拒绝不合法标识与扩展名（防路径穿越）", async () => {
+    await expect(writeBufferIntoAssetStore(Buffer.from("x"), "../escape", "png")).rejects.toThrow();
+    await expect(
+      writeBufferIntoAssetStore(Buffer.from("x"), "asset-r1", "../../png"),
+    ).rejects.toThrow();
+  });
 });
 
 describe("copyIntoAssetStore 来源按产物根解析（ISSUE #4917）", () => {

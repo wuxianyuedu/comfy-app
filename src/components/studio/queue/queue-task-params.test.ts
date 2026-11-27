@@ -3,7 +3,11 @@
 // 内部键剔除、空值不摆、长值截断。
 import { describe, expect, it } from "vitest";
 
-import { queueTaskParamRows, type QueueTaskParamsSource } from "./queue-task-params";
+import {
+  queueTaskParamRows,
+  runningRequestRow,
+  type QueueTaskParamsSource,
+} from "./queue-task-params";
 
 function source(over: Partial<QueueTaskParamsSource> = {}): QueueTaskParamsSource {
   return {
@@ -90,7 +94,7 @@ describe("queueTaskParamRows", () => {
     expect(rows).toHaveLength(0);
   });
 
-  it("数组收成顿号连接的文本，对象走 JSON，超长截断加省略号", () => {
+  it("数组收成顿号连接的文本，对象走 JSON，超长值原样保留不截断（#5074）", () => {
     const rows = queueTaskParamRows(
       source({
         params: {
@@ -104,7 +108,23 @@ describe("queueTaskParamRows", () => {
     expect(byLabel.get("refs")).toBe("a.png、b.png");
     expect(byLabel.get("nested")).toBe('{"keep":true}');
     const long = byLabel.get("long") ?? "";
-    expect(long.endsWith("…")).toBe(true);
-    expect(long.length).toBeLessThan(500);
+    expect(long).toBe("长".repeat(500));
+  });
+});
+
+describe("runningRequestRow（#5075 运行中请求读数）", () => {
+  it("按本地任务档给出提交时的完整统一输入，不编造上游响应", () => {
+    const row = runningRequestRow(
+      source({
+        workflowName: "image_minimax_h3_image_t2i",
+        params: { workflow: "wf-1", prompt: "一只猫", seed: 42 },
+      }),
+    );
+    expect(row.phase).toBe("local-task");
+    expect(row.ok).toBe(true);
+    expect(row.status).toBeNull();
+    expect(row.excerpt).toBeNull();
+    expect(row.endpoint).toContain("image_minimax_h3_image_t2i");
+    expect(row.body).toMatchObject({ workflow: "wf-1", prompt: "一只猫", seed: 42 });
   });
 });

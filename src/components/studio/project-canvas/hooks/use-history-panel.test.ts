@@ -185,6 +185,20 @@ describe("useHistoryPanel", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("轮询拿到内容相同的行时沿用旧数组引用（#5124）", async () => {
+    /* 4s 一拍回来的是新 JSON 对象；值没变就不该让 80 行全部重渲。 */
+    mockedFetch.mockResolvedValue([row()]);
+    const { result } = renderHook(() => useHistoryPanel({ projectId: "p-1" }));
+    await expect.poll(() => result.current.tasks).toHaveLength(1);
+    const before = result.current.tasks;
+    act(() => {
+      result.current.refresh();
+    });
+    await expect.poll(() => mockedFetch.mock.calls.length).toBe(2);
+    await expect.poll(() => result.current.loading).toBe(false);
+    expect(result.current.tasks).toBe(before);
+  });
+
   it("显示密度是纯视觉偏好，切换不触发重新拉取", async () => {
     const { result } = renderHook(() => useHistoryPanel({ projectId: "p-1" }));
     await expect.poll(() => result.current.loading).toBe(false);

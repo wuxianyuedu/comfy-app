@@ -28,10 +28,16 @@
 // Node 里 import 本模块」的承诺。
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { collectOutputs, extractRuntimeParams, type RuntimeParams } from "./executor-outputs";
+import {
+  collectOutputs,
+  extractRuntimeParams,
+  selectedOutputNodeIds,
+  type RuntimeParams,
+} from "./executor-outputs";
 import { describeZeroOutputFailure } from "./zero-output-reason";
 import { friendlyError } from "./executor-errors";
 import { taskOutputDir, taskOutputUrl } from "~/lib/media/output-paths";
+import { taxonomyFrom, type ArtifactTaxonomy } from "~/lib/media/artifact-taxonomy";
 import { isRecord } from "~/lib/is-record";
 import { getWorkflowType, parseModesJson } from "~/lib/workflow/workflow-types";
 import { fetchHistoryEntry, traceComfyQueue, type ComfyHistoryEntry } from "./executor-history";
@@ -183,6 +189,19 @@ function beijingIso(value: Date | string | null | undefined): string | null {
 /** 工坊元数据的**尽力而为**读取：工坊模型名称（工作流上挂的模型标签）与模式。
  *  manifest 是归档件——查不到（宿主未注入该仓储且 dynamic import 失败）就给
  *  null，绝不阻塞收口。 */
+/** 产物三级目录的取值：媒体类型取产物首项，模型 / 模式取工作流标签（缺则回落任务行）。 */
+function resolveTaxonomy(
+  mediaType: string,
+  taskRow: { type?: string | null; userId: string; workflowName: string } | null,
+  meta: Awaited<ReturnType<typeof loadWorkshopMeta>>,
+): ArtifactTaxonomy {
+  return taxonomyFrom({
+    mediaType,
+    modelName: meta?.modelName ?? taskRow?.workflowName ?? null,
+    modeCode: meta?.modeCode ?? taskRow?.type ?? null,
+  });
+}
+
 async function loadWorkshopMeta(
   userId: string | null,
   templateId: string | null,
@@ -192,6 +211,8 @@ async function loadWorkshopMeta(
   modelName: string | null;
   modeName: string | null;
   modes: Array<string>;
+  /** 工作流 IO 勾选（编辑 IO / App Mode 都写这一列），用来判哪些节点算产物。 */
+  workflowIO: unknown;
 } | null> {
   if (userId === null || templateId === null || templateId === "") {
     return null;
@@ -210,6 +231,7 @@ async function loadWorkshopMeta(
       modelName: tagRows[0]?.name ?? null,
       modeName: modeCode === null ? null : (getWorkflowType(modeCode)?.label ?? null),
       modes: parseModesJson(tpl.modes),
+      workflowIO: tpl.workflowIO,
     };
   } catch {
     return null;
@@ -341,6 +363,11 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   const projectId: string | null = taskRow?.projectId ?? null;
   const paramsRaw: unknown = taskRow?.params;
   const taskParams: Record<string, unknown> = isRecord(paramsRaw) ? paramsRaw : {};
+  /* 工坊元数据（含 IO 勾选）只取一次：目录分类与「哪些节点算产物」都吃它。
+   * 查不到就给 null，下面按旧行为收全部输出，不阻塞收口。 */
+  const templateId = typeof taskParams.workflow === "string" ? taskParams.workflow : null;
+  const workshopMeta = await loadWorkshopMeta(taskRow?.userId ?? null, templateId);
+  const onlyNodeIds = selectedOutputNodeIds(workshopMeta?.workflowIO ?? null);
   const reqSeed =
     typeof taskParams.seed === "number" || typeof taskParams.seed === "string"
       ? String(taskParams.seed)
@@ -352,10 +379,6 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     reqW = Number(sizeMatch.groups?.width);
     reqH = Number(sizeMatch.groups?.height);
   }
-  /* 产物地址前缀与磁盘目录同一份布局（`~/lib/media/output-paths`）：这一句
-   * 写进 TaskImage.localPath，删除侧要按它把整个目录删掉 —— 两处各拼一遍就
-   * 会分叉（历史上删除侧只认 `<taskId>`，项目任务的产物目录于是永远留在盘上）。 */
-  const publicBase = taskOutputUrl(taskId, projectId);
   /* 显式打一行「拉取 history」：让「最后一个节点跑完」到「history 就绪」之间的
    * 空档可见 —— ComfyUI 在这段是异步的（成功信号先到，产物后落盘），所以在
    * 这个窗口里卡住，否则看起来就像「执行器冻住了」。 */
@@ -381,7 +404,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     return;
   }
   const outputsCount = Object.keys(entry.outputs ?? {}).length;
-  log(taskId, "info", `✓ history 就绪（${outputsCount} 节点输出）`);
+  log(taskId, "info", `✓ history 就绪（${outputsCount} 个节点有输出）`);
   /* 把 history 的结论摘要打进任务日志：即使后面 outputs 判定为「无输出内容」，
    *  用户也能立刻看到 ComfyUI 自己报的 status（success/error/completed）与
    *  每个节点的输出键，而不是只看到一句收口结论。原文在 trace 文件里。 */
@@ -391,7 +414,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     "info",
     `ComfyUI history 摘要：status=${verdict.statusStr ?? "(无)"} completed=${
       verdict.completed ?? "(无)"
-    } 输出节点=${verdict.outputNodeCount}${
+    } 有输出的节点=${verdict.outputNodeCount}${
       verdict.executionError === undefined ? "" : ` 执行错误=${verdict.executionError}`
     }`,
   );
@@ -425,7 +448,34 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     return;
   }
 
-  const { images, videos, audios, others, texts } = collectOutputs(entry.outputs ?? {});
+  /* 只认编辑 IO / App Mode 勾选为输出的节点：没勾选的节点整格不算产物，
+   * 连它留下的 images / text 都不下载落库（#5109）。IO 列查不到时 onlyNodeIds
+   * 为 null，维持旧行为，避免在没有事实的时候把产物全丢掉。 */
+  const { images, videos, audios, others, texts } = collectOutputs(entry.outputs ?? {}, {
+    onlyNodeIds,
+  });
+  const deliverableCount =
+    images.length + videos.length + audios.length + others.length + texts.length;
+  log(
+    taskId,
+    "info",
+    `可下载产物 ${deliverableCount} 份（有输出的节点 ${outputsCount} 个；只认 IO 勾选的输出节点）`,
+  );
+  /* 三级目录的取值要等产物收集完才知道媒体类型：首图优先，其次视频 / 音频 / 文本。
+   * 地址与磁盘目录同出一份布局，这一句写进 TaskImage.localPath；删除 / 打开侧
+   * 改为从 localPath 反推目录，不再各拼一遍。 */
+  const primaryMediaType =
+    images.length > 0
+      ? "image"
+      : videos.length > 0
+        ? "video"
+        : audios.length > 0
+          ? "audio"
+          : texts.length > 0
+            ? "text"
+            : "other";
+  const taxonomy = resolveTaxonomy(primaryMediaType, taskRow ?? null, workshopMeta);
+  const publicBase = taskOutputUrl(taxonomy, taskId);
   const hasOutput =
     images.length || videos.length || audios.length || texts.length || others.length;
   if (!hasOutput) {
@@ -491,7 +541,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
    * 生成，一个 `../../x` 形状过去能把产物写到产物根之外，而
    * `/api/generated/[...path]` 的白名单只认根内，写出去等于文件永远读不到；
    * 现在它变成一次硬失败（由 complete() 收口成 finalizeFailure，用户看得见）。 */
-  const dir = taskOutputDir(taskId, projectId);
+  const dir = taskOutputDir(taxonomy, taskId);
   if (dir === null) {
     throw new Error(`产物目录越界，已拒绝落盘：taskId=${taskId} projectId=${projectId ?? "(无)"}`);
   }

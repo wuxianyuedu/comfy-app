@@ -53,12 +53,14 @@ import { MAIN_TAB_ID, useShellTabs } from "~/lib/shell/shell-tabs-store";
  * 展开态是 size-7 浅底胶片；折叠成图标轨时按钮内容盒只有 16px（size-8! + p-2!），
  * 28px 胶片会 overflow 并把图标推右 6px，与临时页签的裸图标不对齐。折叠态改成
  * 铺满按钮（inset-0 / size-full），图标回到按钮中心，与裸图标同列。悬停 / 聚焦时
- * 底片向左扩到整条 48px 轨（-left-2 + w calc(100%+16px)），给同处一行的关闭钮
- * 让出可停靠的紫色背景，关闭钮不再悬在底色外的气泡起点上。按钮本身有 relative
+ * 底片**只向右**拉宽（w calc(100%+8px)，left 保持 0 不动）——左缘钉在按钮左缘，
+ * 不往左扩盖住轨左缘那条「当前打开页签」指示条（data-active:before）。图标用
+ * justify-start + pl-2 固定在按钮内容盒（x=8+8=16 起），悬浮前后**位置不变**，
+ * 不随底片拉宽居中右移；关闭钮贴拉宽底片的右缘，两者不相交。按钮本身有 relative
  * 可承载 absolute；折叠态打开项显式开 overflow-visible 并藏掉名称，免得扩出的底片
  * 被按钮裁掉 / 名称从轨里漏出来。 */
 const OPEN_TAB_GLYPH_CLASS =
-  "bg-primary-soft text-primary-strong inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-[width,left] duration-150 group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:inset-0 group-data-[collapsible=icon]:size-full group-data-[collapsible=icon]:rounded-[inherit] group-hover/menu-item:group-data-[collapsible=icon]:-left-2 group-hover/menu-item:group-data-[collapsible=icon]:w-[calc(100%+16px)] group-focus-within/menu-item:group-data-[collapsible=icon]:-left-2 group-focus-within/menu-item:group-data-[collapsible=icon]:w-[calc(100%+16px)]";
+  "bg-primary-soft text-primary-strong inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-[width] duration-150 group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:inset-0 group-data-[collapsible=icon]:size-full group-data-[collapsible=icon]:justify-start group-data-[collapsible=icon]:pl-2 group-data-[collapsible=icon]:rounded-[inherit] group-hover/menu-item:group-data-[collapsible=icon]:w-[calc(100%+8px)] group-focus-within/menu-item:group-data-[collapsible=icon]:w-[calc(100%+8px)]";
 
 /** 侧栏底部「项目」分组里列出的一条项目（只需 id + 展示名）。 */
 export type SidebarProject = {
@@ -347,6 +349,9 @@ export type AppShellProps = {
   children: ReactNode;
   /** 首帧侧栏展开态。由服务端读 `sidebar_state` cookie 传来（见 `ui/sidebar` 里那段说明）；不传按展开。 */
   defaultSidebarOpen?: boolean;
+  /** 生图暂停闸是否开启（ISSUE #5143）：由有 tRPC Provider 的装配层传入，
+   *  侧栏「队列」行据此在页签上显示「暂停」角标；缺省 false。 */
+  generationPaused?: boolean;
   onCloseViewTab?: (key: string) => void;
   /** 删除项目（侧栏「项目」行右键菜单）：上层负责删本地+服务端、关页签、刷新。 */
   onDeleteProject?: (id: string) => void;
@@ -389,6 +394,7 @@ export function AppShell({
   onNewProject,
   viewTabs,
   activeViewKey,
+  generationPaused = false,
   projectNameOf,
   onSelectViewTab,
   onCloseViewTab,
@@ -506,6 +512,11 @@ export function AppShell({
                           <span className="group-data-[collapsible=icon]:sr-only">
                             {item.label}
                           </span>
+                          {item.id === "queue" && generationPaused ? (
+                            <span className="bg-warning/10 text-warning-strong text-2xs rounded px-1.5 py-0.5 font-medium group-data-[collapsible=icon]:hidden">
+                              暂停
+                            </span>
+                          ) : null}
                         </SidebarMenuButton>
                         {openTab ? (
                           /* 关闭按钮（ISSUE #3740）：只在悬停 / 聚焦时浮现 —— 打开态

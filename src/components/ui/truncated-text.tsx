@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Hint } from "~/components/ui/hint";
-import { rafResizeObserverCallback } from "~/lib/dom-rect";
+import { observeElementResize } from "~/lib/dom/shared-resize-observer";
 
 /**
  * TruncatedText —— 「文字被截成省略号」的**唯一实现**（ISSUE #3790）。
@@ -69,18 +69,10 @@ function TruncatedText({ children, className }: TruncatedTextProps) {
     if (!el || typeof ResizeObserver === "undefined") {
       return;
     }
-    /* 观察承载元素自身：容器宽度变了（窗口缩放、侧栏折叠、面板展开）要重判一次 ——
-     * 「刚才没截断、现在截断了」与反过来都属常见。回调经 rAF 隔离一帧
-     * （量完 setState 改布局会同帧再触发观察——#4871）。 */
-    const observer = new ResizeObserver(
-      rafResizeObserverCallback(() => {
-        measure();
-      }),
-    );
-    observer.observe(el);
-    return () => {
-      observer.disconnect();
-    };
+    /* 观察承载元素自身：容器宽度变了（窗口缩放、侧栏折叠、面板展开）要重判
+     * 一次。共享 observer + 一批一次 rAF（#5131）：N 个读数点不再各自持有
+     * 观察者与帧调度；rAF 隔离仍保留（量完 setState 改布局会同帧再触发观察）。 */
+    return observeElementResize(el, measure);
   }, [measure]);
 
   return (

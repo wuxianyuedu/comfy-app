@@ -13,8 +13,16 @@
  */
 import type { SkillSeed } from "~/lib/core/repository-skill";
 
-/** 内置技能种子数据。 */
+import { skillsSeedAnimeManga } from "./skills-seed-anime-manga";
+import { skillsSeedAnimeStudio } from "./skills-seed-anime-studio";
+import { skillsSeedAnimeWorld } from "./skills-seed-anime-world";
+
+/** 内置技能种子：108 条日系动漫画风细分（按工作室 / 题材 / 漫画流派拆文件）
+ *  + 原有 12 条代表模板。新增画风只加一条数据；仓储 `ensureBuiltIns` 按 slug 补缺。 */
 export const BUILTIN_SKILLS: Array<SkillSeed> = [
+  ...skillsSeedAnimeStudio,
+  ...skillsSeedAnimeWorld,
+  ...skillsSeedAnimeManga,
   // ── Style / Art ──────────────────────────────────────
   {
     name: "皮克斯动画风格",

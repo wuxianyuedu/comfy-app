@@ -735,6 +735,43 @@ describe("TaskRepository", () => {
     seedUser(tdb, { id: "u2", email: "u2@test.dev" });
   });
 
+  it("findByIdsWithImages 与逐条 findByIdWithImages 等价，且去重 / 缺行不补位（#5149）", async () => {
+    const a = await taskRepository.createQueued({ ...queued });
+    const b = await taskRepository.createQueued({ ...queued });
+    const [withImagesA, withImagesB] = await Promise.all([
+      taskRepository.findByIdWithImages(a.id),
+      taskRepository.findByIdWithImages(b.id),
+    ]);
+    const batch = await taskRepository.findByIdsWithImages([a.id, a.id, b.id, "missing-task-id"]);
+    expect(batch).toHaveLength(2);
+    expect(batch.map((row) => row.id).sort()).toEqual([a.id, b.id].sort());
+    const byId = new Map(batch.map((row) => [row.id, row]));
+    expect(byId.get(a.id)?.images).toEqual(withImagesA?.images);
+    expect(byId.get(b.id)?.images).toEqual(withImagesB?.images);
+    /* 窄投影：重列那四个字段根本不在返回行上。 */
+    expect(byId.get(a.id)).not.toHaveProperty("workflowSnapshot");
+    expect(await taskRepository.findByIdsWithImages([])).toEqual([]);
+  });
+
+  it("countStatusesWithToday 与三次独立 count 等价（#5124 合并重复聚合）", async () => {
+    const a = await taskRepository.createQueued({ ...queued });
+    const b = await taskRepository.createQueued({ ...queued, projectId: "p1" });
+    await taskRepository.finalizeSuccess(a.id, { resultImages: [], params: {} });
+    expect(b.projectId).toBe("p1");
+
+    const filter = { projectId: undefined, statusList: undefined };
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const combined = await taskRepository.countStatusesWithToday("u1", filter, todayStart);
+    const [total, statusCounts, todayCounts] = await Promise.all([
+      taskRepository.countByUser("u1", filter),
+      taskRepository.countByStatusByUser("u1", filter),
+      taskRepository.countByStatusByUser("u1", filter, todayStart),
+    ]);
+    expect(combined).toEqual({ total, statusCounts, todayCounts });
+    expect(combined.total).toBe(2);
+  });
+
   it("createQueued 落 QUEUED 且可带 projectId / snapshot；listByUser 支持分页与状态过滤", async () => {
     const t1 = await taskRepository.createQueued({
       ...queued,
@@ -912,6 +949,7 @@ describe("TaskRepository", () => {
     });
     expect(await taskRepository.findStatusById("nope")).toBeNull();
     expect(await taskRepository.findSnapshotById(t.id)).toEqual({
+      userId: "u1",
       workflowSnapshot: { nodes: [1] },
       projectId: "p1",
     });

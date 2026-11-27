@@ -40,7 +40,7 @@
 
 /** 命中即展开判据：结构化校验错误或这几类「可行动」形态（见 `adviseOnError`）。 */
 export const ERROR_AUTO_EXPAND_RE =
-  /not found|not installed|out of memory|cannot find model|checkpoint.*not exists|missing\s+\w+\s+model|ValueError|IndexError|KeyError|BackendError|server_busy|insufficient/i;
+  /not found|not installed|out of memory|cannot find model|checkpoint.*not exists|missing\s+\w+\s+model|ValueError|IndexError|KeyError|BackendError|server_busy|insufficient|hostbuffer|read_file_slice/i;
 
 /** 一条建议规则：先命中先返回（顺序即优先级）。 */
 type AdviceRule = {
@@ -71,6 +71,13 @@ const ADVICE_RULES: Array<AdviceRule> = [
       }
       return `wrapper 子图（${uuid[0].slice(0, 8)}…）找不到。自定义工作流依赖的节点未在 ComfyUI 端安装；请确认 wrapper 在源工作流里声明了相同的自定义节点包，或回退到「无 wrapper」的 flat form 模板。`;
     },
+  },
+  {
+    // 文本编码器权重切片读进 host buffer 失败（ISSUE #5144）：原文只说 read_file_slice，
+    // 一个字都不提内存；真正的成因通常是本机内存/显存装不下钉死的大量化权重。
+    pattern: /hostbuffer|host\s*buffer|read_file_slice/i,
+    advice: () =>
+      "文本编码器权重加载失败，常见原因是本机内存 / 显存装不下工作流里钉死的大模型权重，或该模型文件不在盘上。请在「设置 → 创作后端」确认可用内存，改用同模型的更小量化版本（如 int8 → nvfp4），或换一台内存足够的机器后重试；不要只靠反复点「重试」。",
   },
   {
     pattern: /out of memory|oom|cuda out|tried to allocate|显存不足|内存不足/i,

@@ -11,6 +11,8 @@
  * @module comfyui/executor-outputs — 产物收集与运行时参数提取（纯函数）
  */
 import { isRecord } from "~/lib/is-record";
+import { parseWorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import { runtimeNodeId } from "~/lib/workflow/workflow-param-mapping";
 
 /** ComfyUI history 输出文件条目（images / videos / gifs / audios 及 3D 兜底）。 */
 export type CollectedOutputFile = {
@@ -32,18 +34,51 @@ function isCollectedOutputFile(v: unknown): v is CollectedOutputFile {
   return isRecord(v) && typeof v.filename === "string";
 }
 
+/** 从工作流 IO 勾选（`workflowTemplate.workflowIO`，编辑 IO / App Mode 都写这里）
+ *  里取出**被勾选为输出**的运行期节点 id。没勾选的节点一律不算交付物——
+ *  它是作者明确的口径，比按 class_type 猜「哪个是预览节点」可靠得多。
+ *
+ *  返回 null 表示「没有可用的勾选」（旧工作流没配 IO / 查不到模板）：
+ *  此时维持旧行为、收下全部输出，避免在没有事实的时候把产物全丢掉。 */
+export function selectedOutputNodeIds(workflowIO: unknown): ReadonlySet<string> | null {
+  const map = parseWorkflowIOMap(workflowIO);
+  const ids = new Set<string>();
+  for (const entry of Object.values(map)) {
+    if (entry.direction !== "output") {
+      continue;
+    }
+    /* 子图内部勾选的运行期 id 是 `host:inner`（见 runtimeNodeId）；裸 id 也收，
+     * 兼容 history 里以内部 id 直接出现的历史形态。 */
+    ids.add(runtimeNodeId(entry));
+    ids.add(entry.nodeId);
+  }
+  return ids.size > 0 ? ids : null;
+}
+
 /**
  * 从 ComfyUI history 的 outputs 中收集各类产物。
  * 纯函数，便于单测（P2：补齐 audio/text/3D，避免只认 images/videos 导致的死锁）。
+ *
+ * `onlyNodeIds` 传工作流 IO 勾选的输出节点 id（见 `selectedOutputNodeIds`）：
+ * 没勾选的节点整格跳过——图 / 视频 / 音频 / 文本 / 兜底文件一视同仁。
+ * 传 null / 不传时维持旧行为（旧工作流没有 IO 勾选）。
  */
-export function collectOutputs(outputs: Record<string, unknown>): CollectedOutputs {
+export function collectOutputs(
+  outputs: Record<string, unknown>,
+  options?: { onlyNodeIds?: ReadonlySet<string> | null },
+): CollectedOutputs {
   const images: Array<CollectedOutputFile> = [];
   const videos: Array<CollectedOutputFile> = [];
   const audios: Array<CollectedOutputFile> = [];
   const others: Array<CollectedOutputFile> = [];
   const texts: Array<string> = [];
-  for (const node of Object.values(outputs)) {
+  for (const [nodeId, node] of Object.entries(outputs)) {
     if (!isRecord(node)) {
+      continue;
+    }
+    /* 作者没勾成输出的节点整格不算产物（#5109）。勾选集为空时保持旧行为。 */
+    const only = options?.onlyNodeIds;
+    if (only !== undefined && only !== null && !only.has(nodeId)) {
       continue;
     }
     if (Array.isArray(node.images)) {
@@ -60,7 +95,7 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
     if (Array.isArray(node.audios)) {
       audios.push(...node.audios.filter(isCollectedOutputFile));
     }
-    // ShowText / 任意文本输出节点：保留渲染文本（无文件）.
+    // ShowText / 文本输出节点：保留渲染文本（无文件）。
     if (typeof node.text === "string" && node.text.trim()) {
       texts.push(node.text);
     } else if (Array.isArray(node.text)) {

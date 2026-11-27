@@ -11,7 +11,15 @@ import { cancelTask } from "~/lib/comfyui/enqueue";
 import { sleep } from "~/lib/with-timeout";
 import { errorText } from "~/lib/error-message";
 import { asRecord } from "~/lib/is-record";
+import { FILM_WATCH_READ } from "~/lib/retry-policy";
+import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
+import { isSqliteBusyError, sqliteAwareErrorText } from "~/lib/sqlite-error";
 import type { ShotStatus } from "~/lib/film/film-status";
+import {
+  FILM_WATCH_BASE_MAX_ITER as WATCH_BASE_MAX_ITER,
+  FILM_WATCH_PER_SHOT_ITER as WATCH_PER_SHOT_ITER,
+  FILM_WATCH_TICK_MS as WATCH_POLL_MS,
+} from "~/lib/film/film-wait";
 import { appendFilmLog } from "./film-log";
 import { composeFilm } from "./compose-film";
 
@@ -28,10 +36,7 @@ function isResultImages(v: unknown): v is Array<{ localPath?: string; mediaType?
  *   零变化」才判超时——健康的长任务每拍都有进展，不会被这把尺误伤；
  * · **绝对上限**：底仓 + 每镜一档，兜「进度在两档间抖动」这类永不静止的
  *   病态循环，保证收口必然到达。 */
-const WATCH_POLL_MS = 4000;
 const WATCH_IDLE_MAX_ITER = 900;
-const WATCH_BASE_MAX_ITER = 240;
-const WATCH_PER_SHOT_ITER = 600;
 const WATCH_IDLE_MIN = Math.round((WATCH_POLL_MS * WATCH_IDLE_MAX_ITER) / 60_000);
 
 /** 超时收口（#4595）：与 cancelFilm 同款的补偿——先逐个撤在飞任务，再同一事务
@@ -114,17 +119,29 @@ export async function watchFilm(id: string, opts: { resumed?: boolean } = {}): P
        * 「服务莫名断开」的又一来源）。失败要让用户看见：影片日志记 error、
        * 影片判 FAILED（不留 GENERATING 假活）。收口自身可能正踩在故障路径上
        * （DB BUSY / 磁盘），再各兜一层，不让收口自己变成新的漏网口。 */
-      const detail = errorText(error, "成片监看循环异常终止");
+      const detail = sqliteAwareErrorText(error, "成片监看循环异常终止");
+      /* 读失败 ≠ 任务失败（ISSUE #5146）：SQLite 锁族是瞬时冲突，重试穷尽后
+       * 只留日志、不判影片 FAILED —— 在飞镜头还有任务在跑，监看是唯一收口者，
+       * 一判死那些产物就没人回收。清在飞表交给 boot 扫描接回（见下方 finally）。 */
+      const transientLock = isSqliteBusyError(error);
       logger.error(`[film] 监看循环异常终止（film=${id}）：${detail}`);
       try {
-        await appendFilmLog(id, "error", `监看循环异常终止：${detail}`);
+        await appendFilmLog(
+          id,
+          "error",
+          transientLock
+            ? `监看读库遇到瞬时锁冲突，本条监看退场，重启恢复扫描会接回：${detail}`
+            : `监看循环异常终止：${detail}`,
+        );
       } catch {
         /* 日志路径本身失败时不再冒泡 */
       }
-      try {
-        await filmRepository.markFailed(id, detail);
-      } catch {
-        /* 同上 */
+      if (!transientLock) {
+        try {
+          await filmRepository.markFailed(id, detail);
+        } catch {
+          /* 同上 */
+        }
       }
     })
     .finally(() => {
@@ -149,7 +166,9 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
   let lastSnapshot: string | null = null;
   for (let i = 0; i < maxIter; i++) {
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-    const film = await filmRepository.findById(id);
+    const film = await runWithSqliteBusyRetry(() => filmRepository.findById(id), {
+      policy: FILM_WATCH_READ,
+    });
     if (!film || film.status === "CANCELLED" || film.status === "FAILED") {
       return;
     }
@@ -158,7 +177,9 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
     }
 
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-    const shots = await filmShotRepository.listByFilm(id);
+    const shots = await runWithSqliteBusyRetry(() => filmShotRepository.listByFilm(id), {
+      policy: FILM_WATCH_READ,
+    });
     /* 一行镜头都没有的 GENERATING 只可能是「`markGenerating` 之后、逐镜提交之前」
      * 崩在这里。这条状态在本刀之前不可达（监看只由 `startFilm` 起，那时 shots 必然
      * 非空），而 boot 续跑扫描会把它捡起来 —— 不判掉就是 `0/0` 的 NaN 进度，
@@ -211,9 +232,13 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
         taskIds.push(shot.taskId);
       }
     }
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+    const progressRows = await runWithSqliteBusyRetry(
+      () => taskRepository.findExecutionProgressMany(taskIds),
+      { policy: FILM_WATCH_READ },
+    );
     const progressById = new Map(
-      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      (await taskRepository.findExecutionProgressMany(taskIds)).map(
+      progressRows.map(
         /* SAFETY: 类型断言已复核 */
         (row) => [row.id, row] as const,
       ),
@@ -279,7 +304,9 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
      * 用户可能在取进度期间点了取消——取消是用户终态，不再续写进度、
      * 也不进入判失败/合成那一段。 */
     // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：收口动作前必须拿到最新状态
-    const current = await filmRepository.findById(id);
+    const current = await runWithSqliteBusyRetry(() => filmRepository.findById(id), {
+      policy: FILM_WATCH_READ,
+    });
     const status = current?.status;
     if (status === undefined || status === "CANCELLED" || status === "FAILED") {
       return;

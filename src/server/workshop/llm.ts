@@ -3,9 +3,10 @@
 // 从环境变量读取默认值，并可被 `llmConfig` 表里的用户设置覆盖（与界面
 // 设置 UI 共享同一张表，复用 workshopDb 读取，不触碰 `~/env`）。
 import { decryptLlmKey } from "~/lib/llm/secrets";
-import { errorMessage, errorText } from "~/lib/error-message";
+import { errorText } from "~/lib/error-message";
 import { logger } from "~/lib/core/logger";
-import type { LLMMessage } from "~/lib/llm/types";
+import { isLoopbackBaseUrl, type LLMMessage } from "~/lib/llm/types";
+import { ERR_NO_EFFECTIVE_MODEL, llmFailureMessage } from "~/lib/llm/config-health";
 import { llmConfig } from "~/server/db/schema";
 import { workshopDb } from "./db";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
@@ -75,11 +76,10 @@ function headersFor(cfg: WorkshopLLMConfig): Record<string, string> {
 export async function completeWorkshopLLM(
   cfg: WorkshopLLMConfig,
   messages: Array<LLMMessage>,
+  signal?: AbortSignal,
 ): Promise<string> {
   if (!cfg.model.trim()) {
-    throw new Error(
-      "尚未配置生效模型：请先在「设置 → 本地模型/远程模型」中选择或填写要使用的模型名",
-    );
+    throw new Error(ERR_NO_EFFECTIVE_MODEL);
   }
   let res: Response;
   try {
@@ -93,24 +93,32 @@ export async function completeWorkshopLLM(
         max_tokens: cfg.maxTokens,
         stream: false,
       }),
-      signal: AbortSignal.timeout(180_000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(180_000)])
+        : AbortSignal.timeout(180_000),
       scenario: "llm-upstream",
     });
   } catch (error) {
-    const msg = errorMessage(error, String(error));
-    const cause =
-      error instanceof TypeError && error.cause instanceof Error ? String(error.cause.message) : "";
-    const reach = /ECONNREFUSED|ECONNRESET/.test(cause) || /fetch failed/i.test(msg);
-    throw new Error(
-      reach
-        ? `连不上 LLM 服务（${cfg.baseUrl}）：请确认本地服务已启动或 Base URL 正确（${cause || "连接被拒绝"}）。`
-        : `LLM 请求失败：${msg}`,
-      { cause: error },
-    );
+    const healthCfg = {
+      baseUrl: cfg.baseUrl,
+      model: cfg.model,
+      provider: isLoopbackBaseUrl(cfg.baseUrl) ? ("local" as const) : ("remote" as const),
+    };
+    throw new Error(llmFailureMessage({ cfg: healthCfg, error }), { cause: error });
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    const hint = res.status === 401 || res.status === 403 ? "（API Key 无效或未授权）" : "";
+    const hint =
+      res.status === 401 || res.status === 403
+        ? llmFailureMessage({
+            cfg: {
+              baseUrl: cfg.baseUrl,
+              model: cfg.model,
+              provider: isLoopbackBaseUrl(cfg.baseUrl) ? ("local" as const) : ("remote" as const),
+            },
+            status: res.status,
+          })
+        : "";
     throw new Error(
       `LLM 请求失败 (${res.status})${hint}${detail.trim() ? `：${clampText(detail, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}` : ""}`,
     );

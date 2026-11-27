@@ -40,6 +40,9 @@ function row(over: Partial<QueueRow> & Pick<QueueRow, "id" | "status">): QueueRo
     modelName: null,
     prompt: `提示词 ${over.id}`,
     createdAt: new Date("2026-01-01T00:00:00Z"),
+    finishedAt: null,
+    claimedAt: null,
+    queuePosition: over.queuePosition ?? null,
     cover: null,
     checkpoint: null,
     videoPath: null,
@@ -65,7 +68,11 @@ function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorCon
     loading: false,
     loadError: null,
     logRow: null,
+    moveUp: vi.fn(),
     expandedId: null,
+    runningDetail: null,
+    runningLogs: [],
+    runningSettled: null,
     toggleExpanded: vi.fn(),
     detailLoading: false,
     paramRows: [],
@@ -79,6 +86,19 @@ function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorCon
     closeCancelAll: vi.fn(),
     isBusy: () => false,
     refresh: vi.fn(),
+    loadedCount: 0,
+    matchedCount: 0,
+    loadingMore: false,
+    loadMore: vi.fn(),
+    hasMore: false,
+    total: 0,
+    lastSyncedAt: null,
+    refreshError: null,
+    refreshing: false,
+    search: "",
+    setSearch: vi.fn(),
+    statusFilter: "all",
+    setStatusFilter: vi.fn(),
     cancel: vi.fn(),
     openFolder: vi.fn(),
     copyForReprint: vi.fn(),
@@ -186,7 +206,7 @@ describe("QueueMonitor", () => {
     expect(screen.getByText(/连接后显示耗时与节点明细/)).toBeInTheDocument();
   });
 
-  it("每一行都有「日志」入口，点击把该行交给 controller 打开弹窗", () => {
+  it("排队中没有日志入口，已执行的行点「日志」把该行交给 controller（#5074）", () => {
     const openLog = vi.fn();
     monitorMock.mockReturnValue(
       controller({
@@ -199,12 +219,76 @@ describe("QueueMonitor", () => {
     const logButtons = screen.getAllByRole("button", {
       name: /查看这一条的执行日志/,
     });
-    expect(logButtons).toHaveLength(2);
-    /* 读屏顺序：排队段在前、最近结果在后 —— 每个按钮各归属那一行。 */
+    expect(logButtons).toHaveLength(1);
     logButtons[0]!.click();
-    expect(openLog).toHaveBeenCalledWith(expect.objectContaining({ id: "q1", status: "QUEUED" }));
-    logButtons[1]!.click();
     expect(openLog).toHaveBeenCalledWith(expect.objectContaining({ id: "bad", status: "FAILED" }));
+    expect(openLog).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: "q1", status: "QUEUED" }),
+    );
+  });
+
+  it("提前按钮只出现在排队中的行，点一下把整行交给 controller", async () => {
+    const user = userEvent.setup();
+    const moveUp = vi.fn();
+    monitorMock.mockReturnValue(
+      controller({
+        queued: [{ row: row({ id: "q1", status: "QUEUED" }), position: 1 }],
+        runningRows: [row({ id: "r1", status: "RUNNING" })],
+        recent: [row({ id: "done1", status: "SUCCEEDED" })],
+        moveUp,
+      }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    const buttons = screen.getAllByRole("button", { name: "把这一条提前到队首" });
+    /* 运行中 / 终态不该有这个动作：服务端也只认 QUEUED。 */
+    expect(buttons).toHaveLength(1);
+    await user.click(buttons[0]!);
+    expect(moveUp).toHaveBeenCalledWith(expect.objectContaining({ id: "q1", status: "QUEUED" }));
+  });
+
+  it("运行中可展开统一输入与请求信息（#5075）", () => {
+    const toggleExpanded = vi.fn();
+    treeMock.mockReturnValue(treeController({ filterIds: () => new Set(["run-1"]) }));
+    monitorMock.mockReturnValue(
+      controller({
+        running: {
+          id: "run-1",
+          modelText: "MiniMax H3",
+          nodeText: "—",
+          progressPct: 0.2,
+          progressValue: null,
+          startedAt: Date.now() - 1000,
+          stepsText: "—",
+          elapsedText: "00:01",
+          remainingText: "估算中",
+          rateText: "—",
+          workflowName: "image_minimax_h3_image_t2i",
+        },
+        expandedId: "run-1",
+        toggleExpanded,
+        runningDetail: {
+          id: "run-1",
+          workflowName: "image_minimax_h3_image_t2i",
+          modelName: "MiniMax H3",
+          status: "RUNNING",
+          prompt: "一只猫",
+          params: { workflow: "wf-1", prompt: "一只猫", seed: 42 },
+        },
+        paramRows: [{ label: "提示词", value: "一只猫" }],
+      }),
+    );
+    render(<QueueMonitor onOpenComfyui={vi.fn()} />);
+    const detail = screen.getByRole("button", { name: "查看正在跑这条的统一输入与请求信息" });
+    expect(detail).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("统一输入（提交时的参数）")).toBeInTheDocument();
+    expect(screen.getByText("请求信息")).toBeInTheDocument();
+    expect(screen.getByText("本地任务")).toBeInTheDocument();
+    expect(screen.getByText("生成进度")).toBeInTheDocument();
+    expect(screen.getByText("执行日志")).toBeInTheDocument();
+    expect(screen.getByText("请求返回")).toBeInTheDocument();
+    expect(screen.getByText("执行中")).toBeInTheDocument();
+    detail.click();
+    expect(toggleExpanded).toHaveBeenCalledWith("run-1");
   });
 
   it("logRow 非空时挂载执行日志弹窗，关闭回调交还 controller", () => {
@@ -311,10 +395,12 @@ describe("QueueMonitor", () => {
           workflowName: "正在跑的工作流",
           modelText: "sd.safetensors",
           nodeText: "尚未回报节点",
+          progressPct: 0,
+          progressValue: null,
+          startedAt: Date.now() - 30_000,
+          stepsText: "—",
           elapsedText: "00:30",
           remainingText: "估算中",
-          progressPct: 0,
-          stepsText: "—",
           rateText: "—",
         },
       }),

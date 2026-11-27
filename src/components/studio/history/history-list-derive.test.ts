@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  activityAtOf,
   countByStatus,
   emptyStateText,
   filterTasks,
@@ -12,6 +13,7 @@ import {
   modelLabelOf,
   paginateGroups,
   sortTasks,
+  taskDurationTextOf,
 } from "./history-list-derive";
 import type { TaskItem } from "./history-types";
 
@@ -65,6 +67,27 @@ describe("sortTasks", () => {
     sortTasks(input, "newest");
     expect(input.map((t) => t.id)).toEqual(["old", "new"]);
   });
+
+  it("按最近活动时刻排序：完成过的旧任务排在没有完成时刻的新任务之前（#5076）", () => {
+    const rows = [
+      { ...task("submitted-now", "SUCCEEDED", daysAgo(1)) },
+      { ...task("finished-now", "SUCCEEDED", daysAgo(3)), finishedAt: daysAgo(0) },
+    ];
+    expect(sortTasks(rows, "newest").map((t) => t.id)).toEqual(["finished-now", "submitted-now"]);
+  });
+});
+
+describe("activityAtOf（#5076 最近活动时刻）", () => {
+  it("三档回落：finishedAt → claimedAt → createdAt", () => {
+    const base = task("t", "SUCCEEDED", "2026-01-01T00:00:00.000Z");
+    expect(activityAtOf({ ...base, finishedAt: "2026-01-03T00:00:00.000Z" })).toBe(
+      "2026-01-03T00:00:00.000Z",
+    );
+    expect(activityAtOf({ ...base, claimedAt: "2026-01-02T00:00:00.000Z" })).toBe(
+      "2026-01-02T00:00:00.000Z",
+    );
+    expect(activityAtOf(base)).toBe("2026-01-01T00:00:00.000Z");
+  });
 });
 
 describe("countByStatus", () => {
@@ -100,6 +123,15 @@ describe("groupByDate", () => {
     expect(groups).toHaveLength(2);
     expect(groups[0]?.key).toBe("今天");
     expect(groups[1]?.items.map((t) => t.id)).toEqual(["old"]);
+  });
+
+  it("按完成时刻分组而非提交时刻（#5076）", () => {
+    const groups = groupByDate([
+      { ...task("submitted-old", "SUCCEEDED", daysAgo(5)) },
+      { ...task("finished-today", "SUCCEEDED", daysAgo(5)), finishedAt: daysAgo(0) },
+    ]);
+    const today = groups.find((group) => group.key === "今天");
+    expect(today?.items.map((t) => t.id)).toEqual(["finished-today"]);
   });
 });
 
@@ -187,5 +219,47 @@ describe("hasActiveTasks（ISSUE #4619：有进行中任务才轮询）", () => 
     expect(
       hasActiveTasks([task("a", "SUCCEEDED", daysAgo(0)), task("b", "RUNNING", daysAgo(0))]),
     ).toBe(true);
+  });
+});
+
+describe("taskDurationTextOf（ISSUE #5115：历史耗时读数）", () => {
+  const created = "2026-11-26T10:00:00.000Z";
+
+  it("领取 → 终态，秒级 / 分级都走统一格式", () => {
+    expect(
+      taskDurationTextOf({
+        claimedAt: "2026-11-26T10:00:10.000Z",
+        createdAt: created,
+        finishedAt: "2026-11-26T10:00:52.000Z",
+      }),
+    ).toBe("42s");
+    expect(
+      taskDurationTextOf({
+        claimedAt: "2026-11-26T10:00:00.000Z",
+        createdAt: created,
+        finishedAt: "2026-11-26T10:02:17.000Z",
+      }),
+    ).toBe("2m17s");
+  });
+
+  it("旧任务没有 claimedAt 时退回 createdAt（读数含排队，卡片标题如实说明）", () => {
+    expect(taskDurationTextOf({ createdAt: created, finishedAt: "2026-11-26T10:01:20.000Z" })).toBe(
+      "1m20s",
+    );
+  });
+
+  it("没有终态时刻不编耗时（未完 / 中断）", () => {
+    expect(taskDurationTextOf({ createdAt: created, finishedAt: null })).toBeNull();
+    expect(taskDurationTextOf({ createdAt: created })).toBeNull();
+  });
+
+  it("Date 与 ISO 串两种形态都认（task.list 串 / task.detail 经 superjson 还原的 Date）", () => {
+    expect(
+      taskDurationTextOf({
+        claimedAt: new Date("2026-11-26T10:00:00.000Z"),
+        createdAt: new Date(created),
+        finishedAt: new Date("2026-11-26T10:00:33.000Z"),
+      }),
+    ).toBe("33s");
   });
 });

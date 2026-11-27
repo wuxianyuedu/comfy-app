@@ -23,6 +23,19 @@ vi.mock("~/lib/media/asset-store", () => ({
     return `/api/generated/assets/${assetId}/out.png`;
   }),
   removeAssetStoreDir: vi.fn(() => Promise.resolve(undefined)),
+  writeBufferIntoAssetStore: vi.fn(
+    (_buffer: Buffer, assetId: string, extension: string) =>
+      `/api/generated/assets/${assetId}/remote.${extension}`,
+  ),
+}));
+vi.mock("~/lib/network/outbound-url-core", () => ({
+  safeFetch: vi.fn(() =>
+    Promise.resolve({
+      ok: true,
+      headers: { get: (key: string) => (key === "content-type" ? "image/png" : null) },
+      arrayBuffer: () => Promise.resolve(new Uint8Array([1, 2, 3]).buffer),
+    }),
+  ),
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
@@ -421,5 +434,36 @@ describe("asset 目录树（folderTree / subdirPrefix / renameFolder / updateSub
     await expect(caller().updateSubdir({ id: "nope", subdir: "x" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+});
+
+/* ISSUE #5114：调研页（脸库 / 风格库）的远端生图结果入库。 */
+describe("asset.createFromUrl —— 远端结果入库", () => {
+  it("公共入库：远端图片写成资产文件并随行带提示词 / 模型 / 参数快照", async () => {
+    const res = await caller().createFromUrl({
+      category: "character",
+      modelName: "远端画图模型",
+      negativePrompt: "模糊",
+      params: { seed: 42 },
+      prompt: "银发蓝瞳少女脸部特写",
+      scope: "public",
+      sourceUrl: "https://example.com/img.png",
+    });
+    expect(res).toEqual({ created: 1, duplicated: 0, skipped: 0 });
+    const rows = await caller().list({ scope: "public", category: "character" });
+    expect(rows.items).toHaveLength(1);
+    expect(rows.items[0]?.prompt).toBe("银发蓝瞳少女脸部特写");
+    expect(rows.items[0]?.localPath).toMatch(/\/api\/generated\/assets\//);
+  });
+
+  it("项目档缺项目 id 时拒绝", async () => {
+    await expect(
+      caller().createFromUrl({
+        category: "style",
+        prompt: "画风",
+        scope: "project",
+        sourceUrl: "https://example.com/img.png",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });

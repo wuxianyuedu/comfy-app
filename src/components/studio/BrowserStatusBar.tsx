@@ -247,15 +247,18 @@ function AddressItem({ host, pathname }: { host: string; pathname: string }) {
   return (
     <Hint label={copied.on ? "已复制到剪贴板，粘贴到浏览器即可打开" : shown}>
       {/* 视图层不手写 <button>（UI 基元棘轮 P1）：用 ui/button 的 <Button>，
-          尺寸对齐状态栏其余按钮（h-auto + 小内距）。 */}
+          尺寸对齐状态栏其余按钮（h-auto + 小内距）。
+          字号显式用 text-3xs 覆盖 Button 基类的 text-sm（14px）：地址区是记号档、不是正文；
+          锁图标用 size-[10px] 类而不是 size 属性 —— Button 基类给无 size- 类的 svg 兜底
+          size-4（16px），属性敌不过 CSS，只有带上 size- 类才真正落到 10px 档。 */}
       <Button
-        className="text-ink-soft hover:bg-subtle hover:text-ink h-auto w-full justify-start gap-1.5 rounded px-1 py-0.5 text-left font-normal"
+        className="text-ink-soft hover:bg-subtle hover:text-ink text-3xs h-auto w-full justify-start gap-1.5 rounded px-1 py-0.5 text-left font-normal"
         onClick={() => {
           copyUrl(window.location.href);
         }}
         variant="ghost"
       >
-        <Lock className="text-success-strong shrink-0" size={11} />
+        <Lock className="text-success-strong size-[10px] shrink-0" />
         <span className="text-ink-fainter shrink-0">
           {/* key 换值即重播动画：连点两次就有两次反馈（与 ShellTabs 同一口径）。 */}
           <span className="value-tick" key={copied.on ? "copied" : "secure"}>

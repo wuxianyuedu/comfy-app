@@ -26,6 +26,9 @@ import { materialScopeOwnership } from "~/lib/media/materials";
  *  新增落点时先问「它属于某个用户吗」；属于却没出现在这里的，就是漏了一条判据。 */
 const UNSCOPED_PREFIXES = new Set(["films/bgm"]);
 
+/** 任务产物的三级分类前缀；四级正好是 taskId（见 output-layout 的 taskOutputSegments）。 */
+const MEDIA_TYPE_PREFIXES = new Set(["image", "video", "audio", "text", "other"]);
+
 /** 从 `films/<id>.mp4` / `films/_tmp_<id>/…` 里取出成片 id。
  *  两处命名都带 id：收口写 `films/<id>.mp4`，合成前的中间目录写 `films/_tmp_<id>/`；
  *  cuid 里没有点与下划线前缀，所以按「去掉扩展名 + 去掉 `_tmp_`」还原是确定的。 */
@@ -68,7 +71,22 @@ export async function isForeignOwnedArtifact(
     const row = await filmRepository.findById(filmIdOf(second));
     return !!row && row.userId !== userId;
   }
-  // 其余落点是 `<任务 id>/…`（executor-finalize 的默认形状）
+  /* 三级分类下的任务产物：image / <模型> / <模式> / <任务 id> / …。
+   * 迁移前的旧平铺形状 `<任务 id>/…` 仍保留在下一支，两边都认得。 */
+  if (MEDIA_TYPE_PREFIXES.has(first)) {
+    /* 媒体类型段出现就一定是三级布局；段数不够时它不可能是任务 id，
+     * 不能掉到下面按 "image" 去查任务表（会误判、还多一次无谓查询）。 */
+    if (segments.length < 4) {
+      return false;
+    }
+    const taskId = segments[3];
+    if (taskId === undefined) {
+      return false;
+    }
+    const task = await taskRepository.findById(taskId);
+    return !!task && task.userId !== userId;
+  }
+  // 其余落点是迁移前的 `<任务 id>/…`
   const task = await taskRepository.findById(first);
   return !!task && task.userId !== userId;
 }

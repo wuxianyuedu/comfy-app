@@ -13,6 +13,7 @@ import {
 } from "~/lib/workshop/model-mode-contract";
 import { upperToken } from "~/lib/upper-token";
 import {
+  parseWorkflowIOMap,
   resolveEntryDefault,
   type WorkflowIOEntry,
   type WorkflowIOMap,
@@ -297,10 +298,12 @@ export function deriveWorkshopParams(
   mode: string | null | undefined,
   contracts: ReadonlyArray<ModeContract> | null | undefined,
   io: WorkflowIOMap | null | undefined,
+  /** 调用方若已派生过参考图就传进来，避免这里重复算一遍（#5124）。 */
+  references?: Array<string>,
 ): Array<WorkshopParamRow> {
   const params = paramsOf(detail);
   const inputs = workflowInputsOf<RawWorkflowInput>(detail);
-  const refs = deriveReferenceImages(detail);
+  const refs = references ?? deriveReferenceImages(detail);
   return modeContractEntries(mode, contracts).map((port) => {
     const resolved = resolvePort(port.id, { params, inputs, io, refs, detail });
     return {
@@ -448,6 +451,26 @@ function graphDefaultOf(detail: TaskDetail | null, entry: WorkflowIOEntry): unkn
   }
   /* RAW（UI 格式）：按同一套节点定位（含子图宿主链）+ 控件槽位序读图内值。 */
   return rawGraphWidgetValue(workflow, candidates[0] ?? entry.nodeId, entry.name);
+}
+
+/**
+ * 历史详情用的 IO 源（ISSUE #5118）：`workflow.detailFull` 会把落库的「勾选了哪个 pin」
+ * 富化成带 `label`（作者标签 > 本地化名 > pin 名）与默认值的自描述条目——这正是
+ * IO 预览显示 `prompt` / `宽高比` 的那一套。轻量 `workflow.detail` 只给原始列，
+ * label 为空时 `resolveParamLabel` 只能回落 pin 名（`replace` / `aspect_ratio`），
+ * 且没暴露默认值的端口会整行缺失。这里优先取富化结果，老路径 `template.workflowIO`
+ * 仅作兜底（工作流详情未回时如实显示 pin 名，不编）。
+ */
+export function workflowIOOfDetailFull(data: unknown): WorkflowIOMap {
+  if (!isRecord(data)) {
+    return {};
+  }
+  const enriched = parseWorkflowIOMap(data.workflowIO);
+  if (Object.keys(enriched).length > 0) {
+    return enriched;
+  }
+  const template = isRecord(data.template) ? data.template : null;
+  return parseWorkflowIOMap(template?.workflowIO);
 }
 
 export function deriveWorkflowParams(

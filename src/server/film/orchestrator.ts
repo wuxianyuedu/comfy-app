@@ -18,7 +18,7 @@ import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
 import { randomSeed } from "~/lib/comfyui/random-seed";
 import { createWorkflowRunTask } from "~/lib/workshop/workflow-run.server";
 import { parseIdeaToScenes } from "~/lib/workshop/script-parser";
-import { FILM_COMPOSE_SIZE, NATIVE_SHOT_VIDEO_SIZE } from "~/lib/film/film-size";
+import { FILM_COMPOSE_SIZE, NATIVE_SHOT_VIDEO_SIZE, shotSizeFor } from "~/lib/film/film-size";
 import { z } from "zod";
 import { getLLMConfig, completeLLMStructured } from "~/lib/llm/server";
 import { errorText } from "~/lib/error-message";
@@ -26,10 +26,17 @@ import { errorText } from "~/lib/error-message";
 import { toSizeSpec } from "~/lib/media/size-presets";
 /* 行日志那一份两侧（编排与监看）都要用，所以它在 film-log.ts 这个叶子上。 */
 import { appendFilmLog } from "./film-log";
+import { resolveFilmFirstFrame } from "./first-frame";
 /* 监看（无响应看门狗 / 超时收口 / 重启恢复扫描）在 film-watch.ts，这里只取入口。 */
 import { watchFilm } from "./film-watch";
 
 export type FilmShotInput = {
+  /** 角色台词（工坊 Shot.dialogue）：字幕与后续配音的唯一源，落 params.dialogue。 */
+  dialogue?: string;
+  /** 镜头时长（秒，工坊 Shot.duration）；缺省按 frames / fps 折算。 */
+  duration?: number;
+  /** 工坊阶段④定稿的镜头图（ISSUE #5141）：进 params.firstFrame，视频首帧不再另合成。 */
+  firstFrame?: string;
   heading?: string;
   negative?: string;
   order: number;
@@ -227,9 +234,21 @@ async function persistFilmWithShots(args: {
           params: {
             frames: args.framesPerShot,
             fps: args.fps,
-            size: args.sizeSpec,
+            /* 时长口按秒、帧数口按帧：两种单位都随任务落库（ISSUE #5139），
+             * 端口挑自己认的那个，监看侧算 -t / 字幕也用同一份秒值。 */
+            duration: shot.duration ?? args.framesPerShot / args.fps,
+            /* 台词随镜头落 params（ISSUE #5210）：字幕烧录与 SRT 导出都读这一份，
+             * 不再让 heading/prompt 冒充对白。 */
+            ...(shot.dialogue === undefined || shot.dialogue === ""
+              ? {}
+              : { dialogue: shot.dialogue }),
+            /* 单镜画幅用场景无关档（ISSUE #5138）：出图与视频两侧算出同一组宽高。 */
+            size: shotSizeFor(args.sizeSpec),
             videoWorkflowId: args.videoWorkflowId,
             imageWorkflowId: args.imageWorkflowId,
+            ...(shot.firstFrame === undefined || shot.firstFrame === ""
+              ? {}
+              : { firstFrame: shot.firstFrame }),
           },
         })),
         tx,
@@ -323,8 +342,12 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
     order: i,
     shotId: shot.id,
     heading: shot.sceneHeading || undefined,
+    dialogue: shot.dialogue ?? undefined,
     prompt: shot.prompt,
     negative: shot.negativePrompt || undefined,
+    /* 工坊阶段④定稿的镜头图直接接到阶段⑤的首帧输入（ISSUE #5141）。 */
+    firstFrame: shot.imageUrl ?? undefined,
+    duration: shot.duration,
   }));
 
   const filmId = await persistFilmWithShots({
@@ -373,6 +396,11 @@ async function generateVideoShot(
   // 也按「没有首帧」回落（既有默认分支），不把脏值原样喂给工作流。
   const rawInputImage = params.inputImage ?? params.firstFrame;
   let inputImage: string = typeof rawInputImage === "string" ? rawInputImage : "";
+  /* 工坊定稿的分镜图是 `/api/generated/...` 产物地址（ISSUE #5141）：ComfyUI 的
+   * LoadImage 只认 input 目录里的文件名，先落盘读字节再上传，换成上传后的名字。 */
+  if (inputImage !== "") {
+    inputImage = await resolveFilmFirstFrame(inputImage);
+  }
 
   if (!inputImage) {
     const imageWorkflowId =
@@ -401,6 +429,13 @@ async function generateVideoShot(
       ...(shot.negative !== null && shot.negative !== "" ? { negativePrompt: shot.negative } : {}),
       firstFrame: inputImage,
       frames: typeof params.frames === "number" ? params.frames : 81,
+      /* 秒制时长口拿秒、帧制口拿帧（ISSUE #5139）；两种单位都随载荷下发，
+       * 由端口按自己的落点挑，不再把 49 帧当 49 秒。 */
+      duration:
+        typeof params.duration === "number"
+          ? params.duration
+          : (typeof params.frames === "number" ? params.frames : 81) /
+            (typeof params.fps === "number" && params.fps > 0 ? params.fps : 16),
       size,
       seed: randomSeed(),
     },

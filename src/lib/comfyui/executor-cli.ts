@@ -32,6 +32,7 @@
 // 登记进 PURE_NODE_HOSTS 是「标方向 + 消化 unguarded」，不是「本模块已能在纯
 // Node 里加载」——那要等 client / repository / app-runtime-log 各自拆完。
 import { errorText } from "~/lib/error-message";
+import { COMFY_JOB_TIMEOUT_MS } from "../retry-policy";
 import { sqliteAwareErrorText } from "~/lib/sqlite-error";
 import { getSettingsSync } from "../app-settings/app-settings.server";
 import { fireAndForget } from "~/lib/async-action";
@@ -214,7 +215,8 @@ export const cliProcs: Map<string, ChildProcess> = (globalThis.__comfyCliProcs_v
   ChildProcess
 >());
 
-const CLI_TIMEOUT_MS = 25 * 60 * 1000;
+/** 看门狗比单任务执行超时更宽一档（多出的 15 分钟留给 ComfyUI 收尾 / 队列排队）。 */
+const CLI_TIMEOUT_MS = COMFY_JOB_TIMEOUT_MS + 15 * 60 * 1000;
 
 /** 清洗来自任务 `params` 列的 `outputNodeIds`（部分执行目标，comfy-cli
  *  v1.24.0 `--output-node-ids`）。库里那一列是历史数据，形状不作保证：
@@ -275,7 +277,7 @@ export function buildComfyCliRunArgs(options: {
     String(options.port),
     "--no-notify",
     "--timeout",
-    "600",
+    String(Math.round(COMFY_JOB_TIMEOUT_MS / 1000)),
   ];
   for (const id of options.outputNodeIds ?? []) {
     args.push("--output-node-ids", id);

@@ -13,6 +13,8 @@ import {
   offlineRunningCardNote,
   filterRowsByModelSelection,
   queueStats,
+  queueStatsFromCounts,
+  queueTaskDurationMs,
   queuedWithPosition,
   recentWithin,
   remainingText,
@@ -32,6 +34,9 @@ function row(over: Partial<QueueRow> & Pick<QueueRow, "status">): QueueRow {
     status: over.status,
     prompt: over.prompt ?? "一句提示词",
     createdAt: over.createdAt ?? new Date("2026-01-01T00:00:00Z"),
+    claimedAt: over.claimedAt ?? null,
+    finishedAt: over.finishedAt ?? null,
+    queuePosition: over.queuePosition ?? null,
     cover: null,
     checkpoint: null,
     videoPath: null,
@@ -75,8 +80,8 @@ describe("bucketQueueRows", () => {
 
 describe("queuedWithPosition", () => {
   it("位次 1 = 提交最早的那条（入参是 createdAt 倒序）", () => {
-    const early = row({ id: "early", status: "QUEUED" });
-    const late = row({ id: "late", status: "QUEUED" });
+    const early = row({ id: "early", status: "QUEUED", queuePosition: 1 });
+    const late = row({ id: "late", status: "QUEUED", queuePosition: 2 });
     const ordered = queuedWithPosition([late, early]);
     expect(ordered.map((e) => [e.row.id, e.position])).toEqual([
       ["early", 1],
@@ -86,16 +91,28 @@ describe("queuedWithPosition", () => {
 
   it("位次连续且从 1 起，不留空洞", () => {
     const rows = [
-      row({ id: "c", status: "QUEUED" }),
-      row({ id: "b", status: "QUEUED" }),
-      row({ id: "a", status: "QUEUED" }),
+      row({ id: "c", status: "QUEUED", queuePosition: 3 }),
+      row({ id: "b", status: "QUEUED", queuePosition: 2 }),
+      row({ id: "a", status: "QUEUED", queuePosition: 1 }),
     ];
     expect(queuedWithPosition(rows).map((e) => e.position)).toEqual([1, 2, 3]);
   });
 
+  it("分页只加载到第 61 位时仍显示完整队列位次，不重新从 1 编号", () => {
+    const rows = [
+      row({ id: "newer", status: "QUEUED", queuePosition: 62 }),
+      row({ id: "older", status: "QUEUED", queuePosition: 61 }),
+    ];
+    expect(queuedWithPosition(rows).map((entry) => entry.position)).toEqual([61, 62]);
+  });
+
+  it("队列快照里已没有这一行时给 null，不按子集下标编造位次", () => {
+    expect(queuedWithPosition([row({ id: "unknown", status: "QUEUED" })])[0]?.position).toBeNull();
+  });
+
   it("超过窗口上限就截断（列表必须有上限）", () => {
     const many = Array.from({ length: QUEUED_WINDOW + 10 }, (_unused, index) =>
-      row({ id: `q-${String(index)}`, status: "QUEUED" }),
+      row({ id: `q-${String(index)}`, status: "QUEUED", queuePosition: index + 1 }),
     );
     expect(queuedWithPosition(many)).toHaveLength(QUEUED_WINDOW);
   });
@@ -188,7 +205,7 @@ describe("reprintText", () => {
 describe("queueStats", () => {
   const now = new Date("2026-01-05T15:00:00Z");
 
-  it("四格各数各的：跑动/排队按桶，完成/失败只数今天创建的终态行（取消不算）", () => {
+  it("四格各数各的：跑动/排队按桶，完成/失败只数今天结束的终态行（取消不算）", () => {
     const buckets = bucketQueueRows([
       row({ id: "run", status: "RUNNING" }),
       row({ id: "q1", status: "QUEUED" }),
@@ -206,6 +223,24 @@ describe("queueStats", () => {
     });
   });
 
+  it("跨午夜任务按完成时间计入当天，不按创建时间误分", () => {
+    const buckets = bucketQueueRows([
+      row({
+        id: "finished-today",
+        status: "SUCCEEDED",
+        createdAt: new Date(2026, 0, 4, 23, 59),
+        finishedAt: new Date(2026, 0, 5, 0, 1),
+      }),
+      row({
+        id: "finished-yesterday",
+        status: "SUCCEEDED",
+        createdAt: new Date(2026, 0, 5, 0, 1),
+        finishedAt: new Date(2026, 0, 4, 23, 59),
+      }),
+    ]);
+    expect(queueStats(buckets, now).succeededToday).toBe(1);
+  });
+
   it("空列表四格全 0（不编数）", () => {
     expect(queueStats(bucketQueueRows([]), now)).toEqual({
       failedToday: 0,
@@ -213,6 +248,41 @@ describe("queueStats", () => {
       running: 0,
       succeededToday: 0,
     });
+  });
+});
+
+describe("queueTaskDurationMs", () => {
+  it("已结束任务从认领时刻算到完成时刻；未认领时从创建时刻算", () => {
+    const task = row({
+      status: "SUCCEEDED",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      claimedAt: new Date("2026-01-01T00:00:10Z"),
+      finishedAt: new Date("2026-01-01T00:01:20Z"),
+    });
+    expect(queueTaskDurationMs(task)).toBe(70_000);
+    expect(queueTaskDurationMs({ ...task, claimedAt: null })).toBe(80_000);
+  });
+
+  it("没有完成时刻就不编耗时", () => {
+    expect(queueTaskDurationMs(row({ status: "RUNNING" }))).toBeNull();
+  });
+});
+
+describe("queueStatsFromCounts（#5073 全量口径，不受 take=200 截断）", () => {
+  it("服务端计数存在时四格直接取全量，窗口版只作兜底", () => {
+    const fallback = { failedToday: 0, queued: 200, running: 0, succeededToday: 0 };
+    expect(
+      queueStatsFromCounts(
+        { QUEUED: 737, RUNNING: 1, SUCCEEDED: 12, FAILED: 3 },
+        { SUCCEEDED: 4, FAILED: 2 },
+        fallback,
+      ),
+    ).toEqual({ failedToday: 2, queued: 737, running: 1, succeededToday: 4 });
+  });
+
+  it("计数缺席（首帧）退回窗口版，不编数", () => {
+    const fallback = { failedToday: 1, queued: 20, running: 2, succeededToday: 3 };
+    expect(queueStatsFromCounts(undefined, undefined, fallback)).toEqual(fallback);
   });
 });
 

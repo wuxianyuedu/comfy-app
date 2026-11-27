@@ -9,7 +9,7 @@ import { isRecord } from "~/lib/is-record";
 import { task, taskImage, type Task, type TaskImage } from "~/server/db/schema";
 import { NotFoundError } from "./errors";
 import { DrizzleRepository, type TaskWithCover } from "./repository-base";
-import { eq, and, inArray, notInArray, desc, asc, sql, count } from "drizzle-orm";
+import { eq, and, gte, inArray, notInArray, desc, asc, sql, count } from "drizzle-orm";
 import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
 import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import { isTerminalTaskStatus, TERMINAL_TASK_STATUSES } from "~/lib/task-state";
@@ -55,6 +55,7 @@ const taskCardColumns = {
   referenceImages: task.referenceImages,
   parentId: task.parentId,
   status: task.status,
+  sortOrder: task.sortOrder,
   promptId: task.promptId,
   progress: task.progress,
   resultImages: task.resultImages,
@@ -181,13 +182,93 @@ export class TaskRepository extends DrizzleRepository<Task> {
   async countByStatusByUser(
     userId: string,
     opts?: { projectId?: string; statusList?: Array<string> },
+    /** 只数该时刻之后创建的任务（队列卡「今日完成 / 失败」用；ISO 字符串直比，
+     *  与 createdAt 的存储形态一致）。缺省 = 不限时间。 */
+    since?: Date,
   ): Promise<Record<string, number>> {
     const rows = await db
       .select({ status: task.status, count: sql<number>`count(*)` })
       .from(task)
-      .where(taskListWhere(userId, opts))
+      .where(
+        and(
+          taskListWhere(userId, opts),
+          since === undefined ? undefined : gte(task.createdAt, since),
+        ),
+      )
       .groupBy(task.status);
     return Object.fromEntries(rows.map((row) => [row.status, Number(row.count)]));
+  }
+
+  /** 一次 GROUP BY 同时取总数、按状态计数、今日按状态计数（#5124）。
+   *
+   *  此前调用方并行发三条 COUNT 查询：总数与状态计数的 WHERE 完全相同，
+   *  今日计数只是多一个 createdAt 下界；三条扫的是同一张表，白付两遍聚合。
+   *  返回的 `total` 由分组求和得到，与单独的 count(*) 逐字等价。 */
+  async countStatusesWithToday(
+    userId: string,
+    opts: { projectId?: string; statusList?: Array<string> },
+    todayStart: Date,
+  ): Promise<{
+    statusCounts: Record<string, number>;
+    todayCounts: Record<string, number>;
+    total: number;
+  }> {
+    const rows = await db
+      .select({
+        status: task.status,
+        count: sql<number>`count(*)`,
+        todayCount: sql<number>`count(*) filter (where ${task.createdAt} >= ${todayStart.toISOString()})`,
+      })
+      .from(task)
+      .where(taskListWhere(userId, opts))
+      .groupBy(task.status);
+    const statusCounts: Record<string, number> = {};
+    const todayCounts: Record<string, number> = {};
+    let total = 0;
+    for (const row of rows) {
+      const count = Number(row.count);
+      statusCounts[row.status] = count;
+      total += count;
+      const todayCount = Number(row.todayCount);
+      if (todayCount > 0) {
+        todayCounts[row.status] = todayCount;
+      }
+    }
+    return { statusCounts, todayCounts, total };
+  }
+
+  /** 完整排队队列的提交顺序；位次不依赖列表当前加载到第几页。 */
+  async queuedPositionsByUser(userId: string): Promise<Map<string, number>> {
+    const rows = await db
+      .select({ id: task.id })
+      .from(task)
+      .where(and(eq(task.userId, userId), eq(task.status, "QUEUED")))
+      .orderBy(asc(task.sortOrder), asc(task.createdAt), asc(task.id));
+    return new Map(rows.map((row, index) => [row.id, index + 1]));
+  }
+
+  /** 队列概览：进行中数量与按真实结束时刻统计的今日终态数量。 */
+  async summaryByUser(
+    userId: string,
+    todayStartedAt: Date,
+  ): Promise<{ failedToday: number; queued: number; running: number; succeededToday: number }> {
+    const today = todayStartedAt.toISOString();
+    const rows = await db
+      .select({
+        failedToday: sql<number>`count(*) filter (where ${task.status} = 'FAILED' and ${task.finishedAt} >= ${today})`,
+        queued: sql<number>`count(*) filter (where ${task.status} not in ('RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED'))`,
+        running: sql<number>`count(*) filter (where ${task.status} = 'RUNNING')`,
+        succeededToday: sql<number>`count(*) filter (where ${task.status} = 'SUCCEEDED' and ${task.finishedAt} >= ${today})`,
+      })
+      .from(task)
+      .where(eq(task.userId, userId));
+    const row = rows[0];
+    return {
+      failedToday: Number(row?.failedToday ?? 0),
+      queued: Number(row?.queued ?? 0),
+      running: Number(row?.running ?? 0),
+      succeededToday: Number(row?.succeededToday ?? 0),
+    };
   }
 
   async createQueued(input: {
@@ -340,20 +421,22 @@ export class TaskRepository extends DrizzleRepository<Task> {
       // offset 一并传下去——此前 offset 被静默丢弃，第二页会重复返回第一页。
       if (opts.skip !== undefined && opts.take === undefined) {
         const page = await limitAll(
-          /* 排序带 id tiebreaker（#4044）：同毫秒批量入队的行序稳定，skip 翻页不重不漏。
+          /* 排序是领取侧的镜像：sortOrder 降序，同值再按 createdAt / id 降序。
+           * 列表末尾即领取侧队首，队列页反转位次的口径不用跟着改；id tiebreaker
+           *（#4044）让同毫秒批量入队的行序稳定，skip 翻页不重不漏。
            * 列集走 taskCardColumns（四个重列不拉，#4411）——与下方 findMany 的
            * columns 排除集同口径。 */
           db
             .select(taskCardColumns)
             .from(task)
             .where(where)
-            .orderBy(desc(task.createdAt), desc(task.id)),
+            .orderBy(desc(task.sortOrder), desc(task.createdAt), desc(task.id)),
         ).offset(opts.skip);
         return withImages(page);
       }
       const rows = await db.query.task.findMany({
         where,
-        orderBy: [desc(task.createdAt), desc(task.id)],
+        orderBy: [desc(task.sortOrder), desc(task.createdAt), desc(task.id)],
         ...(opts.take === undefined ? {} : { limit: opts.take }),
         ...(opts.skip === undefined ? {} : { offset: opts.skip }),
         /* 列表卡只要十来个字段：四个重列（workflowSnapshot / logs / execPayload /
@@ -368,7 +451,11 @@ export class TaskRepository extends DrizzleRepository<Task> {
       });
       return rows;
     }
-    const q = db.select().from(task).where(where).orderBy(desc(task.createdAt), desc(task.id));
+    const q = db
+      .select()
+      .from(task)
+      .where(where)
+      .orderBy(desc(task.sortOrder), desc(task.createdAt), desc(task.id));
     if (opts?.skip === undefined) {
       return opts?.take === undefined ? q : q.limit(opts.take);
     }
@@ -400,6 +487,48 @@ export class TaskRepository extends DrizzleRepository<Task> {
       .where(and(eq(task.userId, userId), notInArray(task.status, [...TERMINAL_TASK_STATUSES])))
       .orderBy(asc(task.createdAt), asc(task.id));
     return rows.map((row) => row.id);
+  }
+
+  /**
+   * 把一条排队任务提前到队首：只改 sortOrder，不动 createdAt（提交时刻是历史事实）。
+   *
+   * 守卫只认 userId + QUEUED，刻意不叠 owner —— 重排是 Next 侧的**用户动作**，
+   * host 片的行照样要能排。先读队首与目标两条小查询，再发**单条条件 UPDATE**：
+   * 若读与写之间该行已被领取循环领走，条件更新影响 0 行，如实回 not-queued，
+   * 上层据此告诉用户「这条已开跑，无法调整」。不 renumber 其余行，避开读改写
+   * 竞态；写入队首 sortOrder - 1 保证它独占队首，同值仍由 createdAt / id 决胜。
+   */
+  async reorderQueuedToFrontForUser(
+    userId: string,
+    id: string,
+  ): Promise<"moved" | "already-first" | "not-queued"> {
+    const targets = await db
+      .select({ id: task.id })
+      .from(task)
+      .where(and(eq(task.id, id), eq(task.userId, userId), eq(task.status, "QUEUED")))
+      .limit(1);
+    if (targets.length === 0) {
+      return "not-queued";
+    }
+    const heads = await db
+      .select({ id: task.id, sortOrder: task.sortOrder })
+      .from(task)
+      .where(and(eq(task.userId, userId), eq(task.status, "QUEUED")))
+      .orderBy(asc(task.sortOrder), asc(task.createdAt), asc(task.id))
+      .limit(1);
+    const head = heads[0];
+    if (head === undefined) {
+      return "not-queued";
+    }
+    if (head.id === id) {
+      return "already-first";
+    }
+    const updated = await db
+      .update(task)
+      .set({ sortOrder: head.sortOrder - 1 })
+      .where(and(eq(task.id, id), eq(task.userId, userId), eq(task.status, "QUEUED")))
+      .returning({ id: task.id });
+    return updated.length > 0 ? "moved" : "not-queued";
   }
 
   async updateStatusForUser(
@@ -437,6 +566,19 @@ export class TaskRepository extends DrizzleRepository<Task> {
     });
   }
 
+  /** 按 ids 批量取任务卡片行 + images（#5149）：一条 `IN` + 窄投影
+   * `taskCardColumns`，四个 MB 级重列不拉回；images 复用 `attachImages`
+   * 一条装载。消费者按 id 建索引即可代替原来的 N 次 `findByIdWithImages`。
+   * 返回顺序不保证与 ids 一致（SQL 无 ORDER BY），缺行也不补占位。 */
+  async findByIdsWithImages(ids: ReadonlyArray<string>) {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) {
+      return [];
+    }
+    const rows = await db.select(taskCardColumns).from(task).where(inArray(task.id, unique));
+    return attachImages(rows);
+  }
+
   async findStatusById(id: string): Promise<{ status: string } | null> {
     const rows = await db
       .select({ status: task.status })
@@ -446,11 +588,14 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return rows[0] ?? null;
   }
 
+  /** 只取 workflow 快照那一列（外加归属 / 项目两枚小列）。归属也在这里一起读，
+   *  调用方不必再为判权限把整行重列拉回来（#5124）。 */
   async findSnapshotById(
     id: string,
-  ): Promise<{ projectId: string | null; workflowSnapshot: unknown } | null> {
+  ): Promise<{ projectId: string | null; userId: string; workflowSnapshot: unknown } | null> {
     const rows = await db
       .select({
+        userId: task.userId,
         workflowSnapshot: task.workflowSnapshot,
         projectId: task.projectId,
       })
@@ -463,7 +608,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
   async findByProjectIdWithImages(projectId: string, opts?: { take?: number }) {
     return db.query.task.findMany({
       where: eq(task.projectId, projectId),
-      orderBy: [desc(task.createdAt)],
+      /* 与 listByUser 同一队列口径：被提前的行在产物页也靠前。 */
+      orderBy: [desc(task.sortOrder), desc(task.createdAt)],
       /* 产物页只映射卡片字段（project.outputs）：四个重列整批拉回只为 slice 后
        * 丢弃（#4411）。take 顺带下推到 SQL —— 调用方本来就要 slice 到同一数。 */
       ...(opts?.take === undefined ? {} : { limit: opts.take }),

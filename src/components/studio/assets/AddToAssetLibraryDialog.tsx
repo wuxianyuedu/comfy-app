@@ -33,38 +33,55 @@ import {
   type AssetCategoryKey,
   type AssetScopeKey,
 } from "./asset-categories";
-import { useAddToAssetLibrary } from "./hooks/use-asset-library";
+import { type AssetCandidate, useAddToAssetLibrary } from "./hooks/use-asset-library";
 import type { TaskItem } from "../history/history-types";
 
 export function AddToAssetLibraryDialog({
+  candidate = null,
   onClose,
-  task,
+  task = null,
+  taskId = null,
 }: {
+  /** 调研页（脸库 / 风格库）的远端生图结果；与 task / taskId 二选一。 */
+  candidate?: AssetCandidate | null;
   onClose: () => void;
-  task: TaskItem | null;
+  task?: TaskItem | null;
+  /** 只拿到本地任务号的落点（调研页本地通道）用它，不必伪造整行 TaskItem。 */
+  taskId?: string | null;
 }) {
   const projects = useSidebarProjects();
-  const { addToLibrary, pending } = useAddToAssetLibrary(onClose);
+  const { addFromCandidate, addToLibrary, pending } = useAddToAssetLibrary(onClose);
   const [scope, setScope] = useState<AssetScopeKey>("public");
   const [projectId, setProjectId] = useState<string>("");
-  const [category, setCategory] = useState<AssetCategoryKey>("reference");
+  const [category, setCategory] = useState<AssetCategoryKey>(candidate?.category ?? "reference");
   const [subdir, setSubdir] = useState<string>("");
 
   const activeProject = projects.find((p) => p.id === projectId) ?? null;
+  const target = task ?? candidate ?? (taskId === null ? null : { id: taskId });
   const canSubmit =
-    task !== null && (scope === "public" || (projectId !== "" && activeProject !== null));
+    target !== null && (scope === "public" || (projectId !== "" && activeProject !== null));
 
   const submit = () => {
-    if (task === null || !canSubmit) {
+    if (target === null || !canSubmit) {
       return;
     }
-    void addToLibrary({
-      taskId: task.id,
+    const shared = {
       scope,
       ...(scope === "project" ? { projectId } : {}),
       category,
       subdir: subdir.trim(),
-    });
+    };
+    if (candidate !== null) {
+      void addFromCandidate({ ...candidate, ...shared });
+      return;
+    }
+    if (task !== null) {
+      void addToLibrary({ ...shared, taskId: task.id });
+      return;
+    }
+    if (taskId !== null) {
+      void addToLibrary({ ...shared, taskId });
+    }
   };
 
   return (
@@ -74,13 +91,13 @@ export function AddToAssetLibraryDialog({
           onClose();
         }
       }}
-      open={task !== null}
+      open={target !== null}
     >
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>加入资产库</DialogTitle>
           <DialogDescription>
-            {task === null ? "" : "把这次生成的产物沉淀为可复用资产，连同完整生成参数一并保存。"}
+            {target === null ? "" : "把这次生成的产物沉淀为可复用资产，连同完整生成参数一并保存。"}
           </DialogDescription>
         </DialogHeader>
 

@@ -81,8 +81,9 @@ async function seed(extra: Partial<typeof task.$inferInsert> = {}): Promise<stri
     workflowName: "w",
     status: "QUEUED",
   };
-  await repoDb.insert(task).values(Object.assign(row, extra));
-  return id;
+  const resolvedId = extra.id ?? id;
+  await repoDb.insert(task).values({ ...row, ...extra, id: resolvedId });
+  return resolvedId;
 }
 
 function readRow(id: string): Record<string, unknown> | undefined {
@@ -512,6 +513,15 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
     expect(readRow(hostId)?.status).toBe("QUEUED");
   });
 
+  it("同一提交毫秒按 id 排序，与队列展示位次一致", async () => {
+    const createdAt = new Date("2026-11-25T12:00:00.000Z");
+    const second = await seed({ createdAt, id: "tie-b" });
+    const first = await seed({ createdAt, id: "tie-a" });
+
+    expect(await impl.claimNextQueued("inline", 1)).toEqual([first]);
+    expect(await impl.claimNextQueued("inline", 1)).toEqual([second]);
+  });
+
   it("take 截断：只领最早的 N 行，剩下的留给下一轮", async () => {
     const { inlineId, nullId } = await seedThreeOwned();
     expect(await impl.claimNextQueued("inline", 1)).toEqual([inlineId]);
@@ -550,6 +560,41 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
      * 一次领取就是新一轮执行的起点，崩溃后重领的行不该带着上一轮的耗时基准。 */
     expect(stamped).toBeGreaterThan(staleAt.getTime());
     expect(Math.abs((stamped ?? 0) - Date.now())).toBeLessThan(5000);
+  });
+});
+
+/**
+ * 队列序的唯一真相：sortOrder 升序，同值按 createdAt / id 决胜。领取侧 take=1
+ * 每次只取队首，所以这里用 take=1 断言「谁被领走」——不依赖 RETURNING 的行序。
+ * 窥视（peekNextQueued / listQueuedIds）走同一 ORDER BY，可直接断言整序。
+ */
+describe("队列排序口径（sortOrder → createdAt → id）", () => {
+  const base = new Date("2026-01-01T00:00:00Z").getTime();
+
+  it("sortOrder 小的先领，即便它提交得更晚（createdAt 不被重排篡改）", async () => {
+    await seed({ id: "late", sortOrder: 0, createdAt: new Date(base + 3000) });
+    await seed({ id: "jumped", sortOrder: -10, createdAt: new Date(base + 5000) });
+    expect(await impl.claimNextQueued("inline", 1)).toEqual(["jumped"]);
+    expect(readRow("late")?.status).toBe("QUEUED");
+  });
+
+  it("sortOrder 同值时按 createdAt 决胜，createdAt 也相同则按 id", async () => {
+    await seed({ id: "late", sortOrder: 0, createdAt: new Date(base + 2000) });
+    await seed({ id: "early", sortOrder: 0, createdAt: new Date(base + 1000) });
+    expect(await impl.claimNextQueued("inline", 1)).toEqual(["early"]);
+
+    await seed({ id: "tie-b", sortOrder: -5, createdAt: new Date(base + 1000) });
+    await seed({ id: "tie-a", sortOrder: -5, createdAt: new Date(base + 1000) });
+    expect(await impl.claimNextQueued("inline", 1)).toEqual(["tie-a"]);
+  });
+
+  it("peekNextQueued / listQueuedIds 与领取同一队列序，且窥视不领走行", async () => {
+    await seed({ id: "late", sortOrder: 0, createdAt: new Date(base + 3000) });
+    await seed({ id: "jumped", sortOrder: -1, createdAt: new Date(base + 5000) });
+    expect(await impl.peekNextQueued("inline")).toMatchObject({ id: "jumped" });
+    expect(await impl.listQueuedIds("inline", 10)).toEqual(["jumped", "late"]);
+    expect(readRow("jumped")?.status).toBe("QUEUED");
+    expect(readRow("late")?.status).toBe("QUEUED");
   });
 });
 

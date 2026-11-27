@@ -5,6 +5,7 @@ import { useMemo, useState, useCallback, useEffect } from "react";
 import { VideoQueueModal, AppShell } from "~/components/studio";
 import { WORKSPACE_VIEWS, useWorkspaceTabs } from "~/components/studio/hooks/use-workspace-tabs";
 import { useSidebarProjects } from "~/components/studio/hooks/use-sidebar-projects";
+import { useGenerationPauseState } from "~/components/studio/queue/hooks/use-generation-pause-state";
 import { useOpenServerProject } from "~/components/studio/project-canvas/hooks/use-open-server-project";
 import type { RecentProject, WorkspaceView } from "~/components/studio";
 import { WorkspaceViewStack } from "~/components/studio/WorkspaceViewStack";
@@ -56,6 +57,8 @@ export default function WorkspacePage() {
     selectTab: selectViewTab,
     closeTab: closeViewTabByKey,
   } = useWorkspaceTabs();
+  /* 侧栏「队列」行的暂停角标（ISSUE #5143）：由有 tRPC Provider 的本装配层取状态。 */
+  const generationPaused = useGenerationPauseState();
 
   /* 「请求切到某个视图」应用事件的唯一订阅侧（触发方是工坊右栏「资源库」卡，链路隔
    * WorkshopPipeline/WorkshopAside 两层，穿 props 不划算）。载荷按 `WORKSPACE_VIEWS` 收敛，
@@ -333,6 +336,7 @@ export default function WorkspacePage() {
           active={viewMode}
           activeProjectId={activeProjectId}
           activeViewKey={activeViewKey}
+          generationPaused={generationPaused}
           onCloseViewTab={closeViewTabByKey}
           onDeleteProject={handleDeleteProject}
           onNewProject={handleNewProject}

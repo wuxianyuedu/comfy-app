@@ -234,36 +234,114 @@ export function useRelatedEdgesHighlight(
 
   useEffect(() => {
     apply();
-    /* 订阅节点/边表：选中变化、节点增删（折叠会换掉锚点节点）都要重算。
-     * 先比一个轻量签名再决定是否重算，拖动节点时位置更新不会反复重写边表。 */
-    const signature = () => {
-      const state = store.getState();
+
+    /* React Flow 拖动时每一帧都会更新 store。旧实现在每次更新里把全部选中 id
+     * 与全部边 map 成字符串再 sort/join（O(N + E log E) + 一批临时字符串），
+     * 即使签名没变也照付。这里改成逐字段比较并复用缓存对象：位置 / 尺寸这类
+     * 与本高亮无关的更新不产生临时字符串，也不重写边表（#5128）。 */
+    type EdgeKey = {
+      source: string;
+      sourceHandle: string | null | undefined;
+      target: string;
+      targetHandle: string | null | undefined;
+    };
+    const prevKeys: Array<EdgeKey> = [];
+    const prevSelected = new Set<string>();
+
+    const readSelected = (): Array<string> => {
       const ids: Array<string> = [];
-      state.nodeLookup.forEach((internal, nodeId) => {
+      store.getState().nodeLookup.forEach((internal, nodeId) => {
         /* SAFETY: 类型断言已复核 */
         const userNode = internal.internals.userNode as Node | undefined;
         if (userNode?.selected === true) {
           ids.push(nodeId);
         }
       });
-      /* 边表签名参与进来：端口行级别由边表算出，连线增删（含「连上 / 断开某一行」）
-       * 必须重算，否则新连上的行不会亮、断开的行仍然亮着。 */
-      const edgeSignature = state.edges
-        .map(
-          (edge) =>
-            `${edge.source}>${edge.sourceHandle ?? ""}~${edge.target}>${edge.targetHandle ?? ""}`,
-        )
-        .sort()
-        .join(",");
-      return `${ids.sort().join(",")}|${edgeSignature}`;
+      return ids;
     };
-    let previousSignature = signature();
+
+    const sameSelection = (ids: ReadonlyArray<string>): boolean => {
+      if (ids.length !== prevSelected.size) {
+        return false;
+      }
+      for (const id of ids) {
+        if (!prevSelected.has(id)) {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    const commitSelection = (ids: ReadonlyArray<string>) => {
+      prevSelected.clear();
+      for (const id of ids) {
+        prevSelected.add(id);
+      }
+    };
+
+    /* 边的端点结构参与比较：连线增删（含「连上 / 断开某一行」）必须重算，
+     * 否则新连上的行不会亮、断开的行仍然亮着。data 上的关注级别由 apply 写，
+     * 不参与比较，避免自己触发自己的循环。 */
+    const sameEdges = (edges: ReadonlyArray<Edge>): boolean => {
+      if (edges.length !== prevKeys.length) {
+        return false;
+      }
+      for (let i = 0; i < edges.length; i += 1) {
+        const edge = edges[i];
+        const key = prevKeys[i];
+        if (edge === undefined || key === undefined) {
+          return false;
+        }
+        if (
+          edge.source !== key.source ||
+          edge.sourceHandle !== key.sourceHandle ||
+          edge.target !== key.target ||
+          edge.targetHandle !== key.targetHandle
+        ) {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    const commitEdges = (edges: ReadonlyArray<Edge>) => {
+      for (let i = 0; i < edges.length; i += 1) {
+        const edge = edges[i];
+        if (edge === undefined) {
+          continue;
+        }
+        const key: EdgeKey = prevKeys[i] ?? {
+          source: "",
+          sourceHandle: null,
+          target: "",
+          targetHandle: null,
+        };
+        key.source = edge.source;
+        key.sourceHandle = edge.sourceHandle;
+        key.target = edge.target;
+        key.targetHandle = edge.targetHandle;
+        prevKeys[i] = key;
+      }
+      prevKeys.length = edges.length;
+    };
+
+    commitSelection(readSelected());
+    commitEdges(store.getState().edges);
+
     const unsubscribe = store.subscribe(() => {
-      const nextSignature = signature();
-      if (nextSignature === previousSignature) {
+      const state = store.getState();
+      const selected = readSelected();
+      const selectionChanged = !sameSelection(selected);
+      const edgesChanged = !sameEdges(state.edges);
+      if (!selectionChanged && !edgesChanged) {
         return;
       }
-      previousSignature = nextSignature;
+      if (selectionChanged) {
+        commitSelection(selected);
+      }
+      if (edgesChanged) {
+        commitEdges(state.edges);
+      }
       apply();
     });
     return unsubscribe;

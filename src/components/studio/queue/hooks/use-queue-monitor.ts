@@ -7,7 +7,7 @@
 // 轮询成本：状态栏已挂 useComfyQueue，本视图再挂一次即每 2s 两次（服务端量小）；重复消费未修，收口方向是模块级单例订阅（COMFY_QUEUE_POLL_MS 改动会同步影响成本）。
 
 import { useCallback, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { COMFY_QUEUE_POLL_MS, useComfyQueue } from "~/components/studio/hooks/use-comfy-queue";
 import { useCopyResult } from "~/components/ui/use-copy-feedback";
@@ -15,25 +15,47 @@ import { useItemAction } from "~/components/ui/use-item-action";
 import { useViewTabActive } from "~/components/ui/view-tab-active";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { revealTaskFolder } from "~/lib/history-detail-actions";
+import { refreshComfyQueue } from "~/lib/comfy/comfy-queue-store";
 import { formatSampleRateText, formatStepsText } from "~/lib/progress";
 import { cancelAllTasks, cancelTask } from "~/lib/task-cancel-client";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC, useTRPCClient, type RouterOutputs } from "~/trpc/react";
 
 import { useToast } from "../../ToastProvider";
 import type { QueueTaskLogTarget } from "../QueueTaskLogModal";
+import { useTaskLogStream } from "./use-task-log-stream";
 import {
   bucketQueueRows,
   estimateRemainingMs,
   queuedWithPosition,
   queueStats,
-  recentWithin,
+  searchQueueRows,
   remainingText,
   reprintText,
   runningElapsedText,
   type QueueRow,
   type QueueStats,
+  type QueueStatusFilter,
 } from "../queue-monitor-config";
 import { queueTaskParamRows } from "../queue-task-params";
+
+/** summary 四个计数的内容判等：轮询每轮都给新对象，值没变就不该换引用，
+ *  否则 stats 一变、整张队列视图跟着重渲（#5158）。 */
+export function sameStats(prev: QueueStats | null, next: QueueStats): boolean {
+  return (
+    prev !== null &&
+    prev.failedToday === next.failedToday &&
+    prev.queued === next.queued &&
+    prev.running === next.running &&
+    prev.succeededToday === next.succeededToday
+  );
+}
+
+const QUEUE_PAGE_SIZE = 60;
+const QUEUE_STATUS_QUERY: Record<QueueStatusFilter, string | undefined> = {
+  active: "QUEUED,RUNNING",
+  all: undefined,
+  terminal: "SUCCEEDED,FAILED,CANCELLED",
+};
 
 /** 正在跑那条的展示卡（数值都已算成字符串或百分比，视图只渲染）。 */
 export type RunningCardView = {
@@ -42,9 +64,11 @@ export type RunningCardView = {
   modelText: string;
   nodeText: string;
   progressPct: number;
+  progressValue: number | null;
   /** 平均速度（`12.58 it/s`）；步数或耗时拿不到时「—」。 */
   rateText: string;
   remainingText: string;
+  startedAt: number;
   /** 采样步数（`553/8196`）；progressNode 没带时「—」。 */
   stepsText: string;
   workflowName: string;
@@ -52,73 +76,67 @@ export type RunningCardView = {
 
 export type QueueMonitorController = {
   cancel: (id: string, label: string) => Promise<void>;
-  /** 取消全部进行中（否决重复点 / 弹窗 pending）。 */
   cancelAllBusy: boolean;
-  /** 「取消全部」确认弹窗是否开着。 */
   cancelAllOpen: boolean;
-  /** 关闭「取消全部」确认弹窗。 */
   closeCancelAll: () => void;
   closeLog: () => void;
-  /** 确认「取消全部」：关弹窗 → 发请求 → 刷新列表。 */
   confirmCancelAll: () => Promise<void>;
   copyForReprint: (row: QueueRow) => Promise<void>;
-  /** 展开那条的详情是否还在拉取。 */
   detailLoading: boolean;
-  /** 展开的那条（输入参数表）；null = 全部收起。 */
   expandedId: string | null;
-  /** 这一条正在被操作吗（判据在出口里，视图不再自己比 id）。 */
+  hasMore: boolean;
   isBusy: (id: string) => boolean;
-  /** 拉取失败的一句话；null 表示查询本身没问题（动作失败走 toast，不落这里）。 */
+  lastSyncedAt: number | null;
+  loadedCount: number;
   loadError: string | null;
   loading: boolean;
-  /** 正在查看执行日志的那条；null = 弹窗关着。 */
+  loadingMore: boolean;
+  loadMore: () => void;
   logRow: QueueTaskLogTarget | null;
-  /** ComfyUI 是否可达。false 时列表照常渲染（数据来自本地库），只多一条
-   * 「未连接」横幅说明队列不会开始。 */
+  matchedCount: number;
+  moveUp: (row: QueueRow) => Promise<void>;
   online: boolean;
   openFolder: (row: QueueRow) => Promise<void>;
   openLog: (task: QueueTaskLogTarget) => void;
-  /** 展开那条的输入参数行（task.detail → 纯派生）；未展开 / 拉取中为空。 */
   paramRows: Array<ReturnType<typeof queueTaskParamRows>[number]>;
-  /** 暂停 / 恢复切换进行中（防连点）。 */
   pauseBusy: boolean;
-  /** 生图暂停中（落库的持久状态，应用重启不丢，ISSUE #5055）。 */
   paused: boolean;
-  /** 排队项，`position` 从 1 起（1 = 下一个开跑）。 */
-  queued: Array<{ position: number; row: QueueRow }>;
-  /** 最近结果（已截到窗口上限，新的在前）。 */
+  queued: Array<{ position: number | null; row: QueueRow }>;
   recent: Array<QueueRow>;
-  refresh: () => void;
-  /** 打开「取消全部」确认弹窗。 */
+  refresh: (showFeedback?: boolean) => void;
+  refreshError: string | null;
+  refreshing: boolean;
   requestCancelAll: () => void;
-  /** 正在跑的那条（富卡片：来自 `/api/comfy/queue`）；没有在跑时为 null。 */
   running: RunningCardView | null;
-  /** 库里 status=RUNNING 的行。`running` 为 null 而这里非空 = ComfyUI 没连上
-   * （富卡片的数据源不可达），离线兜底卡用它渲染。 */
+  runningDetail: Pick<
+    NonNullable<RouterOutputs["task"]["detail"]>,
+    "id" | "modelName" | "params" | "prompt" | "status" | "workflowName"
+  > | null;
+  runningLogs: ReturnType<typeof useTaskLogStream>["logs"];
   runningRows: Array<QueueRow>;
-  /** 顶部指标带四格（运行中 / 排队中 / 今日完成 / 失败）。 */
+  runningSettled: ReturnType<typeof useTaskLogStream>["settled"];
+  search: string;
+  setSearch: (value: string) => void;
+  setStatusFilter: (value: QueueStatusFilter) => void;
   stats: QueueStats;
-  /** 点同一行收起、点另一行切换。 */
+  statusFilter: QueueStatusFilter;
   toggleExpanded: (id: string) => void;
-  /** 点一下：暂停 ↔ 恢复（暂停语义见执行器闸门，ISSUE #5055）。 */
   togglePause: () => void;
-  /** 本应用排队 + ComfyUI 自己排队，与状态栏那格同一算法；离线时退回
-   * 「库里在跑 + 排队的行数」（`/api/comfy/queue` 读不到，不能报 0）。 */
+  total: number | null;
   waitingCount: number;
 };
 
 /** 队列与运行的全部逻辑。容器与视图只消费这一份 controller。 */
 export function useQueueMonitor(): QueueMonitorController {
   const trpc = useTRPC();
+  const trpcClient = useTRPCClient();
+  const queryClient = useQueryClient();
   const toast = useToast();
   const queue = useComfyQueue();
   const copyText = useCopyResult();
   /* 日志弹窗的目标行：openLog 那一刻的快照（不是从 listQ 派生）——否则每 2s
    * 一次的轮询都会换掉对象身份，弹窗会被误重挂、SSE 反复重订。 */
   const [logRow, setLogRow] = useState<QueueTaskLogTarget | null>(null);
-  /* 「取消全部」确认弹窗的开合（ISSUE #5064）：破坏性整表动作先问一句，
-   * 与 WorksGallery 的删除项目同一口径（ConfirmDialog）。 */
-  const [cancelAllOpen, setCancelAllOpen] = useState(false);
   /* 展开看输入参数的那条（ISSUE #5019）：展开才拉 task.detail（enabled 门控），
    * 参数行由纯派生 queueTaskParamRows 算出。 */
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -139,25 +157,77 @@ export function useQueueMonitor(): QueueMonitorController {
   /* 页签隐藏时不轮询（ISSUE #4598）：disabled 期间 React Query 不发请求、
    * refetchInterval 停摆；切回当前页且数据过 staleTime 时自动补拉一次。 */
   const isTabActive = useViewTabActive();
-
-  const listQ = useQuery(
-    trpc.task.list.queryOptions(
-      { take: 200 },
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<QueueStatusFilter>("all");
+  const [refreshingComfy, setRefreshingComfy] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  /* select 稳定 stats 引用（#5158）：后端每轮 COUNT 重算给出新对象，但四个
+   * 数字往往一字未变；沿用旧对象就不会让统计卡与整表跟着重渲。 */
+  const [statsHolder] = useState<{ value: QueueStats | null }>(() => ({ value: null }));
+  const selectSummary = useCallback(
+    (data: QueueStats) => {
+      if (sameStats(statsHolder.value, data)) {
+        return statsHolder.value ?? data;
+      }
+      statsHolder.value = data;
+      return data;
+    },
+    [statsHolder],
+  );
+  const summaryQ = useQuery(
+    trpc.task.summary.queryOptions(
+      { todayStartedAt: midnight.toISOString() },
       {
-        /* 保持旧数据：轮询回来的瞬间不闪空列表（与历史面板同一口径）。 */
-        placeholderData: (prev) => prev,
-        /* 与状态栏那一格同一个节奏：两处都在回答「机器现在在干什么」，
-         * 快慢不该不一样。 */
         refetchInterval: COMFY_QUEUE_POLL_MS,
         enabled: isTabActive,
+        select: selectSummary,
       },
     ),
   );
 
-  const buckets = useMemo(() => bucketQueueRows(listQ.data?.tasks ?? []), [listQ.data?.tasks]);
-  const queued = useMemo(() => queuedWithPosition(buckets.queued), [buckets.queued]);
-  /* 指标带四格：随每次轮询的新数据重算（ buckets 身份变化即重算，日期跨天自会跟上）。 */
-  const stats = useMemo(() => queueStats(buckets, new Date()), [buckets]);
+  /* offset 分页不能随队列增删反复重取全部页：cursor 会相对新队首漂移，
+   * 已加载条目被跳过或重复。任务列表只在翻页与手动整表刷新时取数；
+   * 实时运行与全局计数仍分别由 ComfyUI store 和 summary 轮询。 */
+  const listInput = useMemo(
+    () => ({ take: QUEUE_PAGE_SIZE, status: QUEUE_STATUS_QUERY[statusFilter] }),
+    [statusFilter],
+  );
+  const listQ = useInfiniteQuery(
+    trpc.task.list.infiniteQueryOptions(listInput, {
+      getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextScanCursor : undefined),
+      enabled: isTabActive,
+    }),
+  );
+
+  const loadedRows = useMemo(() => {
+    const byId = new Map<string, QueueRow>();
+    for (const page of listQ.data?.pages ?? []) {
+      for (const row of page.tasks) {
+        byId.set(row.id, row);
+      }
+    }
+    return [...byId.values()];
+  }, [listQ.data?.pages]);
+  const rows = useMemo(() => searchQueueRows(loadedRows, search), [loadedRows, search]);
+  const buckets = useMemo(() => bucketQueueRows(rows), [rows]);
+  const queued = useMemo(
+    () => queuedWithPosition(buckets.queued, Number.MAX_SAFE_INTEGER),
+    [buckets.queued],
+  );
+  const fallbackStats = useMemo(() => queueStats(buckets, new Date()), [buckets]);
+  const stats = summaryQ.data ?? fallbackStats;
+  const lastPage = listQ.data?.pages.at(-1);
+  const hasMore = lastPage?.hasMore ?? false;
+  const total = lastPage?.total ?? null;
+  const loadedCount = loadedRows.length;
+  const matchedCount = rows.length;
+  const lastSyncedAt = Math.max(
+    queue.syncedAt ?? 0,
+    listQ.dataUpdatedAt ?? 0,
+    summaryQ.dataUpdatedAt ?? 0,
+  );
 
   /* 「同一条不能重复点」与忙标记的落 / 清走全库唯一出口（规范 16 §16.2.4.40）。
    * 传键集合是为了收敛生命周期：条目从列表里消失后忙标记随之丢掉，否则
@@ -177,6 +247,60 @@ export function useQueueMonitor(): QueueMonitorController {
     [toast],
   );
 
+  const refresh = useCallback(
+    (showFeedback = false) => {
+      setRefreshingComfy(true);
+      setRefreshError(null);
+      const listKey = trpc.task.list.infiniteQueryKey(listInput);
+      const firstPageKey = [...listKey, "manual-refresh"];
+      const listRefresh = (async () => {
+        try {
+          const firstPage = await queryClient.fetchQuery({
+            queryFn: ({ signal }) => trpcClient.task.list.query(listInput, { signal }),
+            queryKey: firstPageKey,
+          });
+          queryClient.setQueryData(listKey, { pageParams: [0], pages: [firstPage] });
+          return true;
+        } catch {
+          return false;
+        } finally {
+          queryClient.removeQueries({ queryKey: firstPageKey });
+        }
+      })();
+      const tasksRefresh = Promise.all([listRefresh, summaryQ.refetch()]);
+      const comfyRefresh = refreshComfyQueue().then(
+        () => true,
+        () => false,
+      );
+      void (async () => {
+        try {
+          const [listOk, summaryResult] = await tasksRefresh;
+          const comfyOk = await comfyRefresh;
+          if (!listOk || summaryResult.isError || !comfyOk) {
+            throw new Error("部分真相源未同步");
+          }
+          if (showFeedback) {
+            toast.info("队列已同步");
+          }
+        } catch {
+          if (showFeedback) {
+            const message = "刷新失败：任务记录或 ComfyUI 真值未完整同步，请稍后重试";
+            setRefreshError(message);
+            toast.error(message);
+          }
+        } finally {
+          setRefreshingComfy(false);
+        }
+      })();
+    },
+    [listInput, queryClient, summaryQ, toast, trpc, trpcClient],
+  );
+  const loadMore = useCallback(() => {
+    if (hasMore && !listQ.isFetchingNextPage) {
+      void listQ.fetchNextPage();
+    }
+  }, [hasMore, listQ]);
+
   const running = useMemo<RunningCardView | null>(() => {
     const task = queue.running;
     if (task === null) {
@@ -191,6 +315,8 @@ export function useQueueMonitor(): QueueMonitorController {
       elapsedText: runningElapsedText(queue.elapsedMs),
       remainingText: remainingText(remainingMs),
       progressPct: task.progress,
+      progressValue: task.progressValue,
+      startedAt: task.startedAt,
       stepsText: formatStepsText(task.progressValue, task.progressMax) ?? "—",
       rateText: formatSampleRateText(task.progressValue, queue.elapsedMs) ?? "—",
     };
@@ -205,72 +331,11 @@ export function useQueueMonitor(): QueueMonitorController {
           successText: "已发送取消请求",
         });
         /* 失败也要刷新：用户可能已在别处把它取消了，界面不该继续显示排队中。 */
-        void listQ.refetch();
+        refresh();
       });
     },
-    [action, listQ, report],
+    [action, refresh, report],
   );
-
-  /* 取消全部（ISSUE #5064）：整表动作，用 null 作用域的同一把重入锁（与单条
-   * 取消共用 `action`，因此「取消全部」在跑时那批行的「取消这条」也一起禁用）。
-   * 服务端逐条走执行层出口、部分失败计数带回，这里如实报数：只说「已取消」
-   * 会把没取消掉的几条藏起来（用户还以为队列已经清空了）。 */
-  const confirmCancelAll = useCallback(async () => {
-    setCancelAllOpen(false);
-    await action.run(null, async () => {
-      /* 条数只在本次动作的 closure 里存一份：`runAsyncAction` 的统一出口只认
-       * 「成功 / 失败」两态，而这次要如实报「取消了几条、几条没取消掉」。 */
-      let outcome: Awaited<ReturnType<typeof cancelAllTasks>> | null = null;
-      await runAsyncAction(
-        async () => {
-          outcome = await cancelAllTasks();
-          return outcome;
-        },
-        {
-          report,
-          failureText: "取消全部失败，请稍后重试",
-          successText: () => {
-            if (outcome === null) {
-              return "已发送取消全部请求";
-            }
-            const { cancelled, failed } = outcome;
-            return failed === 0
-              ? `已取消 ${String(cancelled)} 条任务`
-              : `已取消 ${String(cancelled)} 条，${String(failed)} 条未能取消（详见执行日志）`;
-          },
-        },
-      );
-      void listQ.refetch();
-    });
-  }, [action, listQ, report]);
-  const requestCancelAll = useCallback(() => {
-    setCancelAllOpen(true);
-  }, []);
-  const closeCancelAll = useCallback(() => {
-    setCancelAllOpen(false);
-  }, []);
-
-  /* 生图暂停（ISSUE #5055）：状态在库里（应用重启不丢），队列页用播放 / 暂停
-   * 图标切换。暂停语义在执行器闸门（executor-dispatch）：当前任务照常跑完，
-   * 之后不再领取生图任务；恢复后按队列序继续。 */
-  const pauseQ = useQuery(
-    trpc.generationControl.pauseState.queryOptions(undefined, { enabled: isTabActive }),
-  );
-  const setPausedM = useMutation(
-    trpc.generationControl.setPaused.mutationOptions({
-      onSuccess: () => {
-        void pauseQ.refetch();
-      },
-    }),
-  );
-  const togglePause = useCallback(() => {
-    const next = !(pauseQ.data?.paused ?? false);
-    void runAsyncAction(() => setPausedM.mutateAsync({ paused: next }), {
-      report,
-      successText: next ? "已暂停：当前任务跑完后不再领取新的生图任务" : "已恢复：按队列序继续生成",
-      failureText: next ? "暂停失败，请稍后重试" : "恢复失败，请稍后重试",
-    });
-  }, [pauseQ.data, setPausedM, report]);
 
   const openFolder = useCallback(
     async (row: QueueRow) => {
@@ -305,45 +370,146 @@ export function useQueueMonitor(): QueueMonitorController {
     [action, copyText, report],
   );
 
+  /* ===== 以下为并行开发线合入的整表动作 / 就地详情（master 侧能力）===== */
+
+  /* 运行中那条的详情与就地日志：只在展开运行时那条时才取 / 订阅。 */
+  const runningId = running?.id ?? buckets.running[0]?.id ?? null;
+  const runningDetail =
+    expandedId !== null && expandedId === runningId ? (detailQ.data ?? null) : null;
+  const runningLogStream = useTaskLogStream(
+    expandedId !== null && expandedId === runningId ? runningId : null,
+  );
+
+  /* 取消全部：整表动作，用 null 作用域的同一把重入锁；部分失败如实报数。 */
+  const [cancelAllOpen, setCancelAllOpen] = useState(false);
+  const confirmCancelAll = useCallback(async () => {
+    setCancelAllOpen(false);
+    await action.run(null, async () => {
+      let outcome: Awaited<ReturnType<typeof cancelAllTasks>> | null = null;
+      await runAsyncAction(
+        async () => {
+          outcome = await cancelAllTasks();
+          return outcome;
+        },
+        {
+          report,
+          failureText: "取消全部失败，请稍后重试",
+          successText: () => {
+            if (outcome === null) {
+              return "已发送取消全部请求";
+            }
+            const { cancelled, failed } = outcome;
+            return failed === 0
+              ? `已取消 ${String(cancelled)} 条任务`
+              : `已取消 ${String(cancelled)} 条，${String(failed)} 条未能取消（详见执行日志）`;
+          },
+        },
+      );
+      refresh();
+    });
+  }, [action, refresh, report]);
+  const requestCancelAll = useCallback(() => {
+    setCancelAllOpen(true);
+  }, []);
+  const closeCancelAll = useCallback(() => {
+    setCancelAllOpen(false);
+  }, []);
+
+  /* 排队任务提前执行：服务端只发一条条件 UPDATE，已开跑如实回报。 */
+  const reorderM = useMutation(trpc.task.reorder.mutationOptions());
+  const moveUp = useCallback(
+    async (row: QueueRow) => {
+      await action.run(row.id, async () => {
+        await runAsyncAction(() => reorderM.mutateAsync({ id: row.id }), {
+          report,
+          failureText: `提前「${row.workflowName}」失败，请稍后重试`,
+        });
+        refresh();
+      });
+    },
+    [action, refresh, report, reorderM],
+  );
+
+  /* 生图暂停 / 恢复（状态落库，重启不丢）。 */
+  const pauseQ = useQuery(
+    trpc.generationControl.pauseState.queryOptions(undefined, { enabled: isTabActive }),
+  );
+  const setPausedM = useMutation(
+    trpc.generationControl.setPaused.mutationOptions({
+      onSuccess: () => {
+        void pauseQ.refetch();
+      },
+    }),
+  );
+  const togglePause = useCallback(() => {
+    const next = !(pauseQ.data?.paused ?? false);
+    void runAsyncAction(() => setPausedM.mutateAsync({ paused: next }), {
+      report,
+      successText: next ? "已暂停：当前任务跑完后不再领取新的生图任务" : "已恢复：按队列序继续生成",
+      failureText: next ? "暂停失败，请稍后重试" : "恢复失败，请稍后重试",
+    });
+  }, [pauseQ.data, setPausedM, report]);
+
+  const isBusy = useCallback((id: string) => action.isBusy(id), [action]);
+  const openLog = useCallback((task: QueueTaskLogTarget) => {
+    setLogRow(task);
+  }, []);
+  const closeLog = useCallback(() => {
+    setLogRow(null);
+  }, []);
+
   return {
     online: queue.online,
     running,
     runningRows: buckets.running,
+    runningDetail,
+    runningLogs: runningLogStream.logs,
+    runningSettled: runningLogStream.settled,
     queued,
     stats,
-    recent: recentWithin(buckets.recent),
+    recent: buckets.recent,
     /* 离线时 `/api/comfy/queue` 读不到、两个计数恒为 0，而列表明明排着队 ——
-     * 退回「库里在跑 + 排队」的行数，别让「待执行 0」和下面的列表自相矛盾。 */
+     * 退回「库里在跑 + 排队」的行数。 */
     waitingCount: queue.online
       ? queue.queued + queue.comfy.pending
       : buckets.running.length + queued.length,
     loading: listQ.isPending,
+    loadingMore: listQ.isFetchingNextPage,
+    loadMore,
+    hasMore,
+    loadedCount,
+    matchedCount,
+    total,
+    lastSyncedAt: lastSyncedAt > 0 ? lastSyncedAt : null,
+    refreshError,
     loadError: listQ.isError ? "读不到任务记录，后端可能刚重启" : null,
     logRow,
     expandedId,
     toggleExpanded,
     detailLoading: detailQ.isFetching,
     paramRows,
-    isBusy: (id: string) => action.isBusy(id),
-    refresh: () => {
-      void listQ.refetch();
-    },
+    isBusy,
+    refresh,
+    /* 后台 summary 轮询不再进 refreshing（#5158）：每轮 isFetching 抖动两次
+     * 会让视图连渲两次，而「刷新中」只该由用户主动动作驱动。 */
+    refreshing: refreshingComfy || listQ.isFetching,
+    search,
+    setSearch,
+    statusFilter,
+    setStatusFilter,
     cancel,
+    openFolder,
+    copyForReprint,
+    moveUp,
+    paused: pauseQ.data?.paused ?? false,
+    pauseBusy: setPausedM.isPending,
+    togglePause,
     cancelAllOpen,
     cancelAllBusy: action.isBusy(null),
     confirmCancelAll,
     requestCancelAll,
     closeCancelAll,
-    openFolder,
-    copyForReprint,
-    paused: pauseQ.data?.paused ?? false,
-    pauseBusy: setPausedM.isPending,
-    togglePause,
-    openLog: (task) => {
-      setLogRow(task);
-    },
-    closeLog: () => {
-      setLogRow(null);
-    },
+    openLog,
+    closeLog,
   };
 }

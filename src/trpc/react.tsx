@@ -37,7 +37,7 @@ const getQueryClient = () => {
  * 迁移同批必须把 S3 改成认 `queryOptions(` / `mutationOptions(`，否则「视图层
  * 新增 IO」这条闸会静默失明——判据跟着调用形状走，形状换了判据就得换。
  */
-export const { TRPCProvider, useTRPC } = createTRPCContext<AppRouter>();
+export const { TRPCProvider, useTRPC, useTRPCClient } = createTRPCContext<AppRouter>();
 
 /**
  * 按给定链路建一个与本 hub **同类型**的 tRPC 客户端。

@@ -146,10 +146,10 @@ export function parseIssueNumberToken(token) {
  * 图片走 `issues get-imgs` 官方通道，不再手拼 URL 撞 404。只读平台、与显式动作互斥。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,fetchIssue:number|null,fetchIssueBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,fetchIssue:number|null,fetchIssueBad:string[],screenshotReply:number|null,screenshotReplyBad:string[],screenshotFile:string|null,findIssues:string|null,findIssuesBad:string[],findState:string|null,findStateBad:string[],findLabel:string|null,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],editIssue:number|null,editIssueBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,fetchIssue:number|null,fetchIssueBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,fetchIssue:number|null,fetchIssueBad:string[],screenshotReply:number|null,screenshotReplyBad:string[],screenshotFile:string|null,findIssues:string|null,findIssuesBad:string[],findState:string|null,findStateBad:string[],findLabel:string|null,newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],editIssue:number|null,editIssueBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
   const out = {
     message: null,
     messageFile: null,
@@ -185,11 +185,21 @@ export function parseArgs(argv) {
     resultJson: false,
     fetchIssue: null,
     fetchIssueBad: [],
+    screenshotReply: null,
+    screenshotReplyBad: [],
+    screenshotFile: null,
+    findIssues: null,
+    findIssuesBad: [],
+    findState: null,
+    findStateBad: [],
+    findLabel: null,
     newIssue: null,
     newIssueBad: [],
     issueBodyFile: null,
     comment: null,
     commentBad: [],
+    editIssue: null,
+    editIssueBad: [],
     bodyFile: null,
     prBodyFile: null,
     priority: null,
@@ -285,6 +295,45 @@ export function parseArgs(argv) {
       if (tok !== "") {
         out.diagnoseSn = tok;
       }
+    } else if (a === "--screenshot-reply" || a.startsWith("--screenshot-reply=")) {
+      const tok = a.startsWith("--screenshot-reply=")
+        ? a.slice("--screenshot-reply=".length)
+        : String(argv[++i] ?? "");
+      const n = parseIssueNumberToken(tok);
+      if (n === null) {
+        out.screenshotReplyBad.push(tok || "(缺号)");
+      } else if (out.screenshotReply === null) {
+        out.screenshotReply = n;
+      } else {
+        out.screenshotReplyBad.push(`重复的 --screenshot-reply（前一张 #${out.screenshotReply}）`);
+      }
+    } else if (a === "--file") {
+      out.screenshotFile = argv[++i] ?? "";
+    } else if (a === "--find-issues" || a.startsWith("--find-issues=")) {
+      /* 关键词是自由文本（可以带空格），与 `--stage-log` 同一收法；`--state` / `--label`
+       * 是它的输入旗标，遇到就以旗标为界停止收词，不被吃掉。 */
+      const toks = a.startsWith("--find-issues=") ? [a.slice("--find-issues=".length)] : [];
+      while (i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")) {
+        toks.push(String(argv[++i] ?? ""));
+      }
+      const word = toks.join(" ").trim();
+      if (word === "") {
+        out.findIssuesBad.push("(缺关键词)");
+      } else if (out.findIssues === null) {
+        out.findIssues = word;
+      } else {
+        out.findIssuesBad.push(`重复的 --find-issues（前一个「${out.findIssues}」）`);
+      }
+    } else if (a === "--state" || a.startsWith("--state=")) {
+      const tok = a.startsWith("--state=") ? a.slice("--state=".length) : String(argv[++i] ?? "");
+      if (["open", "closed", "all"].includes(tok) === false) {
+        out.findStateBad.push(`词表外：${tok || "(缺值)"}（可选 open / closed / all）`);
+      } else {
+        out.findState = tok;
+      }
+    } else if (a === "--label" || a.startsWith("--label=")) {
+      const tok = a.startsWith("--label=") ? a.slice("--label=".length) : String(argv[++i] ?? "");
+      out.findLabel = tok;
     } else if (a === "--new-issue") {
       const tok =
         i + 1 < argv.length && !String(argv[i + 1]).startsWith("-") ? String(argv[++i] ?? "") : "";
@@ -415,6 +464,23 @@ export function parseArgs(argv) {
         out.comment = n;
       } else {
         out.commentBad.push(`重复的 --comment（前一张 #${out.comment}）`);
+      }
+    } else if (a === "--edit-issue" || a.startsWith("--edit-issue=")) {
+      /* 与 `--comment` 同一条「像不像号」判据（ISSUE #5165）：改单子正文要人点名是哪一张，
+       * 脚本不猜。两种写法（空格 / 等号）走同一支，避免「一种能用、另一种被当未知旗标」。 */
+      let tok = "";
+      if (a.startsWith("--edit-issue=")) {
+        tok = a.slice("--edit-issue=".length);
+      } else if (i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")) {
+        tok = String(argv[++i] ?? "");
+      }
+      const n = parseIssueNumberToken(tok);
+      if (n === null) {
+        out.editIssueBad.push(tok || "(缺号)");
+      } else if (out.editIssue === null) {
+        out.editIssue = n;
+      } else {
+        out.editIssueBad.push(`重复的 --edit-issue（前一张 #${out.editIssue}）`);
       }
     } else if (a === "--body-file") {
       out.bodyFile = argv[++i] ?? "";
@@ -578,7 +644,8 @@ export function parseArgs(argv) {
  *
  * @param {{unknown:string[], modeBad:string[], only:string|null, allowStaged:boolean,
  *   adds:string[], addMultiBad:string[], noCommit?:boolean, message:string|null, messageFile:string|null,
- *   closeIssueBad:string[], asMergedBad:string[], asMerged:number|null, closeIssue:boolean}} opt
+ *   closeIssueBad:string[], asMergedBad:string[], asMerged:number|null, closeIssue:boolean,
+ *   findIssues:string|null, findState:string|null, findStateBad:string[], findLabel:string|null}} opt
  *   `parseArgs` 的解析结果（用到的那几个字段）
  * @returns {string[]} 要逐行打出的错误读数；空数组 = 旗标组合合法
  */
@@ -682,6 +749,17 @@ export function flagConflicts(opt) {
     );
     return lines;
   }
+  /* `--state` / `--label` 是 `--find-issues` 的输入；单独出现时无人消费，
+   * 静默忽略会让人以为已经按状态 / 标签筛过单（与 --issue-body-file 同族）。 */
+  if (
+    (opt.findState !== null || opt.findLabel !== null || (opt.findStateBad ?? []).length > 0) &&
+    opt.findIssues === null
+  ) {
+    lines.push(
+      "[ship] [ERROR] --state / --label 只跟 --find-issues 一起用；单独给它们不会检索任何单子。",
+    );
+    return lines;
+  }
   /* poll / verdict / merge / close-issue / clean-branch 要用「本次跑里解析出来的 PR 号」
    * 或「合并那一段才有的验真结果」，而它们是在 pull-request / merge 那两段拿到的 ——
    * 单独 --only=poll 会走进「一段都没跑、于是没有任何结论」却退 0 的形态。那是假绿灯，
@@ -722,7 +800,10 @@ export function singleActionSettled(opt) {
     opt.ghLogs ||
     opt.ghPrs ||
     opt.fetchIssue ||
+    opt.findIssues !== null ||
+    opt.screenshotReply !== null ||
     opt.comment !== null ||
+    opt.editIssue !== null ||
     opt.claim !== null ||
     opt.release !== null ||
     opt.misclaim ||

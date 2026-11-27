@@ -5,6 +5,7 @@
 
 import { formatElapsed } from "~/components/studio/hooks/use-comfy-queue";
 import { estimateRemainingMsFrom } from "~/lib/progress";
+import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import { isTerminalTaskStatus } from "~/lib/task-state";
 import type { RouterOutputs } from "~/trpc/react";
 
@@ -54,10 +55,9 @@ export function bucketQueueRows(rows: ReadonlyArray<QueueRow>): QueueBuckets {
   return { running, queued, recent };
 }
 
-/** 顶部指标带的四格读数（纯派生，视图只渲染）。
- * running / queued 即三桶计数；完成与失败只数**创建于今天**的终态行 ——
- * task.list 没有完成时刻，创建日是能拿到的最近口径（窗口为最近 200 条，
- * 日常远不到上限，越界时读数偏保守而非虚高）。 */
+/** 顶部指标带的四格读数（纯派生，视图只渲染）。今日终态按真实结束时刻统计，
+ * 历史任务在今天重跑完成也能计入；缺少结束时刻的旧数据才退回创建时刻。
+ * 窗口版只作首帧兜底：正式口径走 {@link queueStatsFromCounts} 的服务端全量计数。 */
 export type QueueStats = {
   failedToday: number;
   queued: number;
@@ -70,7 +70,7 @@ export function queueStats(buckets: QueueBuckets, now: Date): QueueStats {
   let succeededToday = 0;
   let failedToday = 0;
   for (const row of buckets.recent) {
-    if (row.createdAt.toDateString() !== today) {
+    if ((row.finishedAt ?? row.createdAt).toDateString() !== today) {
       continue;
     }
     if (row.status === "SUCCEEDED") {
@@ -88,23 +88,98 @@ export function queueStats(buckets: QueueBuckets, now: Date): QueueStats {
 }
 
 /**
- * 排队位次（第 1 位 = 下一个开跑）。必须显式反一次：task.list 一律按 createdAt 倒序返回
- *（仓储四条分支同一句倒序、不暴露排序参数），而执行器先入先出 —— 直接拿倒序下标当位次，
- * 会把最后提交的显示成「第 1 位」。
+ * 指标带的**全量口径**（#5073）：优先读服务端 `task.list` 已带的按状态分组计数
+ * （SQL GROUP BY，与 take 无关），今日完成 / 失败读同一口径的时间过滤版。
+ * 首帧拿不到计数时才退回窗口版 —— 宁可短暂偏小，也不拿 200 行切片冒充全量。
+ */
+export function queueStatsFromCounts(
+  statusCounts: Record<string, number> | null | undefined,
+  todayCounts: Record<string, number> | null | undefined,
+  fallback: QueueStats,
+): QueueStats {
+  return {
+    failedToday: todayCounts?.FAILED ?? fallback.failedToday,
+    queued: statusCounts?.QUEUED ?? fallback.queued,
+    running: statusCounts?.RUNNING ?? fallback.running,
+    succeededToday: todayCounts?.SUCCEEDED ?? fallback.succeededToday,
+  };
+}
+
+/**
+ * 排队位次（第 1 位 = 下一个开跑）。位次由服务端按完整 QUEUED 队列给出
+ *（task.list 的 `queuePosition`），不按当前页子集重编号 —— 分页只加载到第 61 位时
+ * 仍显示真实的 61/62，队列快照里已没有这一行时给 null，绝不编造。
  */
 export function queuedWithPosition(
   queued: ReadonlyArray<QueueRow>,
-): Array<{ position: number; row: QueueRow }> {
-  const total = queued.length;
+  limit = QUEUED_WINDOW,
+): Array<{ position: number | null; row: QueueRow }> {
   return queued
-    .map((row, index) => ({ row, position: total - index }))
-    .sort((a, b) => a.position - b.position)
-    .slice(0, QUEUED_WINDOW);
+    .map((row) => ({ row, position: row.queuePosition }))
+    .sort(
+      (a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER),
+    )
+    .slice(0, limit);
 }
 
-/** 最近结果：按窗口上限截断（进来的顺序已是新的在前）。 */
-export function recentWithin(rows: ReadonlyArray<QueueRow>): Array<QueueRow> {
-  return rows.slice(0, RECENT_WINDOW);
+/** 最近结果：默认按窗口上限截断；分页视图可显式展示已加载的全部终态行。 */
+export function recentWithin(
+  rows: ReadonlyArray<QueueRow>,
+  limit = RECENT_WINDOW,
+): Array<QueueRow> {
+  return rows.slice(0, limit);
+}
+
+export type QueueStatusFilter = "active" | "all" | "terminal";
+
+/** 搜索只匹配已加载行；状态筛选交给服务端分页，避免「筛到了但没加载」的假空态。 */
+export function searchQueueRows(rows: ReadonlyArray<QueueRow>, query: string): Array<QueueRow> {
+  const needle = normalizeNeedle(query);
+  if (needle === "") {
+    return [...rows];
+  }
+  return rows.filter((row) =>
+    [row.workflowName, row.prompt, row.modelName ?? "", row.id, row.error ?? ""].some((value) =>
+      matchesNeedle(needle, value),
+    ),
+  );
+}
+
+/** 任务时间的两种在途形态：task.list 投影成 ISO 串，task.detail 经 superjson 还原成 Date。 */
+export type TaskTimeInput = Date | string | null | undefined;
+
+function taskTimeMs(value: TaskTimeInput): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const ms = typeof value === "string" ? Date.parse(value) : value.getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * 任务耗时（毫秒）：开始时刻优先取 claimedAt，缺失的旧任务退回 createdAt
+ *（后者会把排队算进去，口径与 schema 注释一致，不冒充「纯生成时间」）。
+ * 终态时刻缺失（未完 / 被中断）返回 null —— 不编一个 0 秒出来。
+ */
+export function taskDurationMs(row: {
+  claimedAt?: TaskTimeInput;
+  createdAt: TaskTimeInput;
+  finishedAt?: TaskTimeInput;
+}): number | null {
+  const end = taskTimeMs(row.finishedAt);
+  if (end === null) {
+    return null;
+  }
+  const start = taskTimeMs(row.claimedAt) ?? taskTimeMs(row.createdAt);
+  if (start === null) {
+    return null;
+  }
+  return Math.max(0, end - start);
+}
+
+/** 队列页耗时：与历史页共用同一份派生（不另写第二套）。 */
+export function queueTaskDurationMs(row: QueueRow): number | null {
+  return taskDurationMs(row);
 }
 
 /**

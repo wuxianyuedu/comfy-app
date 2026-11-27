@@ -24,7 +24,7 @@
       "env": {
         "COMFY_BIN": "python-venv/comfy-cli/Scripts/comfy.exe"
       },
-      "description": "ComfyUI 本地 MCP（PyPI comfy-mcp，comfy-cli 的薄封装；ISSUE #4488）：搜模型 / 节点 / 模板、读已有工作流、改插槽、跑图取产物——驱动用户自跑的本机 ComfyUI（默认 127.0.0.1:8188），工具调用执行 comfy --where local --json。用之前先 server_info 确认 ComfyUI 在跑；POSIX 检出把两处路径换成 python-venv/comfy-cli/bin/。"
+      "description": "ComfyUI 本地 MCP（PyPI comfy-mcp，comfy-cli 的薄封装；ISSUE #4488）：搜模型 / 节点 / 模板、读已有工作流、改插槽、跑图取产物——驱动用户自跑的本机 ComfyUI（默认 127.0.0.1:8188），工具调用执行 comfy --where local --json。⚠️ 上面的 exe 是 pnpm setup:comfy-cli-venv 的产物（幂等补装，ISSUE #4521）：新检出 / 没跑过应用时它不存在，不等于 MCP 不可用——先跑这条命令再判断；安装失败只记日志不阻断。用之前先 server_info 确认 ComfyUI 在跑；POSIX 检出把两处路径换成 python-venv/comfy-cli/bin/。"
     },
     "chrome-devtools": {
       "type": "stdio",

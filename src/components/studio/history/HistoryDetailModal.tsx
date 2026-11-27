@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Folder, X } from "lucide-react";
 
 import { Hint } from "~/components/ui/hint";
@@ -19,7 +20,7 @@ import {
   isPromptParamRow,
   kvValueText,
 } from "./history-detail-derive";
-import { modelLabelOf, modeLabelOf } from "./history-list-derive";
+import { modelLabelOf, modeLabelOf, taskDurationTextOf } from "./history-list-derive";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 import { useHistoryDetailActions } from "./hooks/use-history-detail-actions";
@@ -92,6 +93,121 @@ function ParamImageValue({ name }: { name: string }) {
  * 「重试 / 评分收藏 / 放大重绘」等编辑性入口已从这里撤走（#4841）：详情只看——
  * 重试走任务卡（带参预填测试模型），评分收藏与放大重绘不再有这个弹窗入口。
  */
+/**
+ * 详情头部：标题 / 状态 / 模式模型 / 生成耗时 + 目录与工作流动作。
+ * 从 `HistoryDetailModal` 抽出，避免主组件函数超过 400 行硬闸（规范 §12.13）。
+ */
+function DetailHeader({
+  actions,
+  current,
+  firstImage,
+  onClose,
+  sourceLabel,
+}: {
+  actions: ReturnType<typeof useHistoryDetailActions>;
+  current: TaskDetail | null;
+  firstImage: TaskDetail["images"][number] | undefined;
+  onClose: () => void;
+  sourceLabel: string;
+}) {
+  return (
+    <div className="border-border-subtle relative flex items-center justify-between gap-3 border-b px-6 pt-4 pb-3.5">
+      {/* 左侧两行（ISSUE #4855）：标题 + 状态一行，「模式 + 模型名」一行 ——
+          与历史列表卡首行同一套身份信息（modeLabelOf / modelLabelOf 同一出处），
+          进详情后仍能认出这是哪次提交、用的什么模型。 */}
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <h3 className="text-ink-bright text-[17px] leading-snug font-bold">
+          任务详情
+          {current ? (
+            <span
+              className={`ml-2.5 inline-flex items-center gap-1.5 rounded-full py-0.5 pr-2.5 pl-2 align-middle text-xs font-medium ${STATUS_BADGE_CLASS[current.status] ?? "bg-subtle text-ink-muted"}`}
+            >
+              <span aria-hidden className="size-1.5 rounded-full bg-current" />
+              {taskStatusLabel(current.status)}
+            </span>
+          ) : null}
+        </h3>
+        {current ? (
+          <div className="flex items-center gap-2">
+            <span className="bg-subtle text-ink-muted text-2xs shrink-0 rounded-full px-2 py-0.5">
+              {modeLabelOf(current.type)}
+            </span>
+            <span className="text-ink-strong min-w-0 truncate text-xs font-medium">
+              {modelLabelOf(current)}
+            </span>
+            {taskDurationTextOf(current) !== null && (
+              <Hint label="生成耗时（领取 → 终态；旧任务无领取时刻时含排队时间）">
+                <span className="bg-subtle text-ink-muted text-2xs shrink-0 rounded px-1.5 py-0.5 tabular-nums">
+                  耗时 {taskDurationTextOf(current)}
+                </span>
+              </Hint>
+            )}
+          </div>
+        ) : null}
+      </div>
+      <div className="flex items-center gap-2">
+        <Hint
+          label="在系统文件管理器中打开本次生成的目录（图片 / 视频 / 音频 / workflow.json / manifest.json 都在这里）"
+          wrap
+        >
+          <Button
+            className="border-border text-ink-muted hover:border-border-strong hover:text-ink h-auto gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium"
+            disabled={current === null || current.id === "" || actions.openFolderBusy}
+            onClick={() => {
+              if (current === null || current.id === "") {
+                return;
+              }
+              void actions.openFolder(current.id);
+            }}
+            size="xs"
+            variant="outline"
+          >
+            <Folder data-icon="inline-start" size={12} />
+            打开目录
+          </Button>
+        </Hint>
+        {firstImage !== undefined && firstImage.localPath !== "" && (
+          <div className="flex items-center gap-2">
+            <Hint
+              label="下载本次执行实际用到的工作流 JSON（含当时的节点与参数，工作流模板后续改动也不影响复现）"
+              wrap
+            >
+              <Button
+                className="border-border text-ink-muted hover:border-border-strong hover:text-ink h-auto rounded-lg px-2.5 py-1.5 text-xs font-medium"
+                disabled={actions.downloading}
+                onClick={() => {
+                  if (current === null || current.id === "") {
+                    return;
+                  }
+                  void actions.downloadWorkflow(current.id);
+                }}
+                size="xs"
+                variant="outline"
+              >
+                下载工作流
+              </Button>
+            </Hint>
+            <Hint label={sourceLabel}>
+              <span className="bg-subtle text-ink-muted text-3xs hidden rounded px-1.5 py-0.5 sm:inline">
+                {sourceLabel}
+              </span>
+            </Hint>
+          </div>
+        )}
+        <Button
+          aria-label="关闭"
+          className="text-ink-muted hover:text-ink-bright"
+          onClick={onClose}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <X data-icon="inline-start" size={16} />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function HistoryDetailModal({
   detailId,
   detail,
@@ -105,29 +221,42 @@ export function HistoryDetailModal({
     fetchWorkflow: fetchTaskWorkflow,
   });
 
+  /* 派生按依赖 memo 化（#5124）：`deriveWorkflowParams` 对每个 IO 线性查表、
+   * 无提交值时扫整份 workflow 快照，`deriveWorkshopParams` 还会再算一遍参考图。
+   * 父级每次重渲都重算这整套，detail / workflowIO 不变时纯属白干。 */
+  const origin = useMemo(() => deriveTaskOrigin(detail), [detail]);
+  /* 参考图（ISSUE #4855 / #4910）：派生层统一并集任务行 `referenceImages` 列、
+   * `params.inputImage` / `params.referenceImages` 与 workflowInputs 反推
+   * （存量任务行没落列，靠反推补），去重保序后逐张展示，用户不必再回列表
+   * 猜「参考图是哪张」。 */
+  const referenceImages = useMemo(() => deriveReferenceImages(detail), [detail]);
+  /* 按来源分块：工坊发起的任务多摆一块「工坊参数」（工坊对外值），工作流直接
+   * 发起的任务只有「工作流参数」—— 判据见`deriveTaskOrigin`。 */
+  const workshopParams = useMemo(
+    () =>
+      origin === "workshop"
+        ? deriveWorkshopParams(
+            detail,
+            detail?.type ?? null,
+            modeContracts,
+            workflowIO,
+            referenceImages,
+          )
+        : [],
+    [detail, modeContracts, origin, referenceImages, workflowIO],
+  );
+  const workflowParams = useMemo(
+    () => deriveWorkflowParams(detail, workflowIO, detail?.type ?? null),
+    [detail, workflowIO],
+  );
+  const firstImage = Array.isArray(detail?.images) ? detail.images[0] : undefined;
+
   if (detailId === null || detailId === "") {
     return null;
   }
   // 局部 const 让闭包 / IIFE 内的空值窄化在 TS 中稳定成立。
   const current = detail;
-  /* 按来源分块：工坊发起的任务多摆一块「工坊参数」（工坊对外值），工作流直接
-   * 发起的任务只有「工作流参数」—— 判据见`deriveTaskOrigin`。 */
-  const origin = deriveTaskOrigin(current);
-  const workshopParams =
-    origin === "workshop"
-      ? deriveWorkshopParams(current, current?.type ?? null, modeContracts, workflowIO)
-      : [];
-  const {
-    rows: paramRows,
-    topLevelEntries,
-    hasAny: hasParams,
-  } = deriveWorkflowParams(current, workflowIO, current?.type ?? null);
-  const firstImage = Array.isArray(current?.images) ? current.images[0] : undefined;
-  /* 参考图（ISSUE #4855 / #4910）：派生层统一并集任务行 `referenceImages` 列、
-   * `params.inputImage` / `params.referenceImages` 与 workflowInputs 反推
-   * （存量任务行没落列，靠反推补），去重保序后逐张展示，用户不必再回列表
-   * 猜「参考图是哪张」。 */
-  const referenceImages = deriveReferenceImages(current);
+  const { rows: paramRows, topLevelEntries, hasAny: hasParams } = workflowParams;
   /* 快照是 DB 的 JSON 列（unknown）：先确认它是对象、`source` 是字符串再读，
    *  其余（null / 旧数据 / 非字符串）都按「磁盘回退快照」显示。 */
   const snapshot = current?.workflowSnapshot;
@@ -158,93 +287,13 @@ export function HistoryDetailModal({
         <div
           className={`border-border bg-surface flex ${OVERLAY_MAX_HEIGHT} w-full max-w-[1120px] flex-col overflow-hidden rounded-2xl border`}
         >
-          <div className="border-border-subtle relative flex items-center justify-between gap-3 border-b px-6 pt-4 pb-3.5">
-            {/* 左侧两行（ISSUE #4855）：标题 + 状态一行，「模式 + 模型名」一行 ——
-                与历史列表卡首行同一套身份信息（modeLabelOf / modelLabelOf 同一出处），
-                进详情后仍能认出这是哪次提交、用的什么模型。 */}
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <h3 className="text-ink-bright text-[17px] leading-snug font-bold">
-                任务详情
-                {current ? (
-                  <span
-                    className={`ml-2.5 inline-flex items-center gap-1.5 rounded-full py-0.5 pr-2.5 pl-2 align-middle text-xs font-medium ${STATUS_BADGE_CLASS[current.status] ?? "bg-subtle text-ink-muted"}`}
-                  >
-                    <span aria-hidden className="size-1.5 rounded-full bg-current" />
-                    {taskStatusLabel(current.status)}
-                  </span>
-                ) : null}
-              </h3>
-              {current ? (
-                <div className="flex items-center gap-2">
-                  <span className="bg-subtle text-ink-muted text-2xs shrink-0 rounded-full px-2 py-0.5">
-                    {modeLabelOf(current.type)}
-                  </span>
-                  <span className="text-ink-strong min-w-0 truncate text-xs font-medium">
-                    {modelLabelOf(current)}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-2">
-              <Hint
-                label="在系统文件管理器中打开本次生成的目录（图片 / 视频 / 音频 / workflow.json / manifest.json 都在这里）"
-                wrap
-              >
-                <Button
-                  className="border-border text-ink-muted hover:border-border-strong hover:text-ink h-auto gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium"
-                  disabled={current === null || current.id === "" || actions.openFolderBusy}
-                  onClick={() => {
-                    if (current === null || current.id === "") {
-                      return;
-                    }
-                    void actions.openFolder(current.id);
-                  }}
-                  size="xs"
-                  variant="outline"
-                >
-                  <Folder data-icon="inline-start" size={12} />
-                  打开目录
-                </Button>
-              </Hint>
-              {firstImage !== undefined && firstImage.localPath !== "" && (
-                <div className="flex items-center gap-2">
-                  <Hint
-                    label="下载本次执行实际用到的工作流 JSON（含当时的节点与参数，工作流模板后续改动也不影响复现）"
-                    wrap
-                  >
-                    <Button
-                      className="border-border text-ink-muted hover:border-border-strong hover:text-ink h-auto rounded-lg px-2.5 py-1.5 text-xs font-medium"
-                      disabled={actions.downloading}
-                      onClick={() => {
-                        if (current === null || current.id === "") {
-                          return;
-                        }
-                        void actions.downloadWorkflow(current.id);
-                      }}
-                      size="xs"
-                      variant="outline"
-                    >
-                      下载工作流
-                    </Button>
-                  </Hint>
-                  <Hint label={sourceLabel}>
-                    <span className="bg-subtle text-ink-muted text-3xs hidden rounded px-1.5 py-0.5 sm:inline">
-                      {sourceLabel}
-                    </span>
-                  </Hint>
-                </div>
-              )}
-              <Button
-                aria-label="关闭"
-                className="text-ink-muted hover:text-ink-bright"
-                onClick={onClose}
-                size="icon-sm"
-                variant="ghost"
-              >
-                <X data-icon="inline-start" size={16} />
-              </Button>
-            </div>
-          </div>
+          <DetailHeader
+            actions={actions}
+            current={current}
+            firstImage={firstImage}
+            onClose={onClose}
+            sourceLabel={sourceLabel}
+          />
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
             {detailLoading ? (
               /* 骨架屏（ISSUE #4749）：与产物图网格同形的占位块。 */

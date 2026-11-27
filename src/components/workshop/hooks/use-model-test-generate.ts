@@ -12,6 +12,9 @@ import { useCallback, useRef } from "react";
 
 import { runAsyncAction } from "~/lib/async-action";
 import { debugBodyOf, type ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
+import type { RouterInputs, RouterOutputs } from "~/trpc/react";
+import type { ModelTestRunInput } from "../model-test-runs";
+import type { ModelTestResult } from "../model-test-result";
 import { createReentrancyLock, type ReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 import { createThrottleGate, type ThrottleGate } from "~/components/ui/use-throttled-progress";
 import {
@@ -33,12 +36,7 @@ import type {
   TestCandidate,
 } from "../model-test-config";
 
-/** 一次测试的结果（工坊同款输出：图片 URL / 视频 URL / 对话回复文本）。 */
-export type ModelTestResult =
-  | { kind: "image"; url: string }
-  | { kind: "video"; url: string }
-  | { kind: "chat"; text: string }
-  | null;
+export type { ModelTestResult };
 
 /** 一格（用途 + 模式 + 模型）的运行态（#4080 评论 12）：切走再切回各看各的，
  *  不同格可同时测试。 */
@@ -106,20 +104,20 @@ export type ModelTestGenerateArgs = {
   appendResponseRows: (key: string, rows: ReadonlyArray<ApiCallDebugRow>) => void;
   appendTaskLog: (key: string, entry: TaskLogEntry) => void;
   /** 请求体组装（唯一入口）：值由调用处显式给（生成可带表单值覆盖，ISSUE #4769）。 */
-  buildBodies: (values: ModelTestValues) => ReturnType<typeof buildRequestBodies>;
-  /** 对话测试（#4080）：llm.chatTest 的 mutation（结构化最小面）。 */
-  chatTestM: {
-    mutateAsync: (input: { local: boolean; name: string; prompt: string }) => Promise<{
-      durationMs: number;
-      endpoint: string;
-      model: string;
-      reply: string;
-    }>;
-  };
+  buildBodies: (
+    values: ModelTestValues,
+    referenceImages?: Array<string>,
+  ) => ReturnType<typeof buildRequestBodies>;
+  /** 对话测试：显式接收取消信号，取消会穿透 tRPC 到达上游请求。 */
+  chatTest: (
+    input: RouterInputs["llm"]["chatTest"],
+    signal: AbortSignal,
+  ) => Promise<RouterOutputs["llm"]["chatTest"]>;
   contract: Parameters<typeof contractTestRows>[0];
   inputRows: ReadonlyArray<ModelTestInputRow>;
   kind: ModelTestKind;
   mode: string;
+  onRunRecord: (run: ModelTestRunInput) => void;
   patchSession: (key: string, patch: Partial<ModelTestSession>) => void;
   referenceGroup: ReturnType<typeof useReferenceImageGroup>;
   selectedCandidate: TestCandidate | null;
@@ -133,15 +131,20 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
   /** `valuesOverride`（ISSUE #4769）：JSON 输入模式解析出的表单值 —— 生成读
    *  的是本次渲染的表单闭包，粘贴后同一次点击里直接生成会拿到旧值，所以
    *  覆盖值显式随调用给。 */
-  generate: (sessionKey: string, valuesOverride?: ModelTestValues) => Promise<void>;
+  generate: (
+    sessionKey: string,
+    valuesOverride?: ModelTestValues,
+    referenceImagesOverride?: Array<string>,
+  ) => Promise<void>;
 } {
   const {
     buildBodies,
-    chatTestM,
+    chatTest,
     contract,
     inputRows,
     kind,
     mode,
+    onRunRecord,
     referenceGroup,
     selectedCandidate,
     selectedModel,
@@ -179,10 +182,21 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
   }, []);
 
   const runGenerate = useCallback(
-    async (sessionKey: string, valuesOverride?: ModelTestValues) => {
+    async (
+      sessionKey: string,
+      valuesOverride?: ModelTestValues,
+      referenceImagesOverride?: Array<string>,
+    ) => {
       /* 表单值可被调用方覆盖（ISSUE #4769：JSON 输入模式解析出的值在同一次
        * 点击里直接进生成，绕开「先 setState 再读旧闭包」的时序坑）。 */
       const effective = valuesOverride ?? values;
+      const referenceImages =
+        referenceImagesOverride ??
+        (referenceGroup.images.length > 0
+          ? referenceGroup.images
+          : effective.image?.trim()
+            ? [effective.image.trim()]
+            : []);
       const prompt = effective.prompt?.trim() ?? "";
       if (prompt === "") {
         patchSession(sessionKey, { error: "请填写提示词" });
@@ -191,7 +205,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
       /* 必备口校验（ISSUE #3778）：契约标了必备、通道又承接得住的行，空着就
        * 拦下 —— 与「必备 / 可选」标识同一份读数，别让用户点生成才被上游打回。
        * 参考图行（#3949 需求 6/7）按数组判空。 */
-      const missing = missingRequiredLabels(inputRows, effective, referenceGroup.images.length);
+      const missing = missingRequiredLabels(inputRows, effective, referenceImages.length);
       if (missing.length > 0) {
         patchSession(sessionKey, { error: `请填写必备输入：${missing.join("、")}` });
         return;
@@ -207,6 +221,25 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
         workflowProgress: null,
         submissionRow: null,
       });
+      const startedAt = Date.now();
+      let runResult: ModelTestResult = null;
+      let endpoint: string | undefined;
+      const record = (status: ModelTestRunInput["status"], error: string | null) => {
+        onRunRecord({
+          durationMs: Date.now() - startedAt,
+          endpoint,
+          error,
+          kind,
+          mode,
+          model: selectedModel,
+          result: runResult,
+          referenceImages,
+          sessionKey,
+          startedAt,
+          status,
+          values: effective,
+        });
+      };
       const workflow = selectedCandidate?.workflow;
       /* 工作流候选（#4080 评论 4）：走工坊本地 ComfyUI 通道（封装 → 入队 →
        * SSE 观察），不走图片/视频的 API 中继。 */
@@ -214,7 +247,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
         const firstFrameRaw = effective["first-frame"]?.trim();
         const controller = new AbortController();
         setCancelController(sessionKey, controller);
-        await runAsyncAction(
+        const action = await runAsyncAction(
           async () => {
             try {
               const res = await runWorkflowModelTest({
@@ -249,17 +282,13 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
                 },
                 /* 参考图组优先；只填了单图行时并成一组的兜底（与 relay 组装
                  * 的 firstRef 优先级一致）。 */
-                referenceImages:
-                  referenceGroup.images.length > 0
-                    ? referenceGroup.images
-                    : effective.image?.trim()
-                      ? [effective.image.trim()]
-                      : [],
+                referenceImages,
                 signal: controller.signal,
                 values: effective,
                 workflow,
               });
-              patchSession(sessionKey, { result: { kind: res.kind, url: res.url } });
+              runResult = { kind: res.kind, url: res.url };
+              patchSession(sessionKey, { result: runResult });
               return { ok: true as const };
             } finally {
               setCancelController(sessionKey, null);
@@ -274,6 +303,10 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
             failureText: "生成失败",
           },
         );
+        record(
+          action.ok ? "succeeded" : /取消|abort/i.test(action.detail) ? "cancelled" : "failed",
+          action.ok ? null : action.detail,
+        );
         return;
       }
       /* 对话测试（#4080）：请求走 LLM 补全而不是图片/视频中继，端点在服务端
@@ -281,14 +314,20 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
       if (kind === "chat") {
         const controller = new AbortController();
         setCancelController(sessionKey, controller);
-        await runAsyncAction(
+        const action = await runAsyncAction(
           async () => {
             try {
-              const res = await chatTestM.mutateAsync({
-                name: selectedModel,
-                local: selectedLocal,
-                prompt,
-              });
+              const res = await chatTest(
+                {
+                  name: selectedModel,
+                  local: selectedLocal,
+                  prompt,
+                },
+                controller.signal,
+              );
+              if (controller.signal.aborted) {
+                throw new Error("已取消生成");
+              }
               appendResponseRows(sessionKey, [
                 {
                   body: debugBodyOf({ kind: "chat", model: res.model, prompt }),
@@ -300,8 +339,15 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
                   status: 200,
                 },
               ]);
-              patchSession(sessionKey, { result: { kind: "chat", text: res.reply } });
+              endpoint = res.endpoint;
+              runResult = { kind: "chat", text: res.reply };
+              patchSession(sessionKey, { result: runResult });
               return { ok: true as const };
+            } catch (error) {
+              if (controller.signal.aborted) {
+                throw new Error("已取消生成", { cause: error });
+              }
+              throw error;
             } finally {
               setCancelController(sessionKey, null);
             }
@@ -315,13 +361,17 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
             failureText: "生成失败",
           },
         );
+        record(
+          action.ok ? "succeeded" : /取消|abort/i.test(action.detail) ? "cancelled" : "failed",
+          action.ok ? null : action.detail,
+        );
         return;
       }
-      const { imageBody, videoBody } = buildBodies(values);
+      const { imageBody, videoBody } = buildBodies(effective, referenceImages);
       if (imageBody !== null) {
         const controller = new AbortController();
         setCancelController(sessionKey, controller);
-        await runAsyncAction(
+        const action = await runAsyncAction(
           async () => {
             try {
               const url = await apiGenerateImage(imageBody, {
@@ -330,7 +380,11 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
                 },
                 signal: controller.signal,
               });
-              patchSession(sessionKey, { result: { kind: "image", url } });
+              if (controller.signal.aborted) {
+                throw new Error("已取消生成");
+              }
+              runResult = { kind: "image", url };
+              patchSession(sessionKey, { result: runResult });
               return { ok: true as const };
             } finally {
               setCancelController(sessionKey, null);
@@ -345,12 +399,16 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
             failureText: "生成失败",
           },
         );
+        record(
+          action.ok ? "succeeded" : /取消|abort/i.test(action.detail) ? "cancelled" : "failed",
+          action.ok ? null : action.detail,
+        );
         return;
       }
       if (videoBody !== null) {
         const controller = new AbortController();
         setCancelController(sessionKey, controller);
-        await runAsyncAction(
+        const action = await runAsyncAction(
           async () => {
             try {
               const submitted = await apiSubmitVideo(videoBody, {
@@ -359,8 +417,12 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
                 },
                 signal: controller.signal,
               });
+              if (controller.signal.aborted) {
+                throw new Error("已取消生成");
+              }
               if (submitted.url !== undefined && submitted.url !== "") {
-                patchSession(sessionKey, { result: { kind: "video", url: submitted.url } });
+                runResult = { kind: "video", url: submitted.url };
+                patchSession(sessionKey, { result: runResult });
                 return { ok: true as const };
               }
               const taskId = submitted.remoteTaskId;
@@ -376,7 +438,11 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
                 signal: controller.signal,
                 taskId,
               });
-              patchSession(sessionKey, { result: finished });
+              if (controller.signal.aborted) {
+                throw new Error("已取消生成");
+              }
+              runResult = finished;
+              patchSession(sessionKey, { result: runResult });
               return { ok: true as const };
             } finally {
               setCancelController(sessionKey, null);
@@ -391,6 +457,10 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
             failureText: "生成失败",
           },
         );
+        record(
+          action.ok ? "succeeded" : /取消|abort/i.test(action.detail) ? "cancelled" : "failed",
+          action.ok ? null : action.detail,
+        );
         return;
       }
       patchSession(sessionKey, { error: "未知的生成用途" });
@@ -399,12 +469,13 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
       appendResponseRows,
       appendTaskLog,
       buildBodies,
-      chatTestM,
+      chatTest,
       contract,
       gateFor,
       inputRows,
       kind,
       mode,
+      onRunRecord,
       patchSession,
       referenceGroup.images,
       selectedCandidate,
@@ -419,7 +490,11 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
    * useState，同一事件循环里读不到刚写入的值，双击会跑两遍；不同格互不拦，
    * 可同时测试多个模型（#4080 评论 12）。忙碌位随格走（P65：复位在 finally）。 */
   const generate = useCallback(
-    async (sessionKey: string, valuesOverride?: ModelTestValues) => {
+    async (
+      sessionKey: string,
+      valuesOverride?: ModelTestValues,
+      referenceImagesOverride?: Array<string>,
+    ) => {
       if (selectedModel === "") {
         return;
       }
@@ -429,7 +504,7 @@ export function useModelTestGenerate(args: ModelTestGenerateArgs): {
       }
       try {
         patchSession(sessionKey, { generating: true, generatingSince: Date.now() });
-        await runGenerate(sessionKey, valuesOverride);
+        await runGenerate(sessionKey, valuesOverride, referenceImagesOverride);
       } finally {
         patchSession(sessionKey, { generating: false, generatingSince: null });
         lock.exit();

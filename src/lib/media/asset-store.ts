@@ -63,6 +63,32 @@ export async function copyIntoAssetStore(
   return artifactUrl(["assets", assetId, path.basename(dest)]);
 }
 
+/**
+ * 把远端生图返回的图片缓冲写进资产目录（调研页远端通道入库，ISSUE #5114）。
+ *
+ * 与 `copyIntoAssetStore` 落到**同一个** `generated/assets/<assetId>/` 目录、返回同一形状
+ * 的产物 URL；区别只是来源不是本机任务产物文件，而是已在服务端安全下载好的缓冲。
+ * 远端 URL 先经 `safeFetch` 的 SSRF 判据再走到这里，本函数只负责安全落盘。
+ */
+export async function writeBufferIntoAssetStore(
+  buffer: Buffer,
+  assetId: string,
+  extension: string,
+  root: string = assetsRoot(),
+): Promise<string> {
+  if (!/^[A-Za-z0-9_-]+$/.test(assetId)) {
+    throw new Error("资产标识不合法");
+  }
+  if (!/^[a-z0-9]+$/.test(extension)) {
+    throw new Error("图片扩展名不合法");
+  }
+  const dir = assetStoreDir(assetId, root);
+  await fs.mkdir(dir, { recursive: true });
+  const filename = `remote.${extension}`;
+  await fs.writeFile(path.join(dir, filename), buffer);
+  return artifactUrl(["assets", assetId, filename]);
+}
+
 /** 删除资产的文件目录（删除资产时调用；目录不存在按已清理处理）。 */
 export async function removeAssetStoreDir(
   assetId: string,

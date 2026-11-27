@@ -10,7 +10,20 @@ import { revealTaskFolder } from "~/lib/history-detail-actions";
 import { cancelAllTasks, cancelTask } from "~/lib/task-cancel-client";
 
 import type { QueueRow } from "../queue-monitor-config";
+import { refreshComfyQueue } from "~/lib/comfy/comfy-queue-store";
 import { useQueueMonitor } from "./use-queue-monitor";
+
+type TaskPage = {
+  hasMore: boolean;
+  nextScanCursor: number;
+  tasks: Array<QueueRow>;
+  total: number;
+};
+
+type InfiniteOptions = {
+  getNextPageParam: (page: TaskPage) => number | undefined;
+  refetchInterval?: number | false;
+};
 
 /** 队列端点的一帧观测。写成函数而不是共享对象：逐个用例要改它的一部分。 */
 function queueView(
@@ -31,6 +44,7 @@ function queueView(
     },
     queued: 2,
     elapsedMs: 30_000,
+    syncedAt: 1000,
     ...over,
   };
 }
@@ -45,6 +59,9 @@ function queuedRow(id: string, workflowName: string): QueueRow {
     status: "QUEUED",
     prompt: `提示词 ${id}`,
     createdAt: new Date("2026-01-01T00:00:00Z"),
+    claimedAt: null,
+    finishedAt: null,
+    queuePosition: null,
     cover: null,
     checkpoint: null,
     videoPath: null,
@@ -56,24 +73,77 @@ function queuedRow(id: string, workflowName: string): QueueRow {
 }
 
 const refetch = vi.fn();
+const fetchListFirstPage = vi.fn();
+const setListQueryData = vi.fn();
+const removeListQueries = vi.fn();
+const listQueryKeyMock = vi.fn();
+const summaryRefetch = vi.fn();
+const listFirstPageQuery = vi.fn();
+const fetchNextPage = vi.fn();
+const reorderMutate = vi.fn<(input: { id: string }) => Promise<unknown>>();
+const setPausedMutate = vi.fn<(input: { paused: boolean }) => Promise<unknown>>();
+const listInputMock = vi.hoisted(() => vi.fn());
+const infiniteOptionsMock = vi.hoisted(() => vi.fn<(options: InfiniteOptions) => void>());
+const summaryInputMock = vi.hoisted(() => vi.fn<(input: { todayStartedAt: string }) => void>());
 const toast = { info: vi.fn(), error: vi.fn() };
 const copyResult = vi.fn<(text: string) => Promise<boolean>>();
 let listTasks: Array<QueueRow> = [];
+let pages: Array<TaskPage> = [];
+let isFetchingNextPage = false;
+let listUpdatedAt = 0;
+let summaryUpdatedAt = 0;
+let listRefetchError = false;
+let summaryRefetchError = false;
+let summary:
+  | { failedToday: number; queued: number; running: number; succeededToday: number }
+  | undefined;
 let queueResult: ComfyQueueModule.ComfyQueueView = queueView();
 
 /* 新集成下 hub 交出的是「options 工厂」，本文件的题目是位次/耗时/剩余时间这些
  * 算法，不是 TanStack —— 所以 `useTRPC` 只给一个能对上 queryKey 的工厂，
  * 数据态由下面替掉的 `useQuery` 直接给。 */
 vi.mock("~/trpc/react", () => ({
+  useTRPCClient: () => ({ task: { list: { query: listFirstPageQuery } } }),
   useTRPC: () => ({
     task: {
-      list: { queryOptions: () => ({ queryKey: ["task", "list"] }) },
+      list: {
+        queryKey: (input?: { status?: string; take: number }) => {
+          listQueryKeyMock(input);
+          return input === undefined
+            ? [["task", "list"], { type: "query" }]
+            : [["task", "list"], { input, type: "query" }];
+        },
+        infiniteQueryFilter: () => ({
+          queryKey: [["task", "list"], { type: "infinite" }],
+        }),
+        infiniteQueryKey: (input: { status?: string; take: number }) => {
+          listQueryKeyMock(input);
+          return [["task", "list"], { input, type: "infinite" }];
+        },
+        queryOptions: (input: { status?: string; take: number }) => {
+          listInputMock(input);
+          return { queryKey: ["task", "list"] };
+        },
+        infiniteQueryOptions: (
+          input: { status?: string; take: number },
+          options: InfiniteOptions,
+        ) => {
+          listInputMock(input);
+          infiniteOptionsMock(options);
+          return { queryKey: ["task", "list"], ...options };
+        },
+      },
+      summary: {
+        queryOptions: (input: { todayStartedAt: string }) => {
+          summaryInputMock(input);
+          return { queryKey: ["task", "summary"] };
+        },
+      },
+      reorder: { mutationOptions: () => ({ mutationKey: ["task", "reorder"] }) },
       /* 展开看参数（#5019）会挂 detail 查询：这里给一个能对上 queryKey 的
        * 工厂即可，数据态由上面替掉的 useQuery 统一给。 */
       detail: { queryOptions: () => ({ queryKey: ["task", "detail"] }) },
     },
-    /* 生图暂停（ISSUE #5055）：同样只给能对上 queryKey / mutationKey 的工厂，
-     * 数据态由替掉的 useQuery / useMutation 统一给。 */
     generationControl: {
       pauseState: { queryOptions: () => ({ queryKey: ["generationControl", "pauseState"] }) },
       setPaused: { mutationOptions: () => ({ mutationKey: ["generationControl", "setPaused"] }) },
@@ -85,15 +155,51 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof TanStackQuery>();
   return {
     ...actual,
-    useQuery: () => ({
-      data: { tasks: listTasks },
-      isPending: false,
-      isError: false,
-      refetch,
+    useQueryClient: () => ({
+      fetchQuery: fetchListFirstPage,
+      removeQueries: removeListQueries,
+      setQueryData: setListQueryData,
     }),
-    /* 暂停切换的 mutation 不在本文件题目里（读写逻辑由路由 / 仓储用例覆盖）：
-     * 给一个惰性桩，让挂载期不要求 QueryClient 上下文。 */
-    useMutation: () => ({ mutateAsync: vi.fn(() => Promise.resolve(undefined)), isPending: false }),
+    useQuery: (options: { queryKey: Array<string> }) =>
+      options.queryKey[1] === "summary"
+        ? {
+            data: summary,
+            isPending: false,
+            isError: false,
+            isFetching: false,
+            dataUpdatedAt: summaryUpdatedAt,
+            refetch: summaryRefetch,
+          }
+        : options.queryKey[0] === "generationControl"
+          ? {
+              data: { paused: false },
+              isPending: false,
+              isError: false,
+              isFetching: false,
+              refetch,
+            }
+          : { data: undefined, isPending: false, isError: false, isFetching: false, refetch },
+    useMutation: (options: { mutationKey?: Array<string> }) => ({
+      mutateAsync: options?.mutationKey?.includes("reorder")
+        ? reorderMutate
+        : options?.mutationKey?.includes("setPaused")
+          ? setPausedMutate
+          : vi.fn(() => Promise.resolve(undefined)),
+      isPending: false,
+    }),
+    useInfiniteQuery: (options: InfiniteOptions) => {
+      infiniteOptionsMock(options);
+      return {
+        data: { pages },
+        isPending: false,
+        isError: false,
+        isFetching: false,
+        isFetchingNextPage,
+        dataUpdatedAt: listUpdatedAt,
+        refetch,
+        fetchNextPage,
+      };
+    },
   };
 });
 
@@ -103,6 +209,8 @@ vi.mock("~/components/studio/hooks/use-comfy-queue", async (importOriginal) => {
   const actual = await importOriginal<typeof ComfyQueueModule>();
   return { ...actual, useComfyQueue: () => queueResult };
 });
+
+vi.mock("~/lib/comfy/comfy-queue-store", () => ({ refreshComfyQueue: vi.fn() }));
 
 vi.mock("~/components/studio/ToastProvider", () => ({
   useToast: () => toast,
@@ -116,12 +224,34 @@ vi.mock("~/components/ui/use-copy-feedback", () => ({
 const mockedCancel = vi.mocked(cancelTask);
 const mockedCancelAll = vi.mocked(cancelAllTasks);
 const mockedReveal = vi.mocked(revealTaskFolder);
+const mockedRefreshComfyQueue = vi.mocked(refreshComfyQueue);
 
 beforeEach(() => {
   vi.clearAllMocks();
   /* 服务端回的是 createdAt 倒序：后提交的在前面。 */
-  listTasks = [queuedRow("late", "后提交的工作流"), queuedRow("early", "先提交的工作流")];
+  listTasks = [
+    { ...queuedRow("late", "后提交的工作流"), queuePosition: 2 },
+    { ...queuedRow("early", "先提交的工作流"), queuePosition: 1 },
+  ];
+  pages = [{ tasks: listTasks, hasMore: false, nextScanCursor: 2, total: 2 }];
+  isFetchingNextPage = false;
+  listUpdatedAt = 0;
+  summaryUpdatedAt = 0;
+  listRefetchError = false;
+  summaryRefetchError = false;
+  summary = undefined;
   queueResult = queueView();
+  refetch.mockImplementation(() => Promise.resolve({ isError: listRefetchError }));
+  summaryRefetch.mockImplementation(() => Promise.resolve({ isError: summaryRefetchError }));
+  fetchListFirstPage.mockImplementation(
+    ({ queryFn }: { queryFn: (context: { signal: AbortSignal }) => Promise<TaskPage> }) =>
+      queryFn({ signal: new AbortController().signal }),
+  );
+  removeListQueries.mockResolvedValue(undefined);
+  listFirstPageQuery.mockImplementation(() =>
+    listRefetchError ? Promise.reject(new Error("list unavailable")) : Promise.resolve(pages[0]),
+  );
+  mockedRefreshComfyQueue.mockResolvedValue(undefined);
 });
 
 afterEach(cleanup);
@@ -201,7 +331,9 @@ describe("useQueueMonitor", () => {
       await result.current.cancel("early", "先提交的工作流");
     });
     expect(mockedCancel).toHaveBeenCalledWith("early");
-    expect(refetch).toHaveBeenCalled();
+    expect(fetchListFirstPage).toHaveBeenCalled();
+    expect(summaryRefetch).toHaveBeenCalled();
+    expect(mockedRefreshComfyQueue).toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
   });
 
@@ -211,7 +343,9 @@ describe("useQueueMonitor", () => {
     await act(async () => {
       await result.current.cancel("early", "先提交的工作流");
     });
-    expect(refetch).toHaveBeenCalled();
+    expect(fetchListFirstPage).toHaveBeenCalled();
+    expect(summaryRefetch).toHaveBeenCalled();
+    expect(mockedRefreshComfyQueue).toHaveBeenCalled();
     /* 报的是原因而不是「哪一条」：`runAsyncAction` 里抛出的 message 优先于
      * failureText，后者只在没有原因可报时兜底。用户要靠「哪一条」定位，看的是
      * 这一行仍在队列里、忙标记已复位 —— 不是 toast 文案。 */
@@ -225,43 +359,6 @@ describe("useQueueMonitor", () => {
       await result.current.cancel("early", "先提交的工作流");
     });
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("先提交的工作流"));
-  });
-
-  it("取消全部：确认后打到一个出口、关弹窗、刷新，并如实报出取消条数", async () => {
-    mockedCancelAll.mockResolvedValue({ cancelled: 5, failed: 0, total: 5 });
-    const { result } = renderHook(() => useQueueMonitor());
-    act(() => {
-      result.current.requestCancelAll();
-    });
-    expect(result.current.cancelAllOpen).toBe(true);
-
-    await act(async () => {
-      await result.current.confirmCancelAll();
-    });
-    expect(mockedCancelAll).toHaveBeenCalledTimes(1);
-    expect(mockedCancel).not.toHaveBeenCalled();
-    expect(result.current.cancelAllOpen).toBe(false);
-    expect(refetch).toHaveBeenCalled();
-    expect(toast.info).toHaveBeenCalledWith("已取消 5 条任务");
-  });
-
-  it("取消全部部分失败：条数照实报出来，不把没取消掉的藏起来", async () => {
-    mockedCancelAll.mockResolvedValue({ cancelled: 3, failed: 2, total: 5 });
-    const { result } = renderHook(() => useQueueMonitor());
-    await act(async () => {
-      await result.current.confirmCancelAll();
-    });
-    expect(toast.info).toHaveBeenCalledWith(expect.stringContaining("3 条，2 条未能取消"));
-  });
-
-  it("取消全部失败也刷新并把原因给用户", async () => {
-    mockedCancelAll.mockRejectedValue(new Error("后端无响应"));
-    const { result } = renderHook(() => useQueueMonitor());
-    await act(async () => {
-      await result.current.confirmCancelAll();
-    });
-    expect(refetch).toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith("后端无响应");
   });
 
   it("复制去重投：浏览器拒绝访问剪贴板时报错，而不是当成成功", async () => {
@@ -325,6 +422,7 @@ describe("useQueueMonitor", () => {
       queuedRow("early", "先提交的工作流"),
       { ...queuedRow("run-1", "在跑的工作流"), status: "RUNNING" },
     ];
+    pages = [{ tasks: listTasks, hasMore: false, nextScanCursor: 3, total: 3 }];
     queueResult = queueView({
       online: false,
       comfy: { running: 0, pending: 0 },
@@ -336,6 +434,269 @@ describe("useQueueMonitor", () => {
     /* 离线兜底卡要的数据：库里的 RUNNING 行原样上抛。 */
     expect(result.current.runningRows.map((r) => r.id)).toEqual(["run-1"]);
     expect(result.current.running).toBeNull();
+  });
+
+  it("多页按 id 合并；共享行取后一页快照", () => {
+    const latest = { ...queuedRow("early", "先提交的工作流（已更新）"), queuePosition: 1 };
+    pages = [
+      { tasks: listTasks, hasMore: true, nextScanCursor: 60, total: 61 },
+      { tasks: [latest], hasMore: false, nextScanCursor: 61, total: 61 },
+    ];
+    const { result } = renderHook(() => useQueueMonitor());
+    expect(result.current.loadedCount).toBe(2);
+    expect(result.current.total).toBe(61);
+    expect(result.current.hasMore).toBe(false);
+    expect(result.current.queued[0]?.row.workflowName).toBe("先提交的工作流（已更新）");
+  });
+
+  it("下一页 cursor 取服务端扫描前沿；没有下一页就不推进", () => {
+    pages = [{ tasks: listTasks, hasMore: true, nextScanCursor: 60, total: 61 }];
+    const { result } = renderHook(() => useQueueMonitor());
+    const options = infiniteOptionsMock.mock.lastCall?.[0];
+    expect(options?.getNextPageParam(pages[0]!)).toBe(60);
+    expect(options?.getNextPageParam({ ...pages[0]!, hasMore: false })).toBeUndefined();
+    act(() => {
+      result.current.loadMore();
+    });
+    expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("offset 分页不自动重取全部页，手动刷新才从第一页重建", async () => {
+    const { result } = renderHook(() => useQueueMonitor());
+    const options = infiniteOptionsMock.mock.lastCall?.[0];
+    expect(options?.refetchInterval).toBeUndefined();
+    expect(fetchListFirstPage).not.toHaveBeenCalled();
+
+    await act(async () => {
+      result.current.refresh();
+      await Promise.resolve();
+    });
+
+    expect(fetchListFirstPage).toHaveBeenCalledWith({
+      queryFn: expect.any(Function) as unknown,
+      queryKey: [
+        ["task", "list"],
+        { input: { take: 60, status: undefined }, type: "infinite" },
+        "manual-refresh",
+      ],
+    });
+    expect(setListQueryData).toHaveBeenCalledWith(
+      [["task", "list"], { input: { take: 60, status: undefined }, type: "infinite" }],
+      { pageParams: [0], pages: [pages[0]] },
+    );
+    expect(listQueryKeyMock).toHaveBeenLastCalledWith({ take: 60, status: undefined });
+  });
+
+  it("正在拉下一页时 loadMore 不重复发起", () => {
+    pages = [{ tasks: listTasks, hasMore: true, nextScanCursor: 60, total: 61 }];
+    isFetchingNextPage = true;
+    const { result } = renderHook(() => useQueueMonitor());
+    act(() => {
+      result.current.loadMore();
+    });
+    expect(fetchNextPage).not.toHaveBeenCalled();
+    expect(result.current.loadingMore).toBe(true);
+  });
+
+  it("状态筛选把同一份分页查询切成服务端口径", () => {
+    const { result } = renderHook(() => useQueueMonitor());
+    expect(listInputMock).toHaveBeenLastCalledWith({ take: 60, status: undefined });
+    act(() => {
+      result.current.setStatusFilter("active");
+    });
+    expect(listInputMock).toHaveBeenLastCalledWith({ take: 60, status: "QUEUED,RUNNING" });
+    act(() => {
+      result.current.setStatusFilter("terminal");
+    });
+    expect(listInputMock).toHaveBeenLastCalledWith({
+      take: 60,
+      status: "SUCCEEDED,FAILED,CANCELLED",
+    });
+  });
+
+  it("搜索只过滤已加载行，并给出匹配数", () => {
+    pages = [{ tasks: listTasks, hasMore: true, nextScanCursor: 60, total: 100 }];
+    const { result } = renderHook(() => useQueueMonitor());
+    act(() => {
+      result.current.setSearch("先提交");
+    });
+    expect(result.current.matchedCount).toBe(1);
+    expect(result.current.queued.map((entry) => entry.row.id)).toEqual(["early"]);
+    act(() => {
+      result.current.setSearch("更早但尚未加载");
+    });
+    expect(result.current.matchedCount).toBe(0);
+  });
+
+  it("顶部统计用全局 summary；午夜是本地时区的当天零点", () => {
+    summary = { failedToday: 8, queued: 9, running: 10, succeededToday: 11 };
+    const { result } = renderHook(() => useQueueMonitor());
+    expect(result.current.stats).toEqual(summary);
+    const input = summaryInputMock.mock.lastCall?.[0];
+    expect(input).toBeDefined();
+    if (input === undefined) {
+      throw new Error("summary 查询未收到本地零点");
+    }
+    const midnight = new Date(input.todayStartedAt);
+    expect(midnight.getHours()).toBe(0);
+    expect(midnight.getMinutes()).toBe(0);
+    expect(midnight.getSeconds()).toBe(0);
+    expect(midnight.getMilliseconds()).toBe(0);
+  });
+
+  it("手动刷新同时刷新任务、全局统计与 ComfyUI 真值", async () => {
+    const { result } = renderHook(() => useQueueMonitor());
+    act(() => {
+      result.current.refresh();
+    });
+    expect(fetchListFirstPage).toHaveBeenCalledTimes(1);
+    await expect.poll(() => setListQueryData).toHaveBeenCalledTimes(1);
+    expect(removeListQueries).toHaveBeenCalledTimes(1);
+    expect(summaryRefetch).toHaveBeenCalledTimes(1);
+    expect(mockedRefreshComfyQueue).toHaveBeenCalledTimes(1);
+  });
+
+  it("第一页刷新失败时不覆盖正式分页缓存并清理临时查询", async () => {
+    listRefetchError = true;
+    const { result } = renderHook(() => useQueueMonitor());
+    act(() => {
+      result.current.refresh(true);
+    });
+    await expect.poll(() => result.current.refreshing).toBe(false);
+
+    expect(setListQueryData).not.toHaveBeenCalled();
+    expect(removeListQueries).toHaveBeenCalledWith({
+      queryKey: [
+        ["task", "list"],
+        { input: { take: 60, status: undefined }, type: "infinite" },
+        "manual-refresh",
+      ],
+    });
+    expect(result.current.refreshError).toContain("未完整同步");
+  });
+
+  it("ComfyUI 真值回包前保持刷新态，回包后解除", async () => {
+    let finish: (() => void) | undefined;
+    mockedRefreshComfyQueue.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useQueueMonitor());
+    act(() => {
+      result.current.refresh();
+    });
+    expect(result.current.refreshing).toBe(true);
+    await act(async () => {
+      finish?.();
+      await Promise.resolve();
+    });
+    expect(result.current.refreshing).toBe(false);
+  });
+
+  it("最后同步时间取任务、统计与 ComfyUI 三者最近的成功读数", () => {
+    listUpdatedAt = 2500;
+    summaryUpdatedAt = 3000;
+    const { result, rerender } = renderHook(() => useQueueMonitor());
+    expect(result.current.lastSyncedAt).toBe(3000);
+    queueResult = queueView({ syncedAt: 4000 });
+    rerender();
+    expect(result.current.lastSyncedAt).toBe(4000);
+  });
+
+  it("手动刷新成功给出反馈并清除旧失败", async () => {
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      result.current.refresh(true);
+      await Promise.resolve();
+    });
+    expect(toast.info).toHaveBeenCalledWith("队列已同步");
+    expect(result.current.refreshError).toBeNull();
+    expect(result.current.refreshing).toBe(false);
+  });
+
+  it("ComfyUI 刷新失败保留旧快照并给出明确失败出口", async () => {
+    mockedRefreshComfyQueue.mockRejectedValueOnce(new Error("network down"));
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      result.current.refresh(true);
+      await Promise.resolve();
+    });
+    expect(result.current.refreshError).toContain("未完整同步");
+    expect(toast.error).toHaveBeenCalledWith(result.current.refreshError);
+    expect(result.current.refreshing).toBe(false);
+  });
+
+  it("全局统计刷新失败也不能报成完整同步", async () => {
+    summaryRefetchError = true;
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      result.current.refresh(true);
+      await Promise.resolve();
+    });
+    expect(result.current.refreshError).toContain("未完整同步");
+    expect(toast.info).not.toHaveBeenCalledWith("队列已同步");
+  });
+
+  it("提前：打到 task.reorder，按服务端信封报成功并三源刷新", async () => {
+    reorderMutate.mockResolvedValue({ ok: true, detail: "已提前到队首，下一轮就轮到它" });
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.moveUp(queuedRow("late", "后提交的工作流"));
+    });
+    expect(reorderMutate).toHaveBeenCalledWith({ id: "late" });
+    expect(fetchListFirstPage).toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalledWith("已提前到队首，下一轮就轮到它");
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("提前：行已被领走时服务端回 ok:false，原因照实报、列表也刷新", async () => {
+    reorderMutate.mockResolvedValue({ ok: false, detail: "这条已开跑或已结束，无法调整顺序" });
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.moveUp(queuedRow("late", "后提交的工作流"));
+    });
+    expect(fetchListFirstPage).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("这条已开跑或已结束，无法调整顺序");
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it("取消全部：确认后打到一个出口、关弹窗、刷新，并如实报出取消条数", async () => {
+    mockedCancelAll.mockResolvedValue({ cancelled: 5, failed: 0, total: 5 });
+    const { result } = renderHook(() => useQueueMonitor());
+    act(() => {
+      result.current.requestCancelAll();
+    });
+    expect(result.current.cancelAllOpen).toBe(true);
+
+    await act(async () => {
+      await result.current.confirmCancelAll();
+    });
+    expect(mockedCancelAll).toHaveBeenCalledTimes(1);
+    expect(mockedCancel).not.toHaveBeenCalled();
+    expect(result.current.cancelAllOpen).toBe(false);
+    expect(fetchListFirstPage).toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalledWith("已取消 5 条任务");
+  });
+
+  it("取消全部部分失败：条数照实报出来，不把没取消掉的藏起来", async () => {
+    mockedCancelAll.mockResolvedValue({ cancelled: 3, failed: 2, total: 5 });
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.confirmCancelAll();
+    });
+    expect(toast.info).toHaveBeenCalledWith(expect.stringContaining("3 条，2 条未能取消"));
+  });
+
+  it("取消全部失败也刷新并把原因给用户", async () => {
+    mockedCancelAll.mockRejectedValue(new Error("后端无响应"));
+    const { result } = renderHook(() => useQueueMonitor());
+    await act(async () => {
+      await result.current.confirmCancelAll();
+    });
+    expect(fetchListFirstPage).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("后端无响应");
   });
 
   it("openLog / closeLog：目标行是快照，closeLog 清空", () => {

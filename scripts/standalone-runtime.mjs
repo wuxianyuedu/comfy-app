@@ -33,7 +33,7 @@ import { spawnSync } from "node:child_process";
 import { assertAbsoluteRoot, resolveSpawnTarget, spawnInGroup } from "./launcher-core/shell.mjs";
 import { pruneTimestampedLogs } from "./launcher-core/worktree.mjs";
 import { runStamp } from "./launcher-core/log.mjs";
-import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
+import { planExecutorHostSpawn } from "./launcher-core/executor-host-spawn.mjs";
 import {
   buildStandaloneRuntimeEnv,
   ensureStandaloneSchema,
@@ -130,13 +130,14 @@ function reapTree(pid) {
  *  多一个来源就是多一处会与人对不上的判决，而「Next 以为 host、host 跑成骨架」这类
  *  错配历史上已经吃过（executor-mode.mjs 模块头记着）。 */
 function spawnExecutorHost(childEnv, stamp, dataDir) {
-  const { mode, unknown } = resolveExecutorMode({ procEnv: process.env });
+  /* 与 dev 链同一份判决（ISSUE #5207）：UI-only 检出设了 COMFYAPP_SKIP_EXECUTOR_HOST=1
+   * 时任务仍写 host 归属，但本进程不拉宿主——否则多个主控会互相误杀孤儿。 */
+  const { mode, unknown, shouldSpawn } = planExecutorHostSpawn({ env: process.env });
   if (unknown !== null) {
     line(`executor mode=inline unknown=${JSON.stringify(unknown)}（只认 inline|host）`);
-    return null;
   }
-  line(`executor mode=${mode}`);
-  if (mode !== "host") {
+  line(`executor mode=${mode}${shouldSpawn ? "" : " (skip host spawn)"}`);
+  if (!shouldSpawn) {
     return null;
   }
   if (!existsSync(HOST_ENTRY)) {

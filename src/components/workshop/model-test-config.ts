@@ -390,6 +390,22 @@ export function candidateLabel(candidate: TestCandidate): string {
   return candidate.workflow.encapsulationReady ? base : `${base}（未封装）`;
 }
 
+/** 下拉选项的显示名索引：同名模型用工作流名消歧。 */
+export function buildCandidateLabels(
+  candidates: ReadonlyArray<TestCandidate>,
+): Record<string, string> {
+  const labels: Record<string, string> = {};
+  const seen = new Map<string, number>();
+  for (const candidate of candidates) {
+    const base = candidateLabel(candidate);
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    labels[candidateValue(candidate)] =
+      count === 0 ? base : `${base} · ${candidate.workflow?.name ?? candidate.name}`;
+  }
+  return labels;
+}
+
 /** 工作流是否支持某个生成模式：模式码是工坊与库之间唯一的生成模式判据
  *  （workflow-library-flow §7 红线）—— 只认 modes / taskType 声明，不从内容
  *  类别反推。modes 缺失的老条目退 taskType。 */

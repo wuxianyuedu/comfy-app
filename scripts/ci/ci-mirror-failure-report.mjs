@@ -75,11 +75,17 @@ export function isEgressFailure(text) {
  * 但**重试对它有意义**：推的是 IID 专属 ref 且带 `--force`，重推一次是幂等的，
  * 换一次请求就可能成。于是单列一族，只在 {@link shouldRetryGitFailure} 与 egress 合并。
  *
+ * git-lfs 是 Go 写的，batch 回话走的是 Go 的 `Server error &{...} from HTTP 5xx` 形状
+ * （现场 PR #5065：`batch response: Fatal error: Server error &{...}s(MISSING) from HTTP 502`）：
+ * 既不是 `Internal Server Error`，也没有 `remote: HTTP 5xx` 前缀，旧正则一条都不命中 ——
+ * 上游 502 因此被念成「类别=其他 / 重试 0 次」、一跳交账、不派发。按现场原话补这一形，
+ * 只认 5xx：认证（401/403）、配额（402）、仓库不存在（404）仍是 HTTP 应答，不在这里放宽。
+ *
  * @param {string} text git 那一跳的 stdout + stderr（未脱敏）
  * @returns {boolean} true ⇒ 远端瞬时错误，值得再试一次
  */
 export function isTransientRemoteFailure(text) {
-  return /internal server error|service unavailable|bad gateway|gateway time-?out|remote:\s*HTTP\s*5\d\d\b/i.test(
+  return /internal server error|service unavailable|bad gateway|gateway time-?out|remote:\s*HTTP\s*5\d\d\b|server error[^\n]*?from\s+HTTP\s*5\d\d\b/i.test(
     text,
   );
 }

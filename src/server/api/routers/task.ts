@@ -6,7 +6,7 @@ import { taskRepository, workflowModelTagRepository } from "~/lib/core/repositor
 import { logger } from "~/lib/core/logger";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { asRecord } from "~/lib/is-record";
-import { taskOutputDir } from "~/lib/media/output-paths";
+import { taskDirFromLocalPath } from "~/lib/media/output-paths";
 import { cancelTask as cancelExecutorTask } from "~/lib/comfyui/enqueue";
 import { isVideo, kindOf } from "~/lib/media/media-kind";
 
@@ -44,6 +44,12 @@ function inferMediaType(
 }
 
 export const taskRouter = createTRPCRouter({
+  summary: authedProcedure
+    .input(z.object({ todayStartedAt: z.string().datetime() }))
+    .query(async ({ ctx, input }) =>
+      taskRepository.summaryByUser(ctx.user.id, new Date(input.todayStartedAt)),
+    ),
+
   /* GET /api/tasks —— 读：list tasks */
   list: authedProcedure
     .input(
@@ -57,6 +63,9 @@ export const taskRouter = createTRPCRouter({
           projectId: z.string().optional(),
           media: z.enum(["image", "video", "audio"]).optional(),
           status: z.string().optional(),
+          /** 计数口径（#5076）：与行过滤解耦。历史页按状态筛选时行只取该状态，
+           *  角标仍需各档全量 —— 传终态全集；不传则与 `status` 同口径（既有调用方不变）。 */
+          countStatus: z.string().optional(),
         })
         .default({ take: 60, cursor: 0 }),
     )
@@ -69,6 +78,18 @@ export const taskRouter = createTRPCRouter({
               .filter(Boolean)
           : undefined;
 
+      const countStatusList =
+        input.countStatus !== undefined && input.countStatus !== ""
+          ? input.countStatus
+              .split(",")
+              .map((status) => upperToken(status))
+              .filter(Boolean)
+          : statusList;
+
+      const needsQueuePositions = statusList === undefined || statusList.includes("QUEUED");
+      const queuedPositions = needsQueuePositions
+        ? await taskRepository.queuedPositionsByUser(ctx.user.id)
+        : new Map<string, number>();
       const PAGE = input.take;
       /* media 过滤的判据（`inferMediaType`）依赖首图扩展名等应用层解析，
        * 纯 SQL 复刻不了，内存过滤保留；但把原先「固定 ×4（最多 400 行，
@@ -116,6 +137,12 @@ export const taskRouter = createTRPCRouter({
             status: task.status,
             prompt: task.prompt,
             createdAt: task.createdAt,
+            /* 最近活动时刻（#5076）：终态任务的 finishedAt 才是「刚跑完」的时间，
+             * 只有提交时刻会停在几小时前。claimedAt 供老行 / 中断行回落。 */
+            finishedAt: task.finishedAt ?? null,
+            claimedAt: task.claimedAt ?? null,
+            /* 完整队列位次（#5045）：来自全表 QUEUED 排序，不随列表分页或筛选重编号。 */
+            queuePosition: task.status === "QUEUED" ? (queuedPositions.get(task.id) ?? null) : null,
             cover,
             checkpoint,
             mediaType: inferMediaType(cover, coverMediaType, task.type),
@@ -134,11 +161,18 @@ export const taskRouter = createTRPCRouter({
        * 计数）：与列表同一套过滤（状态 / 项目），只数行数不拉行。media 过滤
        * 是内存判据，不进这个 SQL 计数——带 media 筛选时前端的总数显示退回
        * 「已加载」口径。 */
-      const countFilter = { projectId: input.projectId, statusList };
-      const [total, statusCounts] = await Promise.all([
-        taskRepository.countByUser(ctx.user.id, countFilter),
-        taskRepository.countByStatusByUser(ctx.user.id, countFilter),
-      ]);
+      const countFilter = { projectId: input.projectId, statusList: countStatusList };
+      /* 今日零点按本机时区算，与队列页卡片此前用 `createdAt.toDateString()` 的
+       * 「今天」同一口径。按状态分组的服务端计数不受 take 截断影响。 */
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      /* 三次 COUNT 合成一次 GROUP BY（#5124）：total 与按状态 / 今日计数
+       * 同一套 WHERE，此前三条查询重复扫表。 */
+      const { total, statusCounts, todayCounts } = await taskRepository.countStatusesWithToday(
+        ctx.user.id,
+        countFilter,
+        todayStart,
+      );
       if (!input.media) {
         /* 多取一行判 hasMore（#4594）：请求 PAGE+1 行，返回行数超过 PAGE = 还有下一页。
          * 此前 scanOnce 只取 PAGE 行，`rows.length > PAGE` 恒假 ⇒ hasMore 恒 false，
@@ -154,6 +188,7 @@ export const taskRouter = createTRPCRouter({
           nextScanCursor: input.cursor + Math.min(rows.length, PAGE),
           total,
           statusCounts,
+          todayCounts,
         };
       }
 
@@ -190,6 +225,7 @@ export const taskRouter = createTRPCRouter({
         nextScanCursor: input.cursor + scanned,
         total,
         statusCounts,
+        todayCounts,
       };
     }),
 
@@ -257,6 +293,26 @@ export const taskRouter = createTRPCRouter({
     return { cancelled, failed, total: ids.length };
   }),
 
+  /**
+   * 把一条排队任务提前到队首：只认归属用户 + QUEUED，不叠 owner（host 片的行
+   * 也要能排）。单条条件 UPDATE 与领取语句在 SQLite 上原子互斥，行若在请求
+   * 期间已被领走则影响 0 行 —— 如实回 ok:false + 人话原因，不假装调整成功。
+   * 运行中 / 终态一律不动。
+   */
+  reorder: authedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const outcome = await taskRepository.reorderQueuedToFrontForUser(ctx.user.id, input.id);
+    if (outcome === "moved") {
+      return { ok: true, detail: "已提前到队首，下一轮就轮到它" };
+    }
+    if (outcome === "already-first") {
+      return { ok: true, detail: "这条已经在队首了" };
+    }
+    logger.warn(
+      `[task.reorder] 未能调整顺序（已开跑 / 不属于当前用户 / 不存在）：taskId=${input.id}`,
+    );
+    return { ok: false, detail: "这条已开跑或已结束，无法调整顺序" };
+  }),
+
   /** 打开产物目录：返回 comfyapp:// 深链（协议未注册时的引导见 openTaskFolder）。 */
   openFolder: authedProcedure
     .input(z.object({ id: z.string() }))
@@ -267,11 +323,10 @@ export const taskRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
       const fsPromises = await import("node:fs/promises");
-      /* 目录由 `taskOutputDir()` 一处算：形状会让它落到产物根之外（例如客户端
-       * 生成的 projectId 写成 `../../x`）时返回 null → 这里按越界处置。
-       * 旧写法在本处内联拼路径 + 内联白名单，与 `delete` 那份已经分叉，见
-       * `~/lib/media/output-paths.ts` 的模块注释。 */
-      const dir = taskOutputDir(input.id, task.projectId);
+      /* 目录从库里这条任务的 `localPath` 反推（`taskDirFromLocalPath`）：它正是
+       * 写侧当时落盘的形状，三级分类或迁移前的旧平铺都认得，不必在打开侧再
+       * 拼一遍布局。解析不出 / 越界返回 null → 这里按越界处置。 */
+      const dir = taskDirFromLocalPath(task.images[0]?.localPath);
       if (dir === null) {
         logger.warn(
           `[task.openFolder] 产物目录越界，已拒绝：taskId=${input.id} projectId=${task.projectId}`,
@@ -299,12 +354,10 @@ export const taskRouter = createTRPCRouter({
 
   /* GET /api/tasks/[id]/workflow —— 读：returns the workflow snapshot */
   workflow: authedProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    const owner = await taskRepository.findByIdWithImages(input.id);
-    if (owner?.userId !== ctx.user.id) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
-    }
+    /* 归属与快照同一条窄投影查询取回：此前先 `findByIdWithImages` 判归属
+     * （把 MB 级重列全反序列化一遍），再 `findSnapshotById` 读同一列两次。 */
     const task = await taskRepository.findSnapshotById(input.id);
-    if (!task) {
+    if (!task || task.userId !== ctx.user.id) {
       throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
     }
     /* 快照列是外来 JSON：只判「是对象」这一层，字符串字段带 typeof 收口
@@ -326,11 +379,11 @@ export const taskRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
       }
       const fsPromises = await import("node:fs/promises");
-      /* 产物目录整体删除，目录与落盘侧共用 `taskOutputDir()`。旧写法两处拼错路径且都被
-       * `.catch(() => undefined)` 吞掉（磁盘在涨、日志空白）：目录只拼 `public/generated/<taskId>`
-       * 漏掉 `projects/<projectId>/<taskId>`；按 `localPath` 逐张 unlink 又把 `/api/generated`
-       * 解析成 `public/api/generated` ⇒ ENOENT。越界时只删库行并记原因，不把根外路径交给 rm。 */
-      const dir = taskOutputDir(input.id, task.projectId);
+      /* 产物目录从库里的 `localPath` 反推，与落盘侧同源（旧写法两处各拼一遍，
+       * 一条漏掉项目子层、一条把 `/api/generated` 解析成 `public/api/generated`，
+       * 都被 `.catch(() => undefined)` 吞掉 → 磁盘只涨不删、日志空白）。解析不出
+       * 或越界时只删库行并记原因，不把根外路径交给 rm。 */
+      const dir = taskDirFromLocalPath(task.images[0]?.localPath);
       /* 先删库行、后清磁盘（ISSUE #3872）：原先先 rm（fire-and-forget）再删行，
        * 一旦删行失败，行还指向已不存在的目录（封面/视频 404 且不可恢复）。
        * 先删行则失败即止、文件保留；行删掉之后磁盘清理失败最多留孤儿文件，可再清。 */

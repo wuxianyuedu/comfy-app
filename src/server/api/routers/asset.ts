@@ -11,9 +11,16 @@ import { createId } from "@paralleldrive/cuid2";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
 import { assetRepository, taskRepository } from "~/lib/core/repository";
 import { firstRowRequired } from "~/lib/core/repository-row";
-import { copyIntoAssetStore, removeAssetStoreDir } from "~/lib/media/asset-store";
+import {
+  copyIntoAssetStore,
+  removeAssetStoreDir,
+  writeBufferIntoAssetStore,
+} from "~/lib/media/asset-store";
 import { kindOf } from "~/lib/media/media-kind";
+import { extForMime } from "~/lib/media/mime-ext";
 import { normalizeFolderPath } from "~/lib/media/asset-folders";
+import { safeFetch } from "~/lib/network/outbound-url-core";
+import { isHttpUrl } from "~/lib/url-scheme";
 
 /** 资产分类键（展示名映射在 `asset-categories.ts`，这里只认键）。 */
 export const ASSET_CATEGORY_KEYS = [
@@ -49,6 +56,14 @@ function assetNameOf(prompt: string | null, workflowName: string, index: number,
   }
   return workflowName === "" ? `未命名资产 · ${index + 1}` : `${workflowName} · ${index + 1}`;
 }
+
+/** 远端图片 content-type → 落盘扩展名（映射走 mime-ext 唯一出口，不另写第二张表）。 */
+function remoteImageExtension(contentType: string): string {
+  return extForMime(contentType) ?? "png";
+}
+
+/** 远端生图结果的最大可接受体积（20MB；防止把超大外链拉进本机）。 */
+const REMOTE_IMAGE_MAX_BYTES = 20 * 1024 * 1024;
 
 export const assetRouter = createTRPCRouter({
   /** 列表：归属 / 分类 / 媒体类型 / 关键词 / 目录前缀过滤。目录树角标走 `folderTree`。 */
@@ -316,6 +331,75 @@ export const assetRouter = createTRPCRouter({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "资产入库失败" });
       }
       return { created, skipped: total - created - duplicated, duplicated };
+    }),
+
+  /**
+   * 从调研页（脸库 / 风格库）的远端生图结果入库（ISSUE #5114）。
+   * 远端通道没有任务行与本机产物地址，所以先经 safeFetch 的 SSRF 判据把图片安全下载，
+   * 再写进与 createFromTask 相同的 `generated/assets/<assetId>/` 目录；参数快照由
+   * 调研页随调用传入（本地通道仍走 createFromTask，由任务行提供完整快照）。
+   */
+  createFromUrl: authedProcedure
+    .input(
+      z.object({
+        category: categorySchema,
+        modelName: z.string().max(120).optional(),
+        negativePrompt: z.string().optional(),
+        params: z.record(z.string(), z.unknown()).optional(),
+        projectId: z.string().optional(),
+        prompt: z.string(),
+        scope: scopeSchema,
+        sourceUrl: z.url().refine(isHttpUrl, { message: "图片地址必须是 http/https" }),
+        subdir: z.string().max(120).optional(),
+        workflowName: z.string().max(120).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.scope === "project" && (input.projectId === undefined || input.projectId === "")) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "项目资产必须指定所属项目" });
+      }
+      const res = await safeFetch(input.sourceUrl, {
+        scenario: "remote-media",
+        timeoutMs: 20_000,
+      }).catch(() => null);
+      if (res === null || !res.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "远端图片读取失败" });
+      }
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.toLowerCase().startsWith("image/")) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "远端地址不是图片" });
+      }
+      const buffer = Buffer.from(await res.arrayBuffer());
+      if (buffer.byteLength === 0 || buffer.byteLength > REMOTE_IMAGE_MAX_BYTES) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "远端图片大小不合法" });
+      }
+      const id = createId();
+      const storedUrl = await writeBufferIntoAssetStore(
+        buffer,
+        id,
+        remoteImageExtension(contentType),
+      );
+      const name = assetNameOf(input.prompt, input.workflowName ?? input.modelName ?? "", 0, 1);
+      const rows = await assetRepository.createMany([
+        {
+          category: input.category,
+          id,
+          localPath: storedUrl,
+          mediaType: assetMediaTypeOf(storedUrl),
+          name,
+          negativePrompt: input.negativePrompt ?? null,
+          params: input.params ?? null,
+          projectId: input.scope === "project" ? (input.projectId ?? null) : null,
+          prompt: input.prompt,
+          scope: input.scope,
+          sourceTaskId: null,
+          subdir: input.subdir ?? null,
+          userId: ctx.user.id,
+          workflowName: input.workflowName ?? input.modelName ?? null,
+        },
+      ]);
+      firstRowRequired(rows, "资产入库");
+      return { created: 1, duplicated: 0, skipped: 0 };
     }),
 
   /** 删除：库行 + 资产文件目录（文件在资产自己的目录里，不影响原任务）。 */

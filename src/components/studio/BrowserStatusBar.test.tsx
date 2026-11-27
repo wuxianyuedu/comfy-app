@@ -49,6 +49,7 @@ vi.mock("./hooks/use-comfy-queue", async (importOriginal) => {
       running: null,
       queued: 0,
       elapsedMs: null,
+      syncedAt: null,
     }),
   };
 });
@@ -380,5 +381,23 @@ describe("BrowserStatusBar 地址栏复制（ISSUE #4810）", () => {
       .toBeGreaterThan(0);
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining("复制失败"));
     expect(screen.queryByText("已复制")).toBeNull();
+  });
+});
+
+describe("BrowserStatusBar 地址区字号与锁图标尺寸（ISSUE #4883）", () => {
+  /** 地址区是记号档、不是正文：Button 基类是 text-sm(14px)，必须显式覆盖到 micro 档，
+   * 否则同一状态栏里左大右小。锁图标同理 —— Button 基类给无 size- 类的 svg 兜底
+   * size-4(16px)，size 属性敌不过 CSS，必须带 size- 类才真正落档。 */
+  it("地址区文字用 text-3xs、锁图标用 size-[10px]，不落回 Button 的 text-sm / size-4 兜底", () => {
+    renderBar(viewModel());
+
+    const addressButton = screen.getByRole("button", { name: /安全/ });
+    expect(addressButton).toHaveClass("text-3xs");
+    expect(addressButton).not.toHaveClass("text-sm");
+
+    const lock = addressButton.querySelector("svg");
+    expect(lock).not.toBeNull();
+    /* 关键是带 size- 类：Button 基类只兜底「无 size- 类的 svg」，带上它就避开 size-4。 */
+    expect(lock).toHaveClass("size-[10px]");
   });
 });

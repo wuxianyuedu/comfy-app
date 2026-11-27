@@ -122,6 +122,10 @@ vi.mock("~/lib/comfyui/enqueue", () => ({
 vi.mock("~/lib/comfyui/firstframe", () => ({
   synthesizeFirstFrame: synthFirstFrameMock,
 }));
+const resolveFirstFrameMock = vi.hoisted(() =>
+  vi.fn<(value: string) => Promise<string>>((value) => Promise.resolve(value)),
+);
+vi.mock("./first-frame", () => ({ resolveFilmFirstFrame: resolveFirstFrameMock }));
 /* 监看循环的 4 秒轮询在测试里不能真睡：几百轮预算的判决面用例（#4595）靠
  * 把 sleep 桩成空转才跑得动。withTimeoutResult 等其余导出保持原实现。 */
 vi.mock("~/lib/with-timeout", async (importOriginal) => ({
@@ -432,6 +436,40 @@ describe("startFilm — 自主成片逐镜生成默认带随机种子（走「�
   });
 });
 
+describe("startFilm — 定稿首帧直用 + 秒制时长（ISSUE #5141 / #5139）", () => {
+  it("产物地址先换 input 文件名再下发；时长口拿到秒值而不是帧数", async () => {
+    filmRepo.findById
+      .mockResolvedValueOnce({ id: "f-ff", userId: "u1", status: "GENERATING" })
+      .mockResolvedValueOnce({ id: "f-ff", userId: "u1", status: "GENERATING" })
+      .mockResolvedValue({ id: "f-ff", userId: "u1", status: "CANCELLED" });
+    shotRepo.listByFilm.mockResolvedValue([
+      {
+        id: "s-ff",
+        order: 0,
+        prompt: "海边日落",
+        negative: null,
+        params: {
+          videoWorkflowId: "wf-v",
+          firstFrame: "/api/generated/shot.png",
+          frames: 49,
+          fps: 16,
+          duration: 3.06,
+        },
+      },
+    ]);
+    resolveFirstFrameMock.mockResolvedValue("film_ff_uploaded.png");
+
+    await startFilm("f-ff");
+
+    expect(resolveFirstFrameMock).toHaveBeenCalledWith("/api/generated/shot.png");
+    expect(synthFirstFrameMock).not.toHaveBeenCalled();
+    const values = createRunTaskMock.mock.calls[0]![0].values;
+    expect(values.firstFrame).toBe("film_ff_uploaded.png");
+    expect(values.frames).toBe(49);
+    expect(values.duration).toBe(3.06);
+  });
+});
+
 describe("composeFilm — 合成前置条件不满足时必须落 FAILED 且文案可行动", () => {
   it("影片不存在 / 已在合成或已完成：直接返回，不重复合成", async () => {
     filmRepo.findById.mockResolvedValue(null);
@@ -619,10 +657,14 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
 
     const [, shots] = shotRepo.createMany.mock.calls[0]!;
     const size = shots[0]!.params.size;
-    // 成片画幅默认的视频场景 16:9 1k，原样存尺寸表达 —— 像素由工作流派生
-    expect(size).toMatchObject({ ratio: "16:9 横屏", clarity: "1k" });
-    // 兜底常量是尺寸表达（镜头没带尺寸时用）
-    expect(NATIVE_SHOT_VIDEO_SIZE).toMatchObject({ ratio: "16:9 横屏" });
+    // 单镜画幅用场景无关档（ISSUE #5138）：同一份表达在图片/视频两侧算出同一组宽高。
+    expect(size).toMatchObject({ ratio: "16:9 横屏", clarity: "1M", multiple: 64 });
+    // 兜底常量与单镜口径一致
+    expect(NATIVE_SHOT_VIDEO_SIZE).toMatchObject({
+      ratio: "16:9 横屏",
+      clarity: "1M",
+      multiple: 64,
+    });
   });
 });
 
@@ -655,6 +697,9 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
           prompt: "第一镜",
           negativePrompt: "n1",
           sceneHeading: "H1",
+          /* 工坊阶段④定稿的分镜图 + 秒制时长（#5141 / #5139） */
+          imageUrl: "/api/generated/shot-1.png",
+          duration: 3.06,
         }),
       ],
     });
@@ -692,7 +737,16 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
     expect(shots[0]!.params).toMatchObject({
       videoWorkflowId: "wf-video",
       imageWorkflowId: "wf-image",
+      /* 定稿分镜图直接接首帧，视频侧不再另合成一张（#5141）。 */
+      firstFrame: "/api/generated/shot-1.png",
+      /* 时长按秒、帧数按帧，两种单位同落 params（#5139）。 */
+      duration: 3.06,
+      frames: 49,
+      fps: 16,
     });
+    /* 没带定稿图的镜头不写 firstFrame，走既有「合成首帧」分支。 */
+    expect(shots[1]!.params.firstFrame).toBeUndefined();
+    expect(shots[1]!.params.duration).toBeCloseTo(49 / 16, 2);
   });
 
   it("项目无 production 行或无镜头 → 抛错且不落库", async () => {
@@ -922,29 +976,28 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
     );
   });
 
-  it("监看循环自身 reject → 就地收口：影片判 FAILED、日志记 error、不冒进程级 rejection（ISSUE #4216）", async () => {
+  it("监看读数撞 SQLite 锁：重试穷尽后只留可读日志，不把在飞影片判死（ISSUE #5146）", async () => {
     rowsByStatus([{ id: "f-boom", status: "GENERATING" }]);
-    /* 让 watchLoop 的第一跳（findById）就炸——模拟 SQLite BUSY / 磁盘故障。 */
-    filmRepo.findById.mockRejectedValue(new Error("DB BUSY 模拟"));
+    /* 让 watchLoop 的第一跳（findById）连撞锁——重试穷尽后原样抛出。 */
+    filmRepo.findById.mockRejectedValue(
+      Object.assign(new Error("DB BUSY 模拟"), { code: "SQLITE_BUSY" }),
+    );
 
     const result = await resumeStalledFilms();
     expect(result.resumed).toEqual(["f-boom"]);
 
-    /* 后台循环是被 `void` 起的：从在飞表里拿同一条 promise 等它落地。
-     * 若收口缺失，这条 promise 就是 unhandledRejection，vitest 当场红。 */
     const inflight = (
       globalThis as { filmWatchInFlight_v1?: Map<string, Promise<void>> }
     ).filmWatchInFlight_v1?.get("f-boom");
     expect(inflight).toBeDefined();
     await inflight;
 
-    expect(filmRepo.markFailed).toHaveBeenCalledWith(
-      "f-boom",
-      expect.stringContaining("DB BUSY 模拟"),
-    );
+    /* 读失败 ≠ 任务失败：在飞镜头还有任务，判死就没人收产物。 */
+    expect(filmRepo.markFailed).not.toHaveBeenCalled();
     const msgs = filmRepo.appendLog.mock.calls.map((c) => c[1].msg);
-    expect(msgs.some((m) => m.includes("监看循环异常终止"))).toBe(true);
-    /* 收口后在飞表清空：不留假活的循环。 */
+    expect(msgs.some((m) => m.includes("瞬时锁冲突"))).toBe(true);
+    expect(loggerMock.error.mock.calls.map((c) => String(c[0])).join("|")).toContain("SQLITE_BUSY");
+    /* 退场后清在飞表：boot 扫描还能接回。 */
     const registry = (globalThis as { filmWatchInFlight_v1?: Map<string, Promise<void>> })
       .filmWatchInFlight_v1;
     expect(registry?.size).toBe(0);

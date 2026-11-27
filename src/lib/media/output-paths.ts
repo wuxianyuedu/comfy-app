@@ -41,6 +41,7 @@
 import path from "node:path";
 
 import { ARTIFACT_ROOT_DIR, LEGACY_ARTIFACT_ROOT_DIRS, taskOutputSegments } from "./output-layout";
+import type { ArtifactTaxonomy } from "./artifact-taxonomy";
 
 /* 形状（目录名 / 子层 / URL 前缀 / 相对段）在 `./output-layout.ts`，本层只做**磁盘解析**。
  * 那边是浏览器安全的（不引 `node:path`），因为界面也得告诉用户东西落在哪儿 ——
@@ -73,7 +74,13 @@ export {
  * URL 前缀（`ARTIFACT_URL_PREFIX`）与磁盘根**是两件事**：库里存的正是前者
  * （`TaskImage.localPath` / `Film.localPath`），所以搬根不动 URL，历史行照常读得到。 */
 export function generatedRoot(cwd: string = process.cwd()): string {
-  return path.resolve(cwd, ARTIFACT_ROOT_DIR);
+  /* 多检出协作（ISSUE #5207）：UI-only 检出要与主控共享同一批产物，磁盘根可经
+   * COMFYAPP_GENERATED_ROOT 覆盖（绝对路径原样，相对路径按 cwd）。URL 前缀不变，
+   * 库里存的 `/api/generated/...` 历史行照常读得到。 */
+  const override = process.env.COMFYAPP_GENERATED_ROOT?.trim();
+  return override === undefined || override === ""
+    ? path.resolve(cwd, ARTIFACT_ROOT_DIR)
+    : path.resolve(cwd, override);
 }
 
 /** 历史产物根：`<cwd>/public/generated`。
@@ -162,13 +169,46 @@ export function artifactDiskPath(url: string, root: string = generatedRoot()): s
  *  某个任务的目录返回，等于允许「删掉全部产物」或把整个根暴露给用户。
  *  越界的处置方式三个调用点各不相同，所以判据只写一次、处置留在调用点。 */
 export function taskOutputDir(
+  taxonomy: ArtifactTaxonomy,
   taskId: string,
-  projectId?: string | null,
   root: string = generatedRoot(),
 ): string | null {
-  const abs = path.resolve(root, ...taskOutputSegments(taskId, projectId));
+  const segments = taskOutputSegments(taxonomy, taskId);
+  /* 逐段判合法，不能只靠「解析后在根内」：三级分类多出两层后，
+   * `../../evil` 这样的 taskId 会被上面的目录吃掉两段、解析结果仍在根内，
+   * 于是 `fs.rm` 拿到一个不是预期任务的目录 —— 越界闸必须按段收。 */
+  if (
+    segments.some(
+      (seg) =>
+        seg === "" ||
+        seg === "." ||
+        seg === ".." ||
+        seg.includes("/") ||
+        seg.includes("\\") ||
+        path.isAbsolute(seg),
+    )
+  ) {
+    return null;
+  }
+  const abs = path.resolve(root, ...segments);
   if (abs === root) {
     return null;
   }
   return isWithinGeneratedRoot(abs, root) ? abs : null;
+}
+
+/** 从已落库的 `localPath` 反推任务产物目录（删任务 / 打开文件夹用）。
+ *
+ *  比重新按元数据算一档更稳：库里的地址就是写侧当时真正落盘的形状，连迁移前
+ *  的旧平铺目录也认得（`/api/generated/<taskId>/img_0.png` → 那一层的父目录）。
+ *  解析不出或越界时返回 `null`，由调用点按各自的越界语义处置。 */
+export function taskDirFromLocalPath(
+  localPath: string | null | undefined,
+  root: string = generatedRoot(),
+): string | null {
+  if (localPath === null || localPath === undefined || localPath === "") {
+    return null;
+  }
+  const file = artifactDiskPath(localPath, root);
+  return file === null ? null : path.dirname(file);
 }

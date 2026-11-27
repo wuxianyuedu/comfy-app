@@ -44,12 +44,12 @@ export function SidebarRowClose({
         "opacity-0 transition-opacity",
         hover,
         "focus-visible:opacity-100",
-        /* 折叠态（图标轨）：关闭按钮垂直居中、贴在 48px 轨的右缘（#5059）——
-         * #5040 曾右移 6px 落在 x≈42..54，半个身子探出轨外，正好压在折叠气泡的
-         * 起点上（气泡离轨仅 4px），点不到。收回 right-0（x≈36..48）后落在打开态
-         * 悬浮拉宽的紫色胶片里（#5059 把胶片从 32px 扩到整条 48px 轨），与气泡
-         * 不再相交；pointerdown 关页签的链路不变。 */
-        "group-data-[collapsible=icon]:top-1/2 group-data-[collapsible=icon]:right-0",
+        /* 折叠态（图标轨）：关闭按钮垂直居中、贴在紫色胶片右缘（#5059）——
+         * 底片悬浮时**只向右**拉宽 8px 到轨右缘（左缘不动，不挡左侧「当前打开页签」
+         * 指示条），图标固定在按钮内容盒左侧不随底片移动；关闭钮右移贴住拉宽底片的
+         * 右缘（right-[-8px]），落在图标右侧的空白处，两者不相交。气泡起点在轨右缘
+         * 之外，与关闭钮不再相交；pointerdown 关页签的链路不变。 */
+        "group-data-[collapsible=icon]:top-1/2 group-data-[collapsible=icon]:right-[-8px]",
         "group-data-[collapsible=icon]:-translate-y-1/2 group-data-[collapsible=icon]:size-3",
         /* #5059：折叠态先让底片拉宽（150ms），关闭按钮再淡入（延迟 100ms），
          * 视觉上是「底片展开出一块位置，然后关闭按钮落进去」。 */

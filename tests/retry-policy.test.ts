@@ -7,7 +7,13 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { backoffDelayMs, SQLITE_PRAGMA_BOOT, WS_RECONNECT } from "../src/lib/retry-policy";
+import {
+  backoffDelayMs,
+  COMFY_JOB_TIMEOUT_MS,
+  FIRST_FRAME_WAIT,
+  SQLITE_PRAGMA_BOOT,
+  WS_RECONNECT,
+} from "../src/lib/retry-policy";
 
 describe("backoffDelayMs：既有形状（不加抖动时一字不变）", () => {
   it("fixed：恒等 baseMs，与 attempt 无关", () => {
@@ -31,6 +37,16 @@ describe("backoffDelayMs：既有形状（不加抖动时一字不变）", () =>
 
   it("负 attempt 按 0 处理（防御：别把 2 ** -1 算成小数）", () => {
     expect(backoffDelayMs({ shape: "exponential", baseMs: 40, attempt: -3 })).toBe(40);
+  });
+});
+
+describe("单任务执行超时与等候包络（ISSUE #5140）", () => {
+  it("等候包络 ≥ 执行超时 + 1 分钟收尾余量，不再出现等候方先放弃", () => {
+    const envelope = FIRST_FRAME_WAIT.maxAttempts * FIRST_FRAME_WAIT.baseMs;
+    expect(envelope).toBeGreaterThanOrEqual(COMFY_JOB_TIMEOUT_MS + 60_000);
+    /* 数值锚：执行超时 10min，包络 11min（330 拍 × 2s）。 */
+    expect(COMFY_JOB_TIMEOUT_MS).toBe(600_000);
+    expect(FIRST_FRAME_WAIT.maxAttempts).toBe(330);
   });
 });
 

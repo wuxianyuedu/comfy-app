@@ -4,6 +4,7 @@
 // 「unknown 形状 → 可渲染的键值行」，不发请求、不碰 React。
 
 import { asRecord } from "~/lib/is-record";
+import type { ApiCallDebugRow } from "~/lib/workshop/api-channel-shared";
 import type { RouterOutputs } from "~/trpc/react";
 
 /** task.detail 的返回形状（含 params JSON 列与 modelName 派生列）。 */
@@ -20,10 +21,6 @@ export type QueueTaskParamsSource = {
 
 /** 参数表的一行：label 是给用户看的名字，value 已收成可显示的字符串。 */
 export type QueueTaskParamRow = { label: string; value: string };
-
-/** 长值的显示上限：参数表是给人核对「提交了什么」的，超长原文去任务详情 /
- * 执行日志看，这里截断保排版。 */
-const VALUE_TEXT_CAP = 400;
 
 /** 认得的键给中文名；不认识的键原样回显（与 taskStatusLabel 同一口径）。 */
 const PARAM_LABELS: Record<string, string> = {
@@ -75,7 +72,9 @@ function paramValueText(value: unknown): string | null {
     if (text === "") {
       return null;
     }
-    return text.length > VALUE_TEXT_CAP ? `${text.slice(0, VALUE_TEXT_CAP)}…` : text;
+    /* 参数表是核对「提交了什么」的出口，长提示词 / 工坊参数原样保留，交给
+     * 视图换行展示（#5074：截断后用户看不见完整内容）。 */
+    return text;
   }
   if (typeof value === "number" || typeof value === "boolean") {
     return String(value);
@@ -136,4 +135,27 @@ export function queueTaskParamRows(detail: QueueTaskParamsSource): Array<QueueTa
     push(paramLabel(key), value);
   }
   return rows;
+}
+
+/**
+ * 运行中任务的请求读数（#5075）：本地工作流任务没有 REST 响应摘要，语义等价的
+ * 「请求信息」就是提交时落库的统一输入 + 工作流 id。用 `local-task` 档接入
+ * 测试模型页同款 `RequestDetailSection`，徽标为「本地任务 / 已发送」。
+ * 「实际请求」（模型适配器翻译后的上游请求）没有随任务落库，面板另用一行文字
+ * 如实说明，不猜一个不可验证的形状。
+ */
+export function runningRequestRow(detail: {
+  params: unknown;
+  workflowName?: string | null;
+}): ApiCallDebugRow {
+  const params = asRecord(detail.params) ?? {};
+  return {
+    body: { workflow: params.workflow ?? detail.workflowName, ...params },
+    durationMs: null,
+    endpoint: `本地 ComfyUI · ${detail.workflowName}`,
+    excerpt: null,
+    ok: true,
+    phase: "local-task",
+    status: null,
+  };
 }

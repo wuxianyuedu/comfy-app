@@ -253,13 +253,14 @@ describe("tRPC 挂载面：每条 procedure 都要有执行者（台账 E3）", 
  * 「零消费方」登记表：口 → 为什么还留着。不是免罪牌：每条写清「谁将来接它」，数量只许降不许升（见 `登记表本身不陈旧`）。
  * 要变长得先动台账 E3′。已收口的（别再写回来）：`material.*` 与 REST `/api/materials` 是同一套归属判据的
  * 两扇门，界面只走 REST；`llm.complete` 与 `/api/llm` 重复（那扇还多流式与 tools）；
- * `project.patch` 的登记前提是「补上只改名字 / 只改布局的界面动作」—— 侧栏右键改名接上了它（ISSUE #4808）。
+ * `project.patch` 的登记前提是「补上只改名字 / 只改布局的界面动作」—— 侧栏右键改名接上了它（ISSUE #4808）；
+ * `skill.create` 原登记的前提是「技能管理的写侧界面还没做」—— 风格库的新建画风接上了它（ISSUE #5069）。
  */
 const ZERO_CONSUMER: Record<string, string> = {
+  "film.subtitleSrt":
+    "成片字幕导出的服务端口已落地（与烧录同源），但界面侧还没有「下载字幕」按钮；先用归属用例覆盖，接成片面板时删掉本登记。",
   "project.get":
     "画布加载目前从 `project.list` 的行里取 nodes/edges（`lib/project-canvas/canvas-store.ts`），这条按 id 的单读口还没有入口用它。要么把画布改成按需单读（比 list 省），要么删口。",
-  "skill.create":
-    "工坊与成片工作室都只**读**风格卡（`skill.list`），技能管理的写侧界面还没做。这一条是「功能未接」而不是「判据缺失」：它的重名 CONFLICT / slug 形状闸都有用例。",
 };
 
 /** 登记表长度的棘轮上限（**只许降**）：变长的唯一合法路径是先记进台账 E3′。 */

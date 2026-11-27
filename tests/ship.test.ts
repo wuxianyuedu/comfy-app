@@ -5573,6 +5573,7 @@ describe("planCommands：dry-run 打印的就是真跑时会执行的同一份 a
       diagnose: true,
       prBodyFile: true,
       fetchIssue: 3965,
+      screenshotReply: 5191,
     })) {
       const m = /^cnb (?<module>\w+) (?<tool>[\w-]+)/.exec(line);
       if (m) {

@@ -23,13 +23,14 @@ import { useItemAction } from "~/components/ui/use-item-action";
 import { useViewTabActive } from "~/components/ui/view-tab-active";
 
 import { useToast } from "../../ToastProvider";
-import { parseWorkflowIOMap, type WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 import type { ModeContract } from "~/lib/workshop/model-mode-contract";
 
 import {
   buildModelTestRetryPayload,
   buildReprintPayload,
   taskWorkflowId,
+  workflowIOOfDetailFull,
 } from "../history-detail-derive";
 import type { ModelTestRetryPayload } from "../history-detail-derive";
 import {
@@ -37,7 +38,6 @@ import {
   emptyStateText,
   filterTasks,
   groupByDate,
-  hasActiveTasks,
   paginateGroups,
   sortTasks,
 } from "../history-list-derive";
@@ -50,6 +50,7 @@ import {
   type TaskItem,
 } from "../history-types";
 import { PAGE_SIZE, useSimulatedProgress } from "../history-utils";
+import { useStableHistoryTasks } from "./use-stable-history-tasks";
 import { useTRPC } from "~/trpc/react";
 
 /** 有进行中任务时的轮询节奏（与画布历史面板同一档）：任务完成 / 新任务入队
@@ -156,7 +157,14 @@ export function useHistoryList(args: {
   const isTabActive = useViewTabActive();
   const tasksQ = useInfiniteQuery(
     trpc.task.list.infiniteQueryOptions(
-      { take: PAGE_SIZE, status: HISTORY_TASK_STATUSES },
+      {
+        take: PAGE_SIZE,
+        /* 行过滤下推服务端（#5076）：点「失败 / 已取消」只拉该状态的任务，
+           cursor 也从该状态的第一条开始 —— 不再只对已拉取的 100 行本地过滤。 */
+        status: filter === "ALL" ? HISTORY_TASK_STATUSES : filter,
+        /* 角标仍按终态全集计数，与当前筛选解耦。 */
+        countStatus: HISTORY_TASK_STATUSES,
+      },
       {
         getNextPageParam: (lastPage) => {
           if (!lastPage.hasMore) {
@@ -168,10 +176,10 @@ export function useHistoryList(args: {
            * 回传前沿后两侧语义统一。 */
           return lastPage.nextScanCursor;
         },
-        refetchInterval: (query) => {
-          const rows = (query.state.data?.pages ?? []).flatMap((page) => page.tasks);
-          return hasActiveTasks(rows) ? HISTORY_POLL_MS : false;
-        },
+        /* 此前用「已拉取行里有没有 QUEUED/RUNNING」判轮询，但历史查询只取终态，
+         * 判据恒假 —— 页面永远不会自己冒出新完成的任务（#5076）。改为页签活跃
+         * 就按固定节奏重问，仍由 enabled 在隐藏时停摆。 */
+        refetchInterval: isTabActive ? HISTORY_POLL_MS : false,
         enabled: isTabActive,
       },
     ),
@@ -182,16 +190,9 @@ export function useHistoryList(args: {
   const total = tasksQ.data?.pages.at(-1)?.total ?? null;
 
   /* 各页并集（按 id 去重、保持「新到旧」的页序）：渲染期从查询结果派生，
-   * 不在 effect 里 setState（规范 8.6 / 2.4）。 */
-  const tasks = useMemo<Array<TaskItem>>(() => {
-    const byId = new Map<string, TaskItem>();
-    for (const page of tasksQ.data?.pages ?? []) {
-      for (const task of page.tasks) {
-        byId.set(task.id, { ...task, createdAt: String(task.createdAt) });
-      }
-    }
-    return [...byId.values()];
-  }, [tasksQ.data]);
+   * 不在 effect 里 setState（规范 8.6 / 2.4）；4s 轮询内容不变时沿用旧引用，
+   * 否则 100 张已 memo 的卡片会跟着新数组一起失效。 */
+  const tasks = useStableHistoryTasks(tasksQ.data?.pages);
   const loading = tasksQ.isLoading;
   const progressMap = useSimulatedProgress(tasks);
 
@@ -217,18 +218,21 @@ export function useHistoryList(args: {
   const detail = detailQ.isSuccess ? detailQ.data : null;
   const detailLoading = detailQ.isPending;
   /* 参数可读名要按工作流 IO 的作者标签查 —— 任务行里只存了 pin 名
-   *（`text` / `aspect_ratio` / `megapixels`），那是 ComfyUI 的程序名。
-   * 用轻量的 `workflow.detail`（一次 DB 读，不做派生）拿 `workflowIO` 列；
-   * 工作流已被删除时查询失败，这里保持空表，参数名如实显示 pin 名 —— 不编。 */
+   *（`replace` / `aspect_ratio` / `megapixels`），那是 ComfyUI 的程序名。
+   * 必须用 `workflow.detailFull`：它把落库的「勾选了哪个 pin」富化成带 label
+   *（作者标签 > 本地化名 > pin 名）与默认值的条目，IO 预览显示的就是这一套；
+   * 轻量 `workflow.detail` 只给原始列，label 为空 → 历史只能回落 pin 名，
+   * 且没提交值的端口整行缺失（ISSUE #5118）。工作流已被删除时查询失败，
+   * 这里保持空表，参数名如实显示 pin 名 —— 不编。 */
   const detailWorkflowId = detail ? taskWorkflowId(detail) : null;
   const ioQ = useQuery(
-    trpc.workflow.detail.queryOptions(
+    trpc.workflow.detailFull.queryOptions(
       { id: detailWorkflowId ?? "" },
       { enabled: detailWorkflowId !== null && detailWorkflowId !== "" },
     ),
   );
   const workflowIO = useMemo<WorkflowIOMap>(
-    () => (ioQ.isSuccess ? parseWorkflowIOMap(ioQ.data?.template?.workflowIO) : EMPTY_WORKFLOW_IO),
+    () => (ioQ.isSuccess ? workflowIOOfDetailFull(ioQ.data) : EMPTY_WORKFLOW_IO),
     [ioQ.isSuccess, ioQ.data],
   );
   /* 模式契约注册表：详情弹窗按「任务模式 + 生效契约」枚举工坊对外口（与工坊
@@ -319,7 +323,11 @@ export function useHistoryList(args: {
         await deleteTask.mutateAsync({ id });
         /* 乐观移除：直接改无限查询缓存里的各页（避免本地镜像 state，#4044） */
         queryClient.setQueryData(
-          trpc.task.list.infiniteQueryKey({ take: PAGE_SIZE }),
+          trpc.task.list.infiniteQueryKey({
+            take: PAGE_SIZE,
+            status: filter === "ALL" ? HISTORY_TASK_STATUSES : filter,
+            countStatus: HISTORY_TASK_STATUSES,
+          }),
           /* 键自带 DataTag：`old` 的形状由查询结果推导，不再手写窄类型 */
           (old) => {
             if (!old) {
@@ -340,7 +348,7 @@ export function useHistoryList(args: {
       },
       { report, failureText: "删除失败", successText: "已删除任务" },
     );
-  }, [deleteTask, detailId, removeTarget, report, queryClient, trpc]);
+  }, [deleteTask, detailId, filter, removeTarget, report, queryClient, trpc]);
 
   /* 「重试」= 带参回到输入面（#4841）：取详情 + 模式契约，按「复制去重投」
    * 同一份派生（buildModelTestRetryPayload）折成预填载荷，交给工作区带到
@@ -454,6 +462,11 @@ export function useHistoryList(args: {
     setLogTarget(null);
   }, []);
 
+  /* 行级判据收成稳定函数（规范 04 §4.8）：此前 return 里现造两个箭头，
+   * 每次 controller 重建都换身份，memo 的卡片列表因此陪跑。 */
+  const isRetrying = useCallback((id: string) => retryAction.isBusy(id), [retryAction]);
+  const isRowBusy = useCallback((id: string) => rowAction.isBusy(id), [rowAction]);
+
   return {
     tasks,
     loading,
@@ -469,8 +482,8 @@ export function useHistoryList(args: {
     empty,
     progressMap,
     retryingId: retryAction.busyId,
-    isRetrying: retryAction.isBusy,
-    isRowBusy: (id: string) => rowAction.isBusy(id),
+    isRetrying,
+    isRowBusy,
     logTarget,
     detailId,
     detail,
