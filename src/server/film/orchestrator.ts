@@ -311,6 +311,8 @@ export type CreateFilmFromProjectInput = {
   imageWorkflowId?: string | null;
   /** 统一项目 id（proj_*）；镜头取自该项目的 production.shots。 */
   projectId: string;
+  /** 只生成指定镜头（逐镜 retake）：缺省 = 全部镜头。 */
+  shotIds?: Array<string>;
   size?: unknown;
   subtitleOn?: boolean;
   title?: string;
@@ -326,7 +328,10 @@ export type CreateFilmFromProjectInput = {
 export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
   const row = await productionRepository.getForUser(input.userId, input.projectId);
   const rawShots = row && isShotArray(row.shots) ? row.shots : [];
-  const shots = [...rawShots].sort((a, b) => a.index - b.index);
+  const only = input.shotIds;
+  const shots = [...rawShots]
+    .filter((shot) => only === undefined || only.includes(shot.id))
+    .sort((a, b) => a.index - b.index);
   if (!shots.length) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -445,7 +450,7 @@ async function generateVideoShot(
 }
 
 // ── start (autopilot) ───────────────────────────────────────
-export async function startFilm(id: string) {
+export async function startFilm(id: string, opts: { skipCompose?: boolean } = {}) {
   const film = await filmRepository.findById(id);
   if (!film) {
     throw new TRPCError({ code: "NOT_FOUND", message: "影片不存在" });
@@ -529,7 +534,7 @@ export async function startFilm(id: string) {
 
   // 后台监看 → 合成（循环 rejection 的就地收口在 watchFilm 里那道 .catch，#4216；
   // 交接重读段的守卫见 watchFilm 开头，#4220 —— 两段合起来 watchFilm 不 reject）。
-  void watchFilm(id);
+  void watchFilm(id, { skipCompose: opts.skipCompose === true });
 }
 
 // ── watch + update：拆到 film-watch.ts（文件行数硬闸，#4595）─────────

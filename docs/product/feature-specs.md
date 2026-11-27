@@ -1918,15 +1918,16 @@
 
 #### FR-AG-02 自主编排含独立视频阶段与审批停点
 
-- 状态：计划中
+- 状态：独立视频阶段已上线；三个审批停点中「生视频后」仍待接按钮（ISSUE #5211）
 - 需求：自主成片的计划里有**独立的视频阶段**，并在关键节点有**人工审批停点**；
   AI 能全自动执行，但**不能自己判定质量**。
 - 行为与验收：① 计划步骤里存在独立的 `render_videos`（不是合并进 `render_film` 一步触发）；
   ② 三个停点（生图后 / 生视频后 / 合成前）状态可查，未批准**不自动进入下一阶段**；
   ③ 任一停点可「重出单镜」（`regenerateShot`）而不回退整条链路；
   ④ 视觉评审未实现前，停点**默认停**（不默认放行）。
-- 落点（现状）：`src/lib/production/run-types.ts`（规划步骤）、
-  `src/server/agent/run-engine.ts`（`render_film` 合并触发了逐镜视频 + 合成）、
+- 落点（现状）：`src/lib/production/run-types.ts`（`render_videos` 与 `videoShotRev` 快照）、
+  `src/server/agent/run-engine.ts`（`execVideos` 起片不合成、`execFilm` 对同一份影片合成）、
+  `src/server/film/orchestrator.ts` / `film-watch.ts`（`skipCompose` 透传）、
   `src/server/api/routers/run.ts`（`approve` / `reviewShot` / `regenerateShot`）
 
 #### FR-AG-03 Skill 驱动的阶段策略

@@ -1,0 +1,2 @@
+## Added
+- AI 自主 run 拆出独立 `render_videos` 阶段（借鉴 MiniMax H3 Director 的分镜渲染与 retake、NovelVids 的版本保留）：图齐后先起逐镜视频，`startFilm(..., {skipCompose:true})` 让片段齐了不自动合成；`render_film` 再对同一份影片显式合成。规划器按 `videoShotRev` 快照定点重出变化镜头，已就绪片段不重跑；已 rendered 的旧项目不补跑视频阶段。run 状态新增 `videoFilmId` / `videoStartedAt` / `videoDoneAt` / `videoShotRev` 并纳入归一。产品 FR-AG-02 与阶段⑤口径同步更新；补 3 条规划器用例与 1 条引擎起片用例，既有 91 条相关用例全绿。片段级审批按钮仍待接（沿用人工裁决快照）。

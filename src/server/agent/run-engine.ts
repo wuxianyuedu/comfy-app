@@ -107,8 +107,11 @@ function actionLabel(action: RunAction): string {
     case "review_shots": {
       return `逐镜评审（${action.shotIds.length} 个）`;
     }
+    case "render_videos": {
+      return `逐镜生成视频（${action.shotIds.length} 个）`;
+    }
     case "render_film": {
-      return "生成视频并合成成片";
+      return "合成成片";
     }
     default: {
       return action.kind;
@@ -134,6 +137,7 @@ function gateStageFor(action: RunAction): ProductionStage | null {
     case "review_shots": {
       return "shots";
     }
+    case "render_videos":
     case "render_film": {
       return "render";
     }
@@ -567,11 +571,93 @@ async function execReviewShots(
   };
 }
 
+/**
+ * 逐镜视频执行器（ISSUE #5211）：先起一条只生成片段、不自动合成的影片；
+ * 片段全部 SUCCEEDED 才把 run 推进到成片阶段。镜头 rev 变化会让规划器再次点名该镜，
+ * 这里用 `shotIds` 只重建那些镜头，已就绪的片段不重生成。
+ */
+async function execVideos(
+  userId: string,
+  projectId: string,
+  run: ProductionRun,
+  view: ProductionRunView,
+  shotIds: Array<string>,
+): Promise<ExecResult> {
+  const { filmRepository, filmShotRepository } = await import("~/lib/core/repository");
+  if (run.videoFilmId !== "") {
+    const film = await filmRepository.findById(run.videoFilmId);
+    if (!film) {
+      return {
+        ok: false,
+        error: "视频影片不存在，已释放认领，请重试",
+        run: { ...run, videoFilmId: "", videoStartedAt: "" },
+      };
+    }
+    const shots = await filmShotRepository.listByFilm(film.id);
+    if (shots.some((shot) => shot.status === "FAILED")) {
+      return {
+        ok: false,
+        error: "有镜头视频失败，已释放认领，可只重出失败镜头",
+        run: { ...run, videoFilmId: "", videoStartedAt: "" },
+      };
+    }
+    if (shots.length > 0 && shots.every((shot) => shot.status === "SUCCEEDED")) {
+      return {
+        ok: true,
+        skipLog: true,
+        summary: "逐镜视频已就绪，等待成片阶段合成",
+        run: markActionProcessed({ ...run, videoDoneAt: nowIso() }, view, {
+          kind: "render_videos",
+          shotIds,
+        }),
+      };
+    }
+    return { ok: true, skipLog: true, summary: "逐镜视频生成中" };
+  }
+  try {
+    const { createFilmFromProject, startFilm } = await import("~/server/film/orchestrator");
+    const created = await createFilmFromProject({
+      userId,
+      projectId,
+      videoWorkflowId: run.videoWorkflowId || undefined,
+      imageWorkflowId: run.imageWorkflowId || undefined,
+      shotIds,
+    });
+    await startFilm(created.id, { skipCompose: true });
+    return {
+      ok: true,
+      summary: `已启动逐镜视频（${shotIds.length} 镜）`,
+      run: { ...run, videoFilmId: created.id, videoStartedAt: nowIso() },
+    };
+  } catch (error: unknown) {
+    return { ok: false, error: errorMessage(error, "启动逐镜视频失败") };
+  }
+}
+
 async function execFilm(
   userId: string,
   projectId: string,
   run: ProductionRun,
 ): Promise<ExecResult> {
+  if (run.videoFilmId !== "" && run.filmStartedAt === "") {
+    /* 逐镜视频已单独跑完（ISSUE #5211）：成片阶段只对这份影片合成，不再重建管线。 */
+    const { filmRepository } = await import("~/lib/core/repository");
+    const ready = await filmRepository.findById(run.videoFilmId);
+    if (!ready) {
+      return { ok: false, error: "待合成的影片不存在，请重新跑逐镜视频" };
+    }
+    const startedAt = nowIso();
+    const claimed = await productionRepository.claimFilmStart(userId, projectId, startedAt);
+    if (!claimed) {
+      return { ok: true, skipLog: true, summary: "成片合成中" };
+    }
+    void import("~/server/film/compose-film").then((m) => m.composeFilm(run.videoFilmId));
+    return {
+      ok: true,
+      summary: "已启动成片合成（复用已就绪的逐镜视频）",
+      run: { ...run, filmStartedAt: startedAt },
+    };
+  }
   if (run.filmStartedAt) {
     /* 认领后崩溃/窗口中断的恢复（ISSUE #3962）：`filmStartedAt` 已写但 film 可能
      * 尚未进入可恢复生成态（未创建、或停在 PARSING/未启动）。无可恢复实体时
@@ -798,6 +884,11 @@ async function advanceRunLoopOnce(
         case "review_shots": {
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           res = await execReviewShots(userId, projectId, run, view, action.shotIds);
+          break;
+        }
+        case "render_videos": {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+          res = await execVideos(userId, projectId, run, view, action.shotIds);
           break;
         }
         case "render_film": {
