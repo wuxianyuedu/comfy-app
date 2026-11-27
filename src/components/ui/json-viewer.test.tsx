@@ -5,11 +5,23 @@
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { JsonViewer } from "./json-viewer";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+/* 高亮重注入排到下一帧（onNextFrame）——把它折成同步，好断言「这一帧写了什么」。 */
+beforeEach(() => {
+  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+    cb(0);
+    return 1;
+  });
+  vi.stubGlobal("cancelAnimationFrame", () => undefined);
+});
 
 /** 造一个 `keys` 项的扁平对象（键名 `k0…k{keys-1}`）。 */
 function wideObject(keys: number): Record<string, number> {
@@ -54,5 +66,33 @@ describe("JsonViewer 搜索防抖（#5224 A6）", () => {
         message: "防抖窗口走完后应出现 1 条命中",
       })
       .toBe(true);
+  });
+});
+
+describe("JsonViewer 高亮导航（#5229 F3）", () => {
+  it("命中跳转只切换 active 属性，不重建 <mark> 子树", async () => {
+    render(<JsonViewer data={{ hello: "world", other: "hello" }} initialCollapsedDepth={0} />);
+    const input = screen.getByLabelText("在 JSON 里搜索");
+    await userEvent.type(input, "hello");
+
+    const body = screen.getByTestId("json-viewer-body");
+    await expect
+      .poll(() => body.querySelectorAll("mark.jv-hit-sub").length, {
+        message: "防抖窗口走完后应注入两个高亮 mark",
+      })
+      .toBe(2);
+    const marks = [...body.querySelectorAll<HTMLElement>("mark.jv-hit-sub")];
+    expect(marks.filter((m) => m.dataset.jvActiveHit === "true")).toHaveLength(1);
+    const firstActive = marks.find((m) => m.dataset.jvActiveHit === "true");
+
+    /* Enter 跳到下一条命中：只改两个 mark 的 data 属性，节点身份不变。 */
+    await userEvent.keyboard("{Enter}");
+    const after = [...body.querySelectorAll<HTMLElement>("mark.jv-hit-sub")];
+    expect(after).toHaveLength(2);
+    after.forEach((mark, index) => {
+      expect(mark).toBe(marks[index]);
+    });
+    expect(after.filter((m) => m.dataset.jvActiveHit === "true")).toHaveLength(1);
+    expect(after.find((m) => m.dataset.jvActiveHit === "true")).not.toBe(firstActive);
   });
 });
