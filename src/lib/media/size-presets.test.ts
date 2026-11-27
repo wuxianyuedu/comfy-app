@@ -285,6 +285,24 @@ describe("size-presets：尺寸表达（比例 + 分辨率 / 比例 + 百万像�
     expect(toSizeSpec(42)).toEqual(DEFAULT_SIZE_SPEC);
   });
 
+  it("toSizeSpec：text 列里的 JSON 形态不被当成宽高文本换成默认档（#5136）", () => {
+    const stored = JSON.stringify({ ratio: "16:9 横屏", clarity: "1k", multiple: 64 });
+    expect(toSizeSpec(stored)).toEqual({
+      ratio: "16:9 横屏",
+      clarity: "1k",
+      multiple: 64,
+    });
+    /* 短比例标签也照 normalizeSizeSpec 的归一口径收下。 */
+    expect(toSizeSpec(JSON.stringify({ ratio: "16:9", clarity: "1k", multiple: 64 }))).toEqual({
+      ratio: "16:9 横屏",
+      clarity: "1k",
+      multiple: 64,
+    });
+    /* 非法 JSON 不抛，落回宽高文本 / 默认档。 */
+    expect(toSizeSpec("{not json")).toEqual(DEFAULT_SIZE_SPEC);
+    expect(toSizeSpec('{"ratio":')).toEqual(DEFAULT_SIZE_SPEC);
+  });
+
   it("宽高 → `aspect_ratio` 端口该写的候选值", () => {
     /* 端口没声明候选 → 用标准短标签。 */
     expect(aspectLabelForDims(1280, 720)).toBe("16:9");

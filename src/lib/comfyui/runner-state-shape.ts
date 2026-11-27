@@ -138,6 +138,10 @@ export type RunnerState = {
    *  （`MAX_CONCURRENCY`）、reaper 的进程内认领检查、取消时的归还。
    *  为什么是 Set 而不是计数：计数答不了「这一条是不是我的」，而孤儿判决要的
    *  正是后者（旧实现靠 `queue.some(...)` 回答，队列没了就得另找依据）。 */
+  /** 已写过「等待生图暂停闸解除」提示的 taskId（ISSUE #5143）。与 wsWaitLogged
+   *  分开：恢复暂停时清这张表、WS 重连时清那张表，互不牵连。 */
+  pauseWaitLogged: Map<string, true>;
+
   pendingDispatch: Set<string>;
 
   promptToTask: Map<string, string>;
@@ -208,6 +212,7 @@ export function createEmptyState(): RunnerState {
     reconnectAttempts: 0,
     wsPathIndex: 0,
     executedWorkflow: new Map(),
+    pauseWaitLogged: new Map(),
     wsWaitLogged: new Map(),
   };
 }

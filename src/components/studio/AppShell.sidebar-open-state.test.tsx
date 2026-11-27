@@ -47,7 +47,12 @@ function tabsOf(...views: Array<WorkspaceView>): Array<ViewTab> {
 }
 
 function renderShell(
-  opts: { active?: WorkspaceView; defaultSidebarOpen?: boolean; tabs?: Array<ViewTab> } = {},
+  opts: {
+    active?: WorkspaceView;
+    defaultSidebarOpen?: boolean;
+    generationPaused?: boolean;
+    tabs?: Array<ViewTab>;
+  } = {},
 ): {
   onCloseViewTab: ReturnType<typeof vi.fn>;
   onSelect: ReturnType<typeof vi.fn>;
@@ -61,6 +66,7 @@ function renderShell(
         active={opts.active ?? "home"}
         activeProjectId={null}
         defaultSidebarOpen={opts.defaultSidebarOpen}
+        generationPaused={opts.generationPaused}
         onCloseViewTab={onCloseViewTab}
         onNewProject={vi.fn()}
         onOpenProject={vi.fn()}
@@ -76,6 +82,18 @@ function renderShell(
   );
   return { onCloseViewTab, onSelect };
 }
+
+describe("侧栏「队列」行的暂停角标（ISSUE #5143）", () => {
+  it("暂停时页签上直接显示「暂停」，不暂停时不显示", () => {
+    renderShell({ active: "queue", generationPaused: true });
+    const queue = screen.getByRole("button", { name: /队列/ });
+    expect(queue.textContent).toContain("暂停");
+    cleanup();
+
+    renderShell({ active: "queue", generationPaused: false });
+    expect(screen.getByRole("button", { name: "队列" }).textContent).not.toContain("暂停");
+  });
+});
 
 describe("侧栏打开项的页签态（ISSUE #3740）", () => {
   it("开着页签的那几项，图标住进品牌色浅底胶片（打开态，不像通知角点）", () => {
