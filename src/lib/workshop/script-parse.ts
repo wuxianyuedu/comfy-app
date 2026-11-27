@@ -630,8 +630,8 @@ export function buildShotsFromEntries(
   const shots: Array<Shot> = [];
   entries.forEach((entry, i) => {
     const scene = matchSceneByHeading(entry.sceneHeading, scenes);
-    const names = entry.characterNames.map((n) => n.trim()).filter(Boolean);
-    const linked = characters.filter((c) => c.name !== "" && names.includes(c.name));
+    const names = new Set(entry.characterNames.map((n) => n.trim()).filter(Boolean));
+    const linked = characters.filter((c) => c.name !== "" && names.has(c.name));
     const heading = entry.sceneHeading.trim() || (scene?.heading ?? "") || "未命名场景";
     const shot: Shot = {
       id: workshopUid("shot"),

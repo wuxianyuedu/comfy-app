@@ -193,7 +193,7 @@ export function deriveEncapsulationStatus(args: {
   /* 尺寸来源声明为首图时，尺寸卡没有落点属于设计意图，不进「未配置」清单。 */
   const isSizeSlotUnwired = (id: string) => sizeFromReference && id === "size";
   const missingRequired = ordered
-    .filter((e) => required.includes(e.id) && e.targetIoKey === null && !isSizeSlotUnwired(e.id))
+    .filter((e) => requiredSet.has(e.id) && e.targetIoKey === null && !isSizeSlotUnwired(e.id))
     .map((e) => e.label);
   /* 「尺寸」另有一条判据：**它是必备口时**，定不出宽高就不许跑（见
    *  `isSizeDetermined`）—— 缺的这一项要出现在「缺了它不能跑」的清单里，否则

@@ -260,7 +260,8 @@ function SettingsSectionNav({
   return (
     <nav aria-label="设置分区" className="custom-scrollbar w-40 shrink-0 overflow-y-auto pr-2 pb-2">
       {TREE_GROUPS.map((group) => {
-        const items = SETTINGS_SECTIONS.filter((item) => group.sections.includes(item.id));
+        const groupIds = new Set(group.sections);
+        const items = SETTINGS_SECTIONS.filter((item) => groupIds.has(item.id));
         if (items.length === 0) {
           return null;
         }

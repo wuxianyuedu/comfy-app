@@ -55,7 +55,8 @@ export function ShotRow({
   shot: Shot;
   styles: Array<StyleRef>;
 }) {
-  const linkedChars = characters.filter((character) => shot.characterIds.includes(character.id));
+  const characterIds = new Set(shot.characterIds);
+  const linkedChars = characters.filter((character) => characterIds.has(character.id));
   /* 本镜头的实时生成进度（ComfyUI 当前节点 + 百分比）。 */
   const progress = progressByShot?.[shot.id];
   const progressLabel = progress?.label;
