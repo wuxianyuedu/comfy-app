@@ -138,6 +138,9 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
     isScriptEditorOpen,
     notice,
     integrity,
+    serverChanged,
+    adoptServerProduction,
+    dismissServerChanged,
     rendered,
     generateShot,
     openScriptEditor,
@@ -183,6 +186,24 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
             variant="ghost"
           >
             关闭
+          </Button>
+        </div>
+      )}
+
+      {/* 另一个检出保存过内容时常驻这一条（ISSUE #5251）：采纳是显式动作，
+       * 不自动覆盖用户正在编辑的草稿；忽略只是收起提示，不写库。 */}
+      {serverChanged && (
+        <div
+          className="border-warning/30 bg-warning/10 text-warning-strong mb-4 flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs"
+          data-component="server-changed-hint"
+        >
+          <Icon className="shrink-0" name="info" size={13} />
+          <span className="flex-1">另一个检出已更新了服务端内容，当前草稿可能基于旧版本。</span>
+          <Button onClick={adoptServerProduction} size="xs" type="button" variant="outline">
+            采纳服务端内容
+          </Button>
+          <Button onClick={dismissServerChanged} size="xs" type="button" variant="ghost">
+            忽略
           </Button>
         </div>
       )}

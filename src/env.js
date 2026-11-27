@@ -62,6 +62,9 @@ export const env = createEnv({
     BETTER_AUTH_GITHUB_CLIENT_ID: z.string(),
     BETTER_AUTH_GITHUB_CLIENT_SECRET: z.string(),
     DATABASE_URL: z.url(),
+    /* 协作活动流的来源标签（ISSUE #5251）：由启动器从既有 handle 取值链算出后注入，
+     * `COMFYAPP_DEV_HANDLE` 本身仍不进本文件、运行期不读。 */
+    COMFYAPP_ACTIVITY_SOURCE: z.string().optional(),
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     // 可观测性：日志级别（pino）；SENTRY_DSN 仅生产接入错误追踪时配置
     LOG_LEVEL: z.enum(["debug", "info", "warn", "error", "fatal"]).default("info"),
@@ -87,6 +90,7 @@ export const env = createEnv({
     BETTER_AUTH_GITHUB_CLIENT_ID: process.env.BETTER_AUTH_GITHUB_CLIENT_ID,
     BETTER_AUTH_GITHUB_CLIENT_SECRET: process.env.BETTER_AUTH_GITHUB_CLIENT_SECRET,
     DATABASE_URL: process.env.DATABASE_URL,
+    COMFYAPP_ACTIVITY_SOURCE: process.env.COMFYAPP_ACTIVITY_SOURCE,
     NODE_ENV: process.env.NODE_ENV,
     LOG_LEVEL: process.env.LOG_LEVEL,
     SENTRY_DSN: process.env.SENTRY_DSN,

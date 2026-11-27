@@ -8,6 +8,22 @@ import { auditLog } from "~/server/db/schema";
 import { requireRequestUser } from "~/server/auth/request-user";
 import { unauthorizedResponse } from "~/server/lib/error-response";
 import { apiErrorBody } from "~/lib/api-error";
+import { isPlainRecord } from "~/lib/is-record";
+
+/** 从 auditLog.meta（JSON 文本）里读来源标签；畸形 JSON 不抛、不回显原文。 */
+function readSource(meta: string | null): string | undefined {
+  if (meta === null) {
+    return undefined;
+  }
+  try {
+    const parsed: unknown = JSON.parse(meta);
+    const record = isPlainRecord(parsed) ? parsed : null;
+    const source = record?.source;
+    return typeof source === "string" && source.trim() !== "" ? source : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,12 +57,16 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(auditLog.createdAt))
       .limit(30);
     return NextResponse.json({
-      items: rows.map((row) => ({
-        id: row.id,
-        event: row.event,
-        createdAt:
-          row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
-      })),
+      items: rows.map((row) => {
+        const source = readSource(row.meta);
+        return {
+          ...(source === undefined ? {} : { source }),
+          id: row.id,
+          event: row.event,
+          createdAt:
+            row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
+        };
+      }),
     });
   } catch (error) {
     return NextResponse.json(apiErrorBody(error, "读取活动流失败"), { status: 500 });

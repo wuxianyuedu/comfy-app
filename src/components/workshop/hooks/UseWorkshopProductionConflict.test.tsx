@@ -76,13 +76,13 @@ function lastPutPayload(spy: ReturnType<typeof vi.fn>): Record<string, unknown> 
 }
 
 /** 记录所有请求，并按路径给出应答。 */
-function stubFetch(productionRow: Record<string, unknown> | null) {
+function stubFetch(productionRow: Record<string, unknown> | null, putStale = false) {
   const spy = vi.fn((input: RequestInfo | URL, init?: { method?: string }) => {
     const url = callUrl(input);
     if (url.includes("/api/production")) {
       if (init?.method === "PUT") {
         return Promise.resolve(
-          new Response(JSON.stringify({ ok: true, stale: false, updatedAt: Date.now() }), {
+          new Response(JSON.stringify({ ok: true, stale: putStale, updatedAt: Date.now() }), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           }),
@@ -186,6 +186,32 @@ describe("工坊自动保存不覆盖 AI 侧写入（#5147）", () => {
     expect(Object.hasOwn(payload, "characters")).toBe(false);
     expect(Object.hasOwn(payload, "scenes")).toBe(false);
     expect(Object.hasOwn(payload, "shots")).toBe(false);
+  });
+
+  it("PUT 回 stale → 常驻提示；用户点采纳后才覆盖本机草稿（ISSUE #5251）", async () => {
+    createProject("冲突测试");
+    stubFetch(aiRow(-60_000), true);
+
+    const { result } = renderHook(() => useWorkshopPipeline());
+    await vi.waitFor(() => {
+      expect(result.current.characters).toHaveLength(1);
+    });
+    act(() => {
+      result.current.setScriptMarkdown("# 用户改过的剧本");
+    });
+    await vi.waitFor(() => {
+      expect(result.current.serverChanged).toBe(true);
+    });
+    /* 提示出现时本机草稿仍是用户那份 —— 不自动采纳。 */
+    expect(result.current.scriptMarkdown).toBe("# 用户改过的剧本");
+
+    act(() => {
+      result.current.adoptServerProduction();
+    });
+    await vi.waitFor(() => {
+      expect(result.current.scriptMarkdown).toBe("# AI 写的剧本");
+    });
+    expect(result.current.serverChanged).toBe(false);
   });
 
   it("用户没做任何编辑 → 一拍自动保存都不发（旧行为是每 600ms 整片重发）", async () => {

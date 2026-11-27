@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -35,9 +36,8 @@ export function ShotFilmStrip({
   const failedCount = shots.filter((shot) => shot.status === "failed").length;
   /* 评审状态复用已有的 shot.review（不新增第二套状态类型，也不加 DB 列）：
    * 共享 DB 下另一个检出审过的镜头，这里一眼可见。 */
-  const reviewedCount = shots.filter(
-    (shot) => normalizeReviewVerdict(asRecord(shot)?.review)?.pass === true,
-  ).length;
+  const isReviewed = (shot: Shot) => normalizeReviewVerdict(asRecord(shot)?.review)?.pass === true;
+  const reviewedCount = shots.filter(isReviewed).length;
 
   return (
     <section
@@ -98,6 +98,17 @@ export function ShotFilmStrip({
                   <span className="text-4xs absolute top-0.5 left-0.5 rounded bg-black/60 px-1 leading-4 text-white tabular-nums">
                     {formatShotIndex(shot.index)}
                   </span>
+                )}
+
+                {isReviewed(shot) && (
+                  <Badge
+                    aria-hidden
+                    className="pointer-events-none absolute top-0.5 right-0.5"
+                    size="xs"
+                    tone="success"
+                  >
+                    已评审
+                  </Badge>
                 )}
 
                 <span aria-hidden className={`absolute inset-x-0 bottom-0 h-1 ${frame.barClass}`} />

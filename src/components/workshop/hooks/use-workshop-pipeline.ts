@@ -128,6 +128,8 @@ export type ExtractSessionActions = {
 export type WorkshopPipelineController = {
   /* ── 所在项目（Phase 2：并入统一 proj_*，工坊不再自建多项目） ── */
   activeProjectId: string;
+  /** 另一个检出更新了服务端内容时的显式采纳 / 忽略出口（ISSUE #5251）。 */
+  adoptServerProduction: () => void;
   apiChannels: ApiChannelsView | null;
   /** 取消一个进行中的本机任务（生图 / 视频通用）：调 task.cancel 后由观察
    *  循环收到 CANCELLED 终态收尾。API 直连任务没有本机任务 id，取消不了。 */
@@ -142,6 +144,7 @@ export type WorkshopPipelineController = {
   clipDoneCount: number;
   closeScriptEditor: () => void;
   dismissNotice: () => void;
+  dismissServerChanged: () => void;
 
   // ── 动作
   generateShot: (shot: Shot) => Promise<void>;
@@ -178,8 +181,10 @@ export type WorkshopPipelineController = {
   rendered: boolean;
   saveScriptEditor: () => void;
   scenes: Array<Scene>;
-
   scriptMarkdown: string;
+  /** 服务端被别的检出更新过 —— 视图据此显示常驻提示（ISSUE #5251）。 */
+  serverChanged: boolean;
+
   setCharacters: React.Dispatch<React.SetStateAction<Array<Character>>>;
   setMeta: React.Dispatch<React.SetStateAction<ProjectMeta>>;
   /** 某个生成入口的模型选择（#4834：统一为测试模型级联的取值空间）。 */
@@ -401,18 +406,27 @@ export function useWorkshopPipeline(
   /* 解构成局部名再消费（不整包透传）：`persistNow` / `settleRestore` 是稳定的
    * `useCallback`，可以直接进依赖数组；而整包对象每次渲染都是新的，进依赖会让
    * 卸载兜底那条 effect 每渲染跑一次。 */
-  const { latestDraftRef, stageRef, restoreSettledRef, persistNow, persistLatest, settleRestore } =
-    useWorkshopProductionSync({
-      activeProjectId,
-      applyDraft,
-      currentDraft,
-      setNotice,
-      setDraftCache: (draft) => {
-        workshopDraftCache = draft;
-      },
-      stage: tab,
-      rendered,
-    });
+  const {
+    adoptServerProduction,
+    dismissServerChanged,
+    latestDraftRef,
+    persistLatest,
+    persistNow,
+    restoreSettledRef,
+    serverChanged,
+    settleRestore,
+    stageRef,
+  } = useWorkshopProductionSync({
+    activeProjectId,
+    applyDraft,
+    currentDraft,
+    setNotice,
+    setDraftCache: (draft) => {
+      workshopDraftCache = draft;
+    },
+    stage: tab,
+    rendered,
+  });
   /** 阶段游标的 ref 镜像（progress 恢复那条 effect 读它）。 */
   const tabRef = stageRef;
   /* 项目 id 的 ref 镜像（progress 恢复与草稿镜像对账都要读它）。 */
@@ -673,6 +687,7 @@ export function useWorkshopPipeline(
     shotProgress: generation.shotProgress,
     isScriptEditorOpen,
     notice,
+    serverChanged,
     integrity,
 
     characterExtract,
@@ -689,6 +704,8 @@ export function useWorkshopPipeline(
     saveScriptEditor,
     openModelAdapters,
     handleApiChannelsSaved,
+    adoptServerProduction,
+    dismissServerChanged,
     dismissNotice,
     showNotice,
     markRendered,
