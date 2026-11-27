@@ -1677,8 +1677,8 @@
 
 #### FR-SR-03 跨集资产复用（角色库 / 风格锚 / 场景库）
 
-- 状态：部分实现（角色库已实现：#2508 实体化 + #2801 引用提示 / 反向查询；
-  风格锚 / 场景库尚未实体化）
+- 状态：角色库已实现（#2508 实体化 + #2801 引用提示 / 反向查询）；风格锚 / 场景 /
+  镜头模板实体表与集引用已上线（ISSUE #5215），旧 JSON 列数据可逐项录入迁移
 - 需求：角色、风格、场景成为**可被多集引用**的实体（引用，不是拷贝）。
 - 行为与验收：① 在 B 集引用 A 集的角色后，改 A 集角色卡时给出「该角色被 N 集引用」的提示，
   **不静默改**（改了别的集会跟着变，这件事必须让操作者看见）；**已达标**：角色库面板聚焦
@@ -1688,9 +1688,11 @@
   `episodeCharacters`（某集关联了哪些角色）互为反向；
   ③ **拷贝即失去一致性**：以「复制一份到本集」实现的复用不算本条达标。**已达标**：集经
   `episode_character` 引用系列角色实体，不复制 JSON；
-  ④ 风格锚 / 场景库的同等「可被多集引用」：**未落地**——风格锚仅 `series.styleSlug`
-  （引用 `skill.slug` 的档位，随系列沿用，无集级引用与反向查询），场景仍是
-  `production.scenes` JSON 列；实体化后按 ①~③ 同口径验收。
+  ④ 风格锚 / 场景 / 镜头模板的同等「可被多集引用」：**已上线**（ISSUE #5215）——
+  `seriesAsset` 实体表（kind=style/scene/shot，带 `version` 与 `refCount`）+ `episode_asset`
+  引用表；按 ①~③ 同口径验收：引用而非拷贝、反向查询 `seriesAssetEpisodes` 列出受影响集、
+  正文变更版本递增且被引用时禁止删除。旧 `series.styleSlug` / `production.scenes` /
+  `production.shots` JSON 列保留，逐项录入即可迁移，不自动改写存量。
 - 落点（现状）：`character` 实体表与 `episode_character` 关联表（`series` 级角色库，字段对齐
   `Character`）；系列角色库 tRPC router（`characters` / `createCharacter` / `updateCharacter` /
   `deleteCharacter` / `episodeCharacters` / `characterEpisodes` / `linkCharacter` /
