@@ -86,6 +86,21 @@ async function addCharacter(seriesId: string, name = "角色", caller = userCall
   return ch;
 }
 
+/** 造一个系列资产实体（createSeriesAsset 返回 `T | undefined`）。 */
+async function addAsset(
+  seriesId: string,
+  kind: "style" | "scene" | "shot",
+  name: string,
+  caller = userCaller(),
+  data?: unknown,
+) {
+  const asset = await caller.createSeriesAsset({ data, kind, name, seriesId });
+  if (!asset) {
+    throw new Error("seed asset failed");
+  }
+  return asset;
+}
+
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
@@ -561,5 +576,57 @@ describe("FR-SR-04 整季生成进度与批量提交", () => {
     expect(inputs2.some((i) => i.nodeId === "7")).toBe(false);
     /* 不同镜头的注入内容彼此不同 —— 幂等与进度正常不能掩盖「内容全错」。 */
     expect(inputs1).not.toEqual(inputs2);
+  });
+});
+
+/** 系列级跨集资产实体（FR-SR-03 / ISSUE #5215）：引用而非拷贝、版本与引用计数。 */
+describe("series asset entities（#5215）", () => {
+  it("创建 / 按种类列表 / 同名冲突", async () => {
+    const { s } = await makeHierarchy();
+    const caller = userCaller();
+    const asset = await addAsset(s.id, "style", "赛博国风", caller, { skill: "anime" });
+    expect(asset).toMatchObject({ kind: "style", name: "赛博国风", refCount: 0, version: 1 });
+    expect((await caller.seriesAssets({ seriesId: s.id })).map((a) => a.name)).toEqual([
+      "赛博国风",
+    ]);
+    await expect(
+      caller.createSeriesAsset({ kind: "style", name: "赛博国风", seriesId: s.id }),
+    ).rejects.toThrow(/同名资产已存在/);
+    await caller.createSeriesAsset({ kind: "scene", name: "雨夜街道", seriesId: s.id });
+    expect(
+      (await caller.seriesAssets({ kind: "scene", seriesId: s.id })).map((a) => a.name),
+    ).toEqual(["雨夜街道"]);
+  });
+
+  it("正文变更版本递增；被引用时禁止删除；反向引用与幂等解引用", async () => {
+    const { ep, s } = await makeHierarchy();
+    const caller = userCaller();
+    const asset = await addAsset(s.id, "scene", "码头", caller);
+    await caller.linkSeriesAsset({ assetId: asset.id, episodeId: ep.id });
+    const linked = await caller.episodeAssets({ episodeId: ep.id });
+    expect(linked.length).toBe(1);
+    expect(linked[0]?.asset.id).toBe(asset.id);
+    const updated = await caller.updateSeriesAsset({ data: { desc: "清晨" }, id: asset.id });
+    expect(updated?.version).toBe(2);
+    await expect(caller.deleteSeriesAsset({ id: asset.id })).rejects.toThrow(/仍被 1 集引用/);
+    const refs = await caller.seriesAssetEpisodes({ assetId: asset.id });
+    expect(refs.length).toBe(1);
+    expect(refs[0]?.episode.id).toBe(ep.id);
+    await caller.unlinkSeriesAsset({ assetId: asset.id, episodeId: ep.id });
+    await caller.unlinkSeriesAsset({ assetId: asset.id, episodeId: ep.id });
+    const after = (await caller.seriesAssets({ seriesId: s.id }))[0];
+    expect(after?.refCount).toBe(0);
+    await expect(caller.deleteSeriesAsset({ id: asset.id })).resolves.toEqual({ ok: true });
+  });
+
+  it("跨系列引用被拒；非拥有者读资产 FORBIDDEN", async () => {
+    const { ep, s } = await makeHierarchy();
+    const caller = userCaller();
+    const otherSeries = await addSeries(caller, "S2");
+    const asset = await addAsset(otherSeries.id, "shot", "特写模板", caller);
+    await expect(caller.linkSeriesAsset({ assetId: asset.id, episodeId: ep.id })).rejects.toThrow(
+      /不属于此集/,
+    );
+    await expect(otherCaller().seriesAssets({ seriesId: s.id })).rejects.toThrow(/无权操作/);
   });
 });

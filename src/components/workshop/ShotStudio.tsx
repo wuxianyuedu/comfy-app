@@ -111,7 +111,8 @@ function useAutoFillPrompts(
           return shot;
         }
         const scene = scenes.find((sc) => sc.id === shot.sceneId);
-        const chars = characters.filter((c) => shot.characterIds.includes(c.id));
+        const characterIds = new Set(shot.characterIds);
+        const chars = characters.filter((c) => characterIds.has(c.id));
         const style = styles.find((st) => st.slug === shot.skillSlug);
         return {
           ...shot,
@@ -164,12 +165,22 @@ export function ShotStudio({
   /** 提示词被用户手改过的镜头 —— 自动预填不得覆盖。 */
   const editedRef = React.useRef<Set<string>>(new Set());
 
-  const busyCount = shots.filter((s) => s.status === "running").length;
-  const doneCount = shots.filter((s) => s.imageUrl !== undefined && s.imageUrl !== "").length;
-  const pending = shots.filter(
-    (s) =>
-      (s.imageUrl === undefined || s.imageUrl === "") &&
-      (s.status === "idle" || s.status === "failed"),
+  const busyCount = React.useMemo(
+    () => shots.filter((s) => s.status === "running").length,
+    [shots],
+  );
+  const doneCount = React.useMemo(
+    () => shots.filter((s) => s.imageUrl !== undefined && s.imageUrl !== "").length,
+    [shots],
+  );
+  const pending = React.useMemo(
+    () =>
+      shots.filter(
+        (s) =>
+          (s.imageUrl === undefined || s.imageUrl === "") &&
+          (s.status === "idle" || s.status === "failed"),
+      ),
+    [shots],
   );
 
   // ── 自动预填：分镜输出 → 图片提示词（逻辑收在 useAutoFillPrompts）──
@@ -272,8 +283,9 @@ export function ShotStudio({
          * 没有可执行的图。见 generateShot 入口的门禁。 */
         /* 角色 LoRA（FR-QA-02③ · #2622）：出场角色里第一个绑定的生效
          * （多角色链式加载另立）；工作流没连 lora 口 → unmatched 提示。 */
+        const characterIds = new Set(shot.characterIds);
         const loraChar = characters
-          .filter((c) => shot.characterIds.includes(c.id))
+          .filter((c) => characterIds.has(c.id))
           .find((c) => c.loraName !== undefined && c.loraName !== "");
         const loraName = loraChar?.loraName;
         const loraStrength = loraChar?.loraStrength;

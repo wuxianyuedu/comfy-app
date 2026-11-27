@@ -230,9 +230,10 @@ export function useModeContractEditor(): ModeContractEditorController {
         required: prev.required,
       });
       const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+      const nextIds = new Set<string>(next);
       return {
         ...prev,
-        required: prev.inputs.filter((x) => next.includes(x)),
+        required: prev.inputs.filter((x) => nextIds.has(x)),
       };
     });
   }, []);

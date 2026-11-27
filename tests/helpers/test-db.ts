@@ -81,6 +81,8 @@ const TABLES = [
   "episode",
   "character",
   "episode_character",
+  "seriesAsset",
+  "episode_asset",
   "characterProfile",
   "generationControl",
 ];
@@ -240,6 +242,14 @@ CREATE TABLE IF NOT EXISTS episode_character (
   id TEXT PRIMARY KEY, episodeId TEXT NOT NULL, characterId TEXT NOT NULL, role TEXT NOT NULL DEFAULT '',
   createdAt TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS seriesAsset (
+  id TEXT PRIMARY KEY, seriesId TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL, alias TEXT,
+  data TEXT NOT NULL DEFAULT '{}', version INTEGER NOT NULL DEFAULT 1, refCount INTEGER NOT NULL DEFAULT 0,
+  createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS episode_asset (
+  id TEXT PRIMARY KEY, episodeId TEXT NOT NULL, assetId TEXT NOT NULL, createdAt TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS characterProfile (
   id TEXT PRIMARY KEY, userId TEXT NOT NULL, name TEXT NOT NULL, archetype TEXT NOT NULL DEFAULT '',
   gender TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '[]',
@@ -261,6 +271,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS episode_project_uniq ON episode (projectId);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_character_uniq ON episode_character (episodeId, characterId);
 CREATE UNIQUE INDEX IF NOT EXISTS wmtt_tag_wt_uniq ON workflowModelTag_workflowTemplate (workflowModelTag, workflowTemplate);
 CREATE UNIQUE INDEX IF NOT EXISTS character_series_name_uniq ON "character" (seriesId, name);
+CREATE UNIQUE INDEX IF NOT EXISTS series_asset_series_kind_name_uniq ON seriesAsset (seriesId, kind, name);
+CREATE UNIQUE INDEX IF NOT EXISTS episode_asset_uniq ON episode_asset (episodeId, assetId);
 CREATE TABLE IF NOT EXISTS generationControl (
   id TEXT PRIMARY KEY, paused INTEGER NOT NULL DEFAULT 0, pausedAt TEXT, updatedAt TEXT NOT NULL
 );

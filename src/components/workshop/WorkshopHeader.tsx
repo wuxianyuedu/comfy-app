@@ -5,6 +5,7 @@
 // 这里**不挂**「模型适配 / 模式契约」：它们读写全局注册表（与当前项目无关），
 // 入口在侧栏（`studio/NavItems.tsx` 的 `OVERLAY_NAV_ITEMS`）。
 
+import { useMemo } from "react";
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { Hint } from "~/components/ui/hint";
 import { toPct } from "~/lib/progress";
@@ -20,9 +21,12 @@ type WorkshopHeaderProps = {
 
 export function WorkshopHeader({ title, progressPct, health }: WorkshopHeaderProps) {
   /* 唯一一份进度账在 health 里：段数与「差哪几段」都由它派生，头部不再自己数一遍。 */
-  const pendingRows = health.filter((row) => row.pending);
+  const pendingRows = useMemo(() => health.filter((row) => row.pending), [health]);
   const pendingCount = countPendingStages(health);
-  const pendingLabels = pendingRows.map((row) => row.label).join("、");
+  const pendingLabels = useMemo(
+    () => pendingRows.map((row) => row.label).join("、"),
+    [pendingRows],
+  );
 
   return (
     <header className="border-border flex h-16 items-center gap-3 border-b px-6">

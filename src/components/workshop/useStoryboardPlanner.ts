@@ -149,7 +149,8 @@ export function useStoryboardPlanner(props: Props) {
         }
         const next = { ...shot, ...patch };
         const scene = scenes.find((sc) => sc.id === next.sceneId);
-        const chars = characters.filter((character) => next.characterIds.includes(character.id));
+        const characterIds = new Set(next.characterIds);
+        const chars = characters.filter((character) => characterIds.has(character.id));
         const style = styles.find((st) => st.slug === next.skillSlug);
         return recompute(next, scene, chars, style);
       }),
@@ -207,10 +208,9 @@ export function useStoryboardPlanner(props: Props) {
           const raws = parseStoryboard(full);
           raws.forEach((raw) => {
             n += 1;
+            const rawNames = new Set(raw.characterNames);
             const charIds = characters
-              .filter(
-                (character) => character.name !== "" && raw.characterNames.includes(character.name),
-              )
+              .filter((character) => character.name !== "" && rawNames.has(character.name))
               .map((character) => character.id);
             const shot: Shot = {
               id: workshopUid("shot"),
@@ -225,7 +225,8 @@ export function useStoryboardPlanner(props: Props) {
               params: {},
               status: "idle",
             };
-            const linkedChars = characters.filter((character) => charIds.includes(character.id));
+            const linkedIds = new Set(charIds);
+            const linkedChars = characters.filter((character) => linkedIds.has(character.id));
             built.push(recompute(shot, scene, linkedChars, undefined));
           });
         }

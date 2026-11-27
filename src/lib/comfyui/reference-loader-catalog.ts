@@ -200,9 +200,10 @@ function collectInputs(
   seen: Set<string>,
   push: (name: string, spec: unknown) => void,
 ): void {
+  const orderedNames = new Set(orderList);
   const names: Array<string> = [
     ...orderList.filter((n): n is string => typeof n === "string" && n in table),
-    ...Object.keys(table).filter((n) => !seen.has(n) && !orderList.includes(n)),
+    ...Object.keys(table).filter((n) => !seen.has(n) && !orderedNames.has(n)),
   ];
   for (const name of names) {
     if (seen.has(name)) {

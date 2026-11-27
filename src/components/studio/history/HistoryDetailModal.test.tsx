@@ -260,3 +260,47 @@ describe("HistoryDetailModal 模式 / 模型名 / 参考图（ISSUE #4855）", (
     expect(screen.queryByText("参考图")).toBeNull();
   });
 });
+
+/* D3 回归：原始 JSON 展示文本走缓存，展开/重渲后仍展示同一份格式化内容。 */
+describe("HistoryDetailModal 原始 JSON 展示文本缓存（ISSUE #5227 D3）", () => {
+  const DETAIL: TaskDetail = {
+    ...TASK_DETAIL_BASE,
+    params: { workflow: "wf-1", lora: "model.safetensors", seed: 42 },
+  };
+
+  function renderDetail() {
+    return render(
+      <ToastProvider>
+        <HistoryDetailModal
+          detail={DETAIL}
+          detailId={DETAIL.id}
+          detailLoading={false}
+          modeContracts={null}
+          onClose={vi.fn()}
+          workflowIO={{}}
+        />
+      </ToastProvider>,
+    );
+  }
+
+  it("展开原始 JSON 后重渲，展示的仍是同一份格式化文本", () => {
+    const { rerender } = renderDetail();
+    const trigger = screen.getByText(/原始 JSON/);
+    trigger.click();
+    const before = screen.getByText(/"lora"/).textContent;
+    expect(before).toContain("model.safetensors");
+    rerender(
+      <ToastProvider>
+        <HistoryDetailModal
+          detail={DETAIL}
+          detailId={DETAIL.id}
+          detailLoading={false}
+          modeContracts={null}
+          onClose={vi.fn()}
+          workflowIO={{}}
+        />
+      </ToastProvider>,
+    );
+    expect(screen.getByText(/"lora"/).textContent).toBe(before);
+  });
+});

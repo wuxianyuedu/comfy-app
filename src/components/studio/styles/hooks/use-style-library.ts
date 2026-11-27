@@ -251,7 +251,8 @@ export function useStyleLibrary() {
       setNotice("先写提示词，或选一个角色 / 场景");
       return;
     }
-    const chosen = styles.filter((style) => selection.selected.includes(style.slug));
+    const selected = new Set(selection.selected);
+    const chosen = styles.filter((style) => selected.has(style.slug));
     if (chosen.length === 0) {
       setNotice("先勾选至少一个画风");
       return;

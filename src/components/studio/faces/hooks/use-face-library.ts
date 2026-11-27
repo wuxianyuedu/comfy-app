@@ -85,10 +85,10 @@ export function useFaceLibrary() {
 
   const catalog = useModelCatalog("image", "T2I");
   const filtered = useMemo(() => searchFacePresets(query, FACE_PRESETS), [query]);
-  const selectedPresets = useMemo(
-    () => FACE_PRESETS.filter((preset) => selection.selected.includes(preset.id)),
-    [selection.selected],
-  );
+  const selectedPresets = useMemo(() => {
+    const selected = new Set(selection.selected);
+    return FACE_PRESETS.filter((preset) => selected.has(preset.id));
+  }, [selection.selected]);
   const prompt = useMemo(
     () => selectedPresets.map((preset) => buildFacePrompt(preset)).join("\n"),
     [selectedPresets],

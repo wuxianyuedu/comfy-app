@@ -19,6 +19,7 @@ import { isRecord } from "~/lib/is-record";
 import "react18-json-view/src/style.css";
 import { Button } from "~/components/ui/button";
 import { onNextFrame } from "~/lib/next-frame";
+import { useDebouncedValue } from "~/components/ui/use-debounced-value";
 import { useHotkey } from "~/components/ui/use-hotkey";
 import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
@@ -58,6 +59,17 @@ function isJsonValue(value: unknown): value is JsonValue {
  *  做 DOM 后处理, 留作 collectHits 返回类型 + 日后扩展 (例如 toggle 行级
  *  highlight) 时使用。 */
 type Path = ReadonlyArray<string | number>;
+/** 命中路径的单向链表节点：递归时只挂一层父指针，不再每层 `[...path, key]` 复制
+ *  整条数组（#5224 A6，深树遍历曾为 O(深度²) 分配/GC）。`toPath()` 只在真正
+ *  产出一条命中时才回溯展开一次。 */
+type PathNode = { key: string | number; parent: PathNode | null };
+function toPath(node: PathNode): Path {
+  const out: Array<string | number> = [];
+  for (let cur: PathNode | null = node; cur !== null && cur.parent !== null; cur = cur.parent) {
+    out.push(cur.key);
+  }
+  return out.reverse();
+}
 
 // ─── 命中收集 ──────────────────────────────────────────────────────────────
 /** 收集所有命中路径 (key / primitive value 都参与匹配, 大小写不敏感) */
@@ -68,47 +80,48 @@ function collectHits(root: JsonValue, query: string): Array<Path> {
   }
   const hits: Array<Path> = [];
 
-  const visit = (node: JsonValue, path: Path) => {
+  const visit = (node: JsonValue, path: PathNode) => {
     if (node === null) {
       if ("null".includes(q)) {
-        hits.push(path);
+        hits.push(toPath(path));
       }
       return;
     }
     if (typeof node === "string") {
       if (node.toLowerCase().includes(q)) {
-        hits.push(path);
+        hits.push(toPath(path));
       }
       return;
     }
     if (typeof node === "number") {
       if (String(node).toLowerCase().includes(q)) {
-        hits.push(path);
+        hits.push(toPath(path));
       }
       return;
     }
     if (typeof node === "boolean") {
       if (String(node).toLowerCase().includes(q)) {
-        hits.push(path);
+        hits.push(toPath(path));
       }
       return;
     }
     if (Array.isArray(node)) {
       node.forEach((value, index) => {
-        visit(value, [...path, index]);
+        visit(value, { key: index, parent: path });
       });
       return;
     }
     // object
     for (const [k, value] of Object.entries(node)) {
+      const child: PathNode = { key: k, parent: path };
       if (k.toLowerCase().includes(q)) {
-        hits.push([...path, k]);
+        hits.push(toPath(child));
       }
-      visit(value, [...path, k]);
+      visit(value, child);
     }
   };
 
-  visit(root, []);
+  visit(root, { key: "", parent: null });
   return hits;
 }
 
@@ -299,6 +312,9 @@ export type JsonViewerProps = {
 export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: JsonViewerProps) {
   // ── 搜索 + 命中索引 ──
   const [query, setQuery] = useState("");
+  /* 输入框吃实时 query（敲字零延迟），全树 collectHits + DOM TreeWalker 后处理
+   * 吃 250ms 防抖值：此前每次 keystroke 都触发两次全量遍历（#5224 A6）。 */
+  const debouncedQuery = useDebouncedValue(query, 250);
   const [hitIndex, setHitIndex] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -306,14 +322,14 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const hits = useMemo(
-    () => (isJsonValue(data) ? collectHits(data, query.trim()) : []),
-    [data, query],
+    () => (isJsonValue(data) ? collectHits(data, debouncedQuery.trim()) : []),
+    [data, debouncedQuery],
   );
 
   // 数据 / query 变化: 重置 hitIndex（render 阶段同步，避免 effect 级联渲染）
-  const [prevQuery, setPrevQuery] = useState(query);
-  if (prevQuery !== query) {
-    setPrevQuery(query);
+  const [prevQuery, setPrevQuery] = useState(debouncedQuery);
+  if (prevQuery !== debouncedQuery) {
+    setPrevQuery(debouncedQuery);
     setHitIndex(0);
   }
 
@@ -331,7 +347,7 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
     if (!body) {
       return;
     }
-    const needle = query.trim();
+    const needle = debouncedQuery.trim();
     if (!needle && !paintedRef.current) {
       return;
     }
@@ -343,7 +359,7 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
       applyHighlights(bodyRef.current, hits, hitIndex, needle);
       paintedRef.current = needle.length > 0 && hits.length > 0;
     });
-  }, [query, hits, hitIndex, data]);
+  }, [debouncedQuery, hits, hitIndex, data]);
 
   // ── active hit 居中滚动 ──
   useEffect(() => {

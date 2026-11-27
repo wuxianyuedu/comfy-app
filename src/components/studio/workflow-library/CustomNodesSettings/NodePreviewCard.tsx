@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { colorFor, type ManifestNodeRaw } from "~/config/custom-nodes";
 import { PortRow, WidgetValueChip } from "./SettingsParts";
 import { Button } from "~/components/ui/button";
@@ -35,12 +36,19 @@ export function NodePreviewCard({
   onToggle: () => void;
 }) {
   const color = colorFor(data?.category);
-  const inputs = data?.inputs ?? [];
-  const outputs = data?.outputs ?? [];
-  const typed = inputs.filter(
-    (input) => input.widget === undefined || input.widget === null || input.widget === "",
+  const inputs = useMemo(() => data?.inputs ?? [], [data?.inputs]);
+  const outputs = useMemo(() => data?.outputs ?? [], [data?.outputs]);
+  const typed = useMemo(
+    () =>
+      inputs.filter(
+        (input) => input.widget === undefined || input.widget === null || input.widget === "",
+      ),
+    [inputs],
   );
-  const widgets = inputs.filter((input) => input.widget !== null && input.widget !== undefined);
+  const widgets = useMemo(
+    () => inputs.filter((input) => input.widget !== null && input.widget !== undefined),
+    [inputs],
+  );
   /* 空串同义「无值」需回退 fallbackName（原 `||` 语义的显式写法）。 */
   const displayName = data?.displayName;
   const title = displayName !== undefined && displayName !== "" ? displayName : fallbackName;

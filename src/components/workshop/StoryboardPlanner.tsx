@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -41,9 +42,10 @@ export function StoryboardPlanner(props: Props) {
     polishAll,
   } = planner;
 
-  const idleCount = shots.filter(
-    (shot) => shot.status === "idle" || shot.status === "failed",
-  ).length;
+  const idleCount = useMemo(
+    () => shots.filter((shot) => shot.status === "idle" || shot.status === "failed").length,
+    [shots],
+  );
 
   return (
     <div className="flex-col gap-4">

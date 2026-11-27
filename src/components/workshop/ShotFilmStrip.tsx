@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
@@ -16,6 +18,12 @@ export function formatShotIndex(index: number): string {
   return String(index).padStart(2, "0");
 }
 
+/** 评审通过谓词（ISSUE #5251）：复用 `shot.review`，共享 DB 下另一个检出审过的镜头一眼可见。
+ *  模块级纯函数 —— 既能进 useMemo 依赖稳定的计数，也能给每帧角标用，不写第二份。 */
+function isReviewed(shot: Shot): boolean {
+  return normalizeReviewVerdict(asRecord(shot)?.review)?.pass === true;
+}
+
 /**
  * 镜头胶片带 —— 一排到底的镜头总览，点一帧跳到那一镜：纵向镜头卡回答不了「16 镜跑到哪了、哪几镜挂了」，失败帧在带上是可见缺口。刻意不做：选中态
  *（没有「当前镜头」概念，语义是导航动作，不挂 `aria-selected`）与假进度（帧底那根条只表达状态，百分比在镜头卡里给真数）。
@@ -28,16 +36,16 @@ export function ShotFilmStrip({
   onJump: (shot: Shot) => void;
   shots: Array<Shot>;
 }) {
+  const doneCount = useMemo(() => shots.filter((shot) => shot.status === "done").length, [shots]);
+  const failedCount = useMemo(
+    () => shots.filter((shot) => shot.status === "failed").length,
+    [shots],
+  );
+  const reviewedCount = useMemo(() => shots.filter(isReviewed).length, [shots]);
+
   if (shots.length === 0) {
     return null;
   }
-
-  const doneCount = shots.filter((shot) => shot.status === "done").length;
-  const failedCount = shots.filter((shot) => shot.status === "failed").length;
-  /* 评审状态复用已有的 shot.review（不新增第二套状态类型，也不加 DB 列）：
-   * 共享 DB 下另一个检出审过的镜头，这里一眼可见。 */
-  const isReviewed = (shot: Shot) => normalizeReviewVerdict(asRecord(shot)?.review)?.pass === true;
-  const reviewedCount = shots.filter(isReviewed).length;
 
   return (
     <section

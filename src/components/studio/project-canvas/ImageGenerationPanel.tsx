@@ -1,7 +1,7 @@
 "use client";
 
 import { upperToken } from "~/lib/upper-token";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Hint } from "~/components/ui/hint";
 import { Spinner } from "~/components/ui/spinner";
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -53,6 +53,98 @@ export type ImageGenerationPanelProps = {
   wfListLoading?: boolean;
 };
 
+/* 启发式兜底分类：早期导入的旧工作流 taskType 可能为空或误判（把 I2V 混进文生图），
+ * 故按 wf.name 关键字补最可能的类型（含中文「图生视频」/「文生视频」，无英文 marker 也能识别）；
+ * 推断不出返回空串，由上层 drop。 */
+const inferTypeByName = (rawName: string): string => {
+  const up = upperToken(rawName);
+  // ── VIDEO 类（更具体优先；Chinese"图生视频" 出现在 I2V 之前，
+  // 因为中文"图生视频" 后面可能不带"I2V" 字样）
+  if (/图生视频|IMG2VIDEO/.test(rawName)) {
+    return "I2V";
+  }
+  if (/文生视频|TXT2VIDEO/.test(rawName)) {
+    return "T2V";
+  }
+  if (/首尾帧视频|FLFVIDEO|FLF2V|FL2V/.test(up)) {
+    return "FLF2V";
+  }
+  if (/视频转视频|V2V/.test(up)) {
+    return "V2V";
+  }
+  if (rawName.includes("图生视频") || up.includes("I2V")) {
+    return "I2V";
+  }
+  if (up.includes("FMF2V")) {
+    return "FMF2V";
+  }
+  if (up.includes("T2V")) {
+    return "T2V";
+  }
+  if (up.includes("S2V")) {
+    return "S2V";
+  }
+  if (up.includes("R2V")) {
+    return "R2V";
+  }
+  if (/VR2V|VRC2V/.test(up)) {
+    return "VR2V";
+  }
+  if (/视频|VIDEO/.test(rawName) || up.includes("VIDEO")) {
+    return "T2V";
+  } // 中文"视频"或VIDEO兜底
+  // ── IMAGE 类
+  if (/文生图|T2I|TXT2IMG/.test(rawName) || /T2I|TXT2IMG/.test(up)) {
+    return "T2I";
+  }
+  if (/图生图|局部重绘|I2I|IMG2IMG/.test(rawName) || /I2I|IMG2IMG/.test(up)) {
+    return "I2I";
+  }
+  if (up.includes("INPAINT")) {
+    return "Inpaint";
+  }
+  if (up.includes("OUTPAINT")) {
+    return "Outpaint";
+  }
+  if (up.includes("UPSCAL")) {
+    return "Upscale";
+  }
+  if (up.includes("C2I")) {
+    return "C2I";
+  }
+  if (up.includes("IMAGE")) {
+    return "T2I";
+  } // 兜底归 T2I
+  return "";
+};
+/* name 推断优先于 DB。
+ * 此前，老的 inferWorkflowTypeFromGraph 把 WanVideoSampler+LoadImage
+ * 误判为 T2I 落库；name 现在能正确识别为 I2V，必须以 name 为准避免泄漏。 */
+const effectiveTaskType = (w: {
+  id?: string | null;
+  name?: string | null;
+  taskType?: string | null;
+}): string => {
+  const fromName = inferTypeByName(w.name ?? "");
+  if (fromName) {
+    return fromName;
+  }
+  const fromDb = normalizeTaskType(w.taskType ?? "");
+  if (fromDb) {
+    return fromDb;
+  }
+  return inferTypeByName(w.id ?? "");
+};
+
+/** 稳定的空工作流桶：避免 `?? []` 每次渲染造出新数组、击穿下游 useMemo。 */
+const EMPTY_WORKFLOWS: Array<{
+  id: string;
+  modelTags?: Array<string>;
+  name: string;
+  sourcePath?: string | null;
+  taskType?: string | null;
+}> = [];
+
 export function ImageGenerationPanel({
   kind,
   d,
@@ -97,119 +189,59 @@ export function ImageGenerationPanel({
 
   const isVideo = kind === "video";
   const typeList = isVideo ? VIDEO_WORKFLOW_TYPES : IMAGE_WORKFLOW_TYPES;
-  /* 启发式兜底分类：早期导入的旧工作流 taskType 可能为空或误判（把 I2V 混进文生图），
-   * 故按 wf.name 关键字补最可能的类型（含中文「图生视频」/「文生视频」，无英文 marker 也能识别）；
-   * 推断不出返回空串，由上层 drop。 */
-  const inferTypeByName = (rawName: string): string => {
-    const up = upperToken(rawName);
-    // ── VIDEO 类（更具体优先；Chinese"图生视频" 出现在 I2V 之前，
-    // 因为中文"图生视频" 后面可能不带"I2V" 字样）
-    if (/图生视频|IMG2VIDEO/.test(rawName)) {
-      return "I2V";
+  const genTag = d.genModelTag ?? "";
+  /* 一次遍历建「类型 → 工作流」索引，替代原先渲染期六次全量扫描：
+   * typeOptions 用 filter+some 嵌套 O(类型×工作流)，外加三次按类型 filter、两次
+   * 标签 for 循环（#5224 A1）。effectiveTaskType 对同一条 wf 只算一次。 */
+  const byType = useMemo(() => {
+    const index = new Map<string, Array<(typeof wfList)[number]>>();
+    for (const workflow of wfList) {
+      const code = effectiveTaskType(workflow);
+      const bucket = index.get(code);
+      if (bucket) {
+        bucket.push(workflow);
+      } else {
+        index.set(code, [workflow]);
+      }
     }
-    if (/文生视频|TXT2VIDEO/.test(rawName)) {
-      return "T2V";
-    }
-    if (/首尾帧视频|FLFVIDEO|FLF2V|FL2V/.test(up)) {
-      return "FLF2V";
-    }
-    if (/视频转视频|V2V/.test(up)) {
-      return "V2V";
-    }
-    if (rawName.includes("图生视频") || up.includes("I2V")) {
-      return "I2V";
-    }
-    if (up.includes("FMF2V")) {
-      return "FMF2V";
-    }
-    if (up.includes("T2V")) {
-      return "T2V";
-    }
-    if (up.includes("S2V")) {
-      return "S2V";
-    }
-    if (up.includes("R2V")) {
-      return "R2V";
-    }
-    if (/VR2V|VRC2V/.test(up)) {
-      return "VR2V";
-    }
-    if (/视频|VIDEO/.test(rawName) || up.includes("VIDEO")) {
-      return "T2V";
-    } // 中文"视频"或VIDEO兜底
-    // ── IMAGE 类
-    if (/文生图|T2I|TXT2IMG/.test(rawName) || /T2I|TXT2IMG/.test(up)) {
-      return "T2I";
-    }
-    if (/图生图|局部重绘|I2I|IMG2IMG/.test(rawName) || /I2I|IMG2IMG/.test(up)) {
-      return "I2I";
-    }
-    if (up.includes("INPAINT")) {
-      return "Inpaint";
-    }
-    if (up.includes("OUTPAINT")) {
-      return "Outpaint";
-    }
-    if (up.includes("UPSCAL")) {
-      return "Upscale";
-    }
-    if (up.includes("C2I")) {
-      return "C2I";
-    }
-    if (up.includes("IMAGE")) {
-      return "T2I";
-    } // 兜底归 T2I
-    return "";
-  };
-  /* name 推断优先于 DB。
-   * 此前，老的 inferWorkflowTypeFromGraph 把 WanVideoSampler+LoadImage
-   * 误判为 T2I 落库；name 现在能正确识别为 I2V，必须以 name 为准避免泄漏。 */
-  const effectiveTaskType = (w: {
-    id?: string | null;
-    name?: string | null;
-    taskType?: string | null;
-  }): string => {
-    const fromName = inferTypeByName(w.name ?? "");
-    if (fromName) {
-      return fromName;
-    }
-    const fromDb = normalizeTaskType(w.taskType ?? "");
-    if (fromDb) {
-      return fromDb;
-    }
-    return inferTypeByName(w.id ?? "");
-  };
+    return index;
+  }, [wfList]);
   // Q3=B：列出全部类型，但隐藏无对应工作流的页签
-  const typeOptions = typeList.filter((typeOption) =>
-    wfList.some((wfList) => effectiveTaskType(wfList) === typeOption.code),
+  const typeOptions = useMemo(
+    () => typeList.filter((typeOption) => byType.has(typeOption.code)),
+    [byType, typeList],
   );
   const typeKnown = typeOptions.some((typeOption) => typeOption.code === d.mode);
-  const genTag = d.genModelTag ?? "";
   /* 模型 dropdown 列表只受「类型」影响，不受当前
    * 已选 genModelTag 影响 —— 否则选了 z-Anime 后下拉只剩一项。 */
-  const typeFilteredWorkflows = wfList.filter((workflow) => effectiveTaskType(workflow) === d.mode);
+  const typeFilteredWorkflows: Array<(typeof wfList)[number]> =
+    byType.get(d.mode) ?? EMPTY_WORKFLOWS;
   // Q2=A：工作流同时按 taskType + 模型标签 严格匹配
-  const workflowOptions = typeFilteredWorkflows.filter((workflow) =>
-    genTag ? (workflow.modelTags ?? []).includes(genTag) : true,
+  const workflowOptions = useMemo(
+    () =>
+      typeFilteredWorkflows.filter((workflow) =>
+        genTag ? (workflow.modelTags ?? []).includes(genTag) : true,
+      ),
+    [genTag, typeFilteredWorkflows],
   );
   /* 模型 dropdown 按当前选中类型过滤 —
    * 源必须是 typeFilteredWorkflows（与 genTag 解耦）。 */
-  const availableModelTags = new Set<string>();
-  for (const w of typeFilteredWorkflows) {
-    for (const tag of w.modelTags ?? []) {
-      availableModelTags.add(tag);
+  const modelTagOptions = useMemo(() => {
+    const availableModelTags = new Set<string>();
+    for (const w of typeFilteredWorkflows) {
+      for (const tag of w.modelTags ?? []) {
+        availableModelTags.add(tag);
+      }
     }
-  }
-  const modelTagOptions = modelTagLib.filter((modelTagLib) =>
-    availableModelTags.has(modelTagLib.name),
-  );
+    return modelTagLib.filter((modelTagLib) => availableModelTags.has(modelTagLib.name));
+  }, [modelTagLib, typeFilteredWorkflows]);
 
   const selectType = (code: string) => {
     seededFor.current = null;
     setWfModes(null);
     /* 切类型时若当前模型标签在新类型下没有工作流
      * 也清掉，避免 SelectMenu 残留「幽灵选项」。如仍匹配则保留。 */
-    const newTypeWfs = wfList.filter((wfList) => effectiveTaskType(wfList) === code);
+    const newTypeWfs = byType.get(code) ?? [];
     const newAvailTags = new Set<string>();
     for (const w of newTypeWfs) {
       for (const tag of w.modelTags ?? []) {
@@ -236,7 +268,7 @@ export function ImageGenerationPanel({
     // 多点一次。注意保持与显式换工作流等同的清空（workflowInputs/sinkId），
     // 并与下面 selectWorkflow 的字段集合完全一致；否则会出现「自动选的 wf
     // 比用户手动选的 wf 字段少一截」的诡异状态。
-    const newTypeWfs = wfList.filter((wfList) => effectiveTaskType(wfList) === d.mode);
+    const newTypeWfs = byType.get(d.mode) ?? [];
     const candidateWfs = newTypeWfs.filter((workflow) =>
       name ? (workflow.modelTags ?? []).includes(name) : true,
     );

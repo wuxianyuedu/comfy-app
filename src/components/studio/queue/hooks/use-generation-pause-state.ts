@@ -9,11 +9,19 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { useTRPC } from "~/trpc/react";
+import { useViewTabActive } from "~/components/ui/view-tab-active";
 
 export function useGenerationPauseState(): boolean {
   const trpc = useTRPC();
+  /* 侧栏常驻共享状态：原先没有页签门控，等于每个页签后台都每 30s 轮询一次
+   * （#5224 A3 / §2.10.1 自激盲区）。与 use-queue-monitor 的 pauseState 同一口径：
+   * 非当前页签停摆，切回来时 stale 数据自动补拉。 */
+  const isTabActive = useViewTabActive();
   const query = useQuery(
-    trpc.generationControl.pauseState.queryOptions(undefined, { refetchInterval: 30_000 }),
+    trpc.generationControl.pauseState.queryOptions(undefined, {
+      refetchInterval: 30_000,
+      enabled: isTabActive,
+    }),
   );
   return query.data?.paused === true;
 }
