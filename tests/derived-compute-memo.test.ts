@@ -77,11 +77,11 @@ describe("ISSUE #5225 B 档：渲染期派生计算记忆化", () => {
 
   it("C 档重叠的三处 includes 换成 Set 查表", () => {
     const shotStudio = source("src/components/workshop/ShotStudio.tsx");
-    expect(shotStudio).toContain("const charIds = new Set(shot.characterIds)");
+    expect(shotStudio).toContain("const characterIds = new Set(shot.characterIds)");
     expect(shotStudio).not.toContain("characters.filter((c) => shot.characterIds.includes(c.id))");
 
     const shotRow = source("src/components/workshop/StoryboardPlanner.parts.tsx");
-    expect(shotRow).toContain("const ids = new Set(shot.characterIds)");
+    expect(shotRow).toContain("const characterIds = new Set(shot.characterIds)");
     expect(shotRow).not.toContain(
       "characters.filter((character) => shot.characterIds.includes(character.id))",
     );
