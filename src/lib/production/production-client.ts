@@ -44,17 +44,35 @@ function normalizeProductionData(raw: Record<string, unknown>): ProductionData {
   };
 }
 
-/** 把某项目的生产数据写穿到服务端 production 表（按 proj_* upsert）。静默失败。 */
-export async function pushProduction(projectId: string, payload: ProductionPayload): Promise<void> {
+/**
+ * 把某项目的生产数据写穿到服务端 production 表（按 proj_* upsert）。静默失败。
+ * `expectedUpdatedAt` 给出上次读到的版本时走乐观并发：服务端发现已被别的检出改写
+ * 会回 `stale:true`，此时调 `onStale`（调用方给出可行动提示），不静默覆盖他人改动。
+ */
+export async function pushProduction(
+  projectId: string,
+  payload: ProductionPayload,
+  opts: { expectedUpdatedAt?: string; onStale?: () => void } = {},
+): Promise<void> {
   if (!projectId) {
     return;
   }
   try {
-    await fetchWithTimeout("/api/production", {
+    const res = await fetchWithTimeout("/api/production", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project: projectId, production: payload }),
+      body: JSON.stringify({
+        project: projectId,
+        production: payload,
+        ...(opts.expectedUpdatedAt ? { ifUpdatedAt: opts.expectedUpdatedAt } : {}),
+      }),
     });
+    if (res.ok) {
+      const body: unknown = await res.json().catch(() => null);
+      if (typeof body === "object" && body !== null && "stale" in body && body.stale === true) {
+        opts.onStale?.();
+      }
+    }
   } catch {
     /* 网络/服务不可用时静默降级：localStorage 仍是即时缓存 */
   }

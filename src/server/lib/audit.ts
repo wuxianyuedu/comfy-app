@@ -16,6 +16,7 @@ export type AuditEvent =
   | "data_exported"
   | "task_deleted"
   | "project_deleted"
+  | "project_content_saved"
   | "settings_changed";
 
 export async function audit(
