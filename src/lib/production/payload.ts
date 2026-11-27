@@ -3,6 +3,7 @@
 // meta 摊平 + 进度（阶段游标 + rendered）。这是「一份生产数据」的唯一组装口径，
 // 工坊与画布两侧都经它，避免各自拼一份导致字段漂移（§12.12 去重）。纯函数、无 IO。
 import { isRecord } from "~/lib/is-record";
+import { jsonEquals } from "~/lib/production/json-equals";
 import type { ProductionPayload, ProductionWrite } from "~/lib/production/production-client";
 import type { ProductionStage } from "~/lib/production/progress";
 import { parseDraftDto } from "~/lib/workshop/draft-sync-shared";
@@ -58,27 +59,6 @@ const PRODUCTION_WRITE_FIELDS = [
   "progress",
 ] as const satisfies ReadonlyArray<keyof ProductionPayload>;
 
-/** 一个 JSON 值的结构指纹（对象按键排序、数组保序、`undefined` 视同缺键）。
- *  用于「这份字段到底有没有变」——`JSON.stringify` 直接比会因键序不同而误判，
- *  而误判的代价是发出一份本可以不发的整列写（#5147 的同一类风险）。 */
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
-  }
-  if (isRecord(value)) {
-    const parts = Object.keys(value)
-      .filter((key) => value[key] !== undefined)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`);
-    return `{${parts.join(",")}}`;
-  }
-  return JSON.stringify(value) ?? "null";
-}
-
-function sameJson(left: unknown, right: unknown): boolean {
-  return canonicalJson(left) === canonicalJson(right);
-}
-
 /** 按字段取赋值：`key` 是联合类型，逐键写要保住「这个键只装它自己的类型」。 */
 function assignField<K extends keyof ProductionPayload>(
   target: ProductionWrite,
@@ -104,7 +84,7 @@ export function narrowProductionWrite(
 ): ProductionWrite {
   const write: ProductionWrite = {};
   for (const key of PRODUCTION_WRITE_FIELDS) {
-    if (!sameJson(base[key], next[key])) {
+    if (!jsonEquals(base[key], next[key])) {
       assignField(write, key, next[key]);
     }
   }

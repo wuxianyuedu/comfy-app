@@ -8,6 +8,7 @@
 
 import { useMemo, useState } from "react";
 
+import { jsonEquals } from "~/lib/production/json-equals";
 import type { TaskItem } from "../history-types";
 
 /** 服务端行的时间字段可能是 Date / 字符串 / 数字，展示层统一成字符串。 */
@@ -20,18 +21,6 @@ type TaskPage = { tasks: ReadonlyArray<TaskRow> };
 export type HistoryTaskPages = ReadonlyArray<TaskPage> | undefined;
 
 type Holder = { rows: ReadonlyArray<TaskRow>; tasks: Array<TaskItem> };
-
-/** 两个外来 JSON 值是否等价。同一行里只有 params / validationErrors 需要深比，
- *  其余都是标量；原实现对整行 16 个字段做一次 JSON.stringify，每次 4s 轮询
- *  100 行就是 100 次数组分配 + 字符串拼接，发生在 render 期。 */
-function sameLooseValue(a: unknown, b: unknown): boolean {
-  const left = a ?? null;
-  const right = b ?? null;
-  if (left === right) {
-    return true;
-  }
-  return JSON.stringify(left) === JSON.stringify(right);
-}
 
 /** 用户能感知到的行字段逐项判等；短路，内容没变时一次字符串都不拼。 */
 function sameTaskRow(a: TaskRow, b: TaskRow): boolean {
@@ -49,8 +38,8 @@ function sameTaskRow(a: TaskRow, b: TaskRow): boolean {
     a.type === b.type &&
     (a.error ?? null) === (b.error ?? null) &&
     (a.negativePrompt ?? null) === (b.negativePrompt ?? null) &&
-    sameLooseValue(a.params, b.params) &&
-    sameLooseValue(a.validationErrors, b.validationErrors)
+    jsonEquals(a.params, b.params) &&
+    jsonEquals(a.validationErrors, b.validationErrors)
   );
 }
 

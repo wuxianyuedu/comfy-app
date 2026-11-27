@@ -17,7 +17,7 @@ import {
 } from "~/lib/workflow/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import { exposedParamDisplayLabel } from "~/lib/workflow/workflow-exposed-params";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Switch } from "~/components/ui/switch";
 import { FieldLabel } from "~/components/ui/field";
 
@@ -69,6 +69,14 @@ export function WorkflowParamCardColumn({
   sizeFromReference = false,
   onSizeFromReferenceChange,
 }: WorkflowParamCardColumnProps) {
+  /* 尺寸卡只画一次：六子口聚成一张卡（每行一形态），原实现把
+   * `entries.filter(...)` 放进 `entries.map()` 的循环里，每个尺寸子口都全量重扫
+   * 一遍（#5224 A2，典型 O(n²)）。这里在循环外算一次。 */
+  const sizeForms = useMemo(
+    () => entries.filter((item) => SIZE_SUB_IDS.includes(item.cls)),
+    [entries],
+  );
+
   if (entries.length === 0) {
     return null;
   }
@@ -88,7 +96,7 @@ export function WorkflowParamCardColumn({
          * 每行一颗圆点，不再并排六张卡（用户口径：「尺寸这里不要显示这么多节点，
          * 尺寸只显示一个节点」）。只在第一个子口的位置画这一张，其余跳过。 */
         if (SIZE_SUB_IDS.includes(entry.cls)) {
-          const forms = entries.filter((item) => SIZE_SUB_IDS.includes(item.cls));
+          const forms = sizeForms;
           if (entry !== forms[0]) {
             return null;
           }
