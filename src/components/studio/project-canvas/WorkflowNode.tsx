@@ -5,7 +5,7 @@
  */
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { useStore } from "@xyflow/react";
 import {
   DynamicWorkflowForm,
@@ -111,28 +111,34 @@ export function WorkflowNode({
   const { inputs, outputs } = splitWorkflowIO(workflowIO);
 
   /* 按 sourceFilter 过滤 chip2 列表 — 让 chip1 真正参与决策。
-   * 叠加模型筛选 — chip4 选中的标签名必须命中工作流的 modelTags。 */
-  const filteredList = workflowList
-    .filter((workflowList) => {
-      if (sourceFilter === "all") {
-        return true;
-      }
-      if (sourceFilter === "local") {
-        return Boolean(workflowList.sourcePath);
-      }
-      return (
-        workflowList.sourcePath === undefined ||
-        workflowList.sourcePath === null ||
-        workflowList.sourcePath === ""
-      );
-    })
-    .filter((workflow) => {
-      if (modelFilter === "all") {
-        return true;
-      }
-      const tags = workflow.modelTags ?? [];
-      return tags.includes(modelFilter);
-    });
+   * 叠加模型筛选 — chip4 选中的标签名必须命中工作流的 modelTags。
+   * useMemo 缓存两次 filter 的结果：节点重渲（拖动 / 选中）时 workflowList 与两个
+   * 筛选值引用不变 ⇒ 不重扫列表（列表 × 节点的乘法开销，见 ISSUE #5204）。 */
+  const filteredList = useMemo(
+    () =>
+      workflowList
+        .filter((workflow) => {
+          if (sourceFilter === "all") {
+            return true;
+          }
+          if (sourceFilter === "local") {
+            return Boolean(workflow.sourcePath);
+          }
+          return (
+            workflow.sourcePath === undefined ||
+            workflow.sourcePath === null ||
+            workflow.sourcePath === ""
+          );
+        })
+        .filter((workflow) => {
+          if (modelFilter === "all") {
+            return true;
+          }
+          const tags = workflow.modelTags ?? [];
+          return tags.includes(modelFilter);
+        }),
+    [workflowList, sourceFilter, modelFilter],
+  );
 
   return (
     <>

@@ -21,6 +21,7 @@ import { NodeChip, PORT_STYLE, StatusBadge, StatusDot } from "./CanvasNodePrimit
 import { OutputRowPort, SelectedToolbar } from "./SelectedToolbar";
 import { useFileUpload } from "./hooks/use-file-upload";
 import { useNodePatch } from "./hooks/use-node-patch";
+import { useWorkflowCallbacks } from "./hooks/use-workflow-callbacks";
 import { useWorkflowIo } from "./hooks/use-workflow-io";
 import { useGenerate } from "./hooks/use-generate";
 import { useShotGenerationWriteback } from "./hooks/use-shot-generation-writeback";
@@ -79,14 +80,20 @@ export const CanvasNode = React.memo(function CanvasNode({
     seededFor,
   } = useWorkflowIo({ d, patch });
 
-  /* 多模式保存：乐观更新 + 失败回滚都在这个 hook 里（视图零 IO）。 */
+  /* 多模式保存：乐观更新 + 失败回滚都在这个 hook 里（视图零 IO）。
+   * onFailed 收成 useCallback：hook 把它列入 saveModes 的依赖，内联箭头会让
+   * saveModes 每次都是新引用，击穿 WorkflowNode 的 memo（ISSUE #5204）。 */
+  const handleModeFailed = useCallback(
+    (reason: string) => {
+      patch({ error: reason, status: "error" });
+    },
+    [patch],
+  );
   const { saveModes } = useWorkflowModes({
     workflowId: d.workflowId,
     modes: wfModes,
     setModes: setWfModes,
-    onFailed: (reason) => {
-      patch({ error: reason, status: "error" });
-    },
+    onFailed: handleModeFailed,
   });
 
   /* 任务运行逻辑：挂载时对账 + runGenerate + 错误面板重试。 */
@@ -110,6 +117,16 @@ export const CanvasNode = React.memo(function CanvasNode({
     getNode,
     screenToFlowPosition,
   });
+
+  const { onFormChange, onGenerate, onModesChange, onSeedModeChange, onSelectWorkflow } =
+    useWorkflowCallbacks({
+      patch,
+      runGenerate,
+      saveModes,
+      seedModes: d.seedModes,
+      seededFor,
+      wfList,
+    });
 
   /* ── 按 kind 渲染 body ── */
   let body: React.ReactNode = null;
@@ -297,28 +314,13 @@ export const CanvasNode = React.memo(function CanvasNode({
           id={id}
           modelFilter={modelFilter}
           modelTagLib={modelTagLib}
-          onFormChange={(next) => {
-            patch({ workflowInputs: next });
-          }}
-          onGenerate={runGenerate}
+          onFormChange={onFormChange}
+          onGenerate={onGenerate}
           onModelFilterChange={setModelFilter}
-          onModesChange={(modes, defaultMode) => saveModes({ modes, defaultMode })}
+          onModesChange={onModesChange}
           onPatch={patch}
-          onSeedModeChange={(ioKey, mode) => {
-            patch({ seedModes: { ...d.seedModes, [ioKey]: mode } });
-          }}
-          onSelectWorkflow={(workflowId) => {
-            const wf = wfList.find((item) => item.id === workflowId);
-            seededFor.current = null;
-            patch({
-              workflowId: workflowId || undefined,
-              workflowName: wf?.name,
-              workflowTaskType: wf?.taskType,
-              workflowInputs: {},
-              paramMap: undefined,
-              workflowSinkId: undefined,
-            });
-          }}
+          onSeedModeChange={onSeedModeChange}
+          onSelectWorkflow={onSelectWorkflow}
           onSourceFilterChange={setSourceFilter}
           sourceFilter={sourceFilter}
           workflowIO={wfIO}
