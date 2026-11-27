@@ -27,6 +27,7 @@ import { toSizeSpec } from "~/lib/media/size-presets";
 /* 行日志那一份两侧（编排与监看）都要用，所以它在 film-log.ts 这个叶子上。 */
 import { appendFilmLog } from "./film-log";
 import { resolveFilmFirstFrame } from "./first-frame";
+import { extractTailFrameUrl } from "./tail-frame";
 /* 监看（无响应看门狗 / 超时收口 / 重启恢复扫描）在 film-watch.ts，这里只取入口。 */
 import { watchFilm } from "./film-watch";
 
@@ -43,6 +44,8 @@ export type FilmShotInput = {
   prompt: string;
   /** 关联的统一镜头 id（Phase 5 逐镜回写用）；自由建片（剧本自解析）时无来源，留空。 */
   shotId?: string;
+  /** 跨镜接力的上一镜片段地址（ISSUE #5212）：生成时抽尾帧当本镜首帧。 */
+  tailFrameFrom?: string;
 };
 
 export type CreateFilmInput = {
@@ -249,6 +252,9 @@ async function persistFilmWithShots(args: {
             ...(shot.firstFrame === undefined || shot.firstFrame === ""
               ? {}
               : { firstFrame: shot.firstFrame }),
+            ...(shot.tailFrameFrom === undefined || shot.tailFrameFrom === ""
+              ? {}
+              : { tailFrameFrom: shot.tailFrameFrom }),
           },
         })),
         tx,
@@ -352,6 +358,15 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
     negative: shot.negativePrompt || undefined,
     /* 工坊阶段④定稿的镜头图直接接到阶段⑤的首帧输入（ISSUE #5141）。 */
     firstFrame: shot.imageUrl ?? undefined,
+    /* 跨镜接力：上一镜已有片段才带来源，生成时抽尾帧覆盖首帧（ISSUE #5212）。 */
+    tailFrameFrom: (() => {
+      const from = shot.continuityFromShotId;
+      if (typeof from !== "string" || from === "") {
+        return undefined;
+      }
+      const prev = rawShots.find((candidate) => candidate.id === from);
+      return typeof prev?.clipUrl === "string" && prev.clipUrl !== "" ? prev.clipUrl : undefined;
+    })(),
     duration: shot.duration,
   }));
 
@@ -403,6 +418,15 @@ async function generateVideoShot(
   let inputImage: string = typeof rawInputImage === "string" ? rawInputImage : "";
   /* 工坊定稿的分镜图是 `/api/generated/...` 产物地址（ISSUE #5141）：ComfyUI 的
    * LoadImage 只认 input 目录里的文件名，先落盘读字节再上传，换成上传后的名字。 */
+  /* 跨镜接力优先于定稿图（ISSUE #5212）：上一镜片段的尾帧作本镜首帧；
+   * 抽帧失败回落定稿图，不阻断生成。 */
+  const tailFrom = typeof params.tailFrameFrom === "string" ? params.tailFrameFrom : "";
+  if (tailFrom !== "") {
+    const tail = await extractTailFrameUrl(tailFrom);
+    if (tail !== null) {
+      inputImage = tail;
+    }
+  }
   if (inputImage !== "") {
     inputImage = await resolveFilmFirstFrame(inputImage);
   }
