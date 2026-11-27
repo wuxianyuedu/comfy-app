@@ -127,6 +127,15 @@ export const HISTORY_READ = {
   maxAttempts: 12,
 } as const;
 
+/** 成片监看的仓储读（ISSUE #5146）：8 次 × 500ms（共 4s）——刚写完 19 行镜头
+ *  时 WAL 写事务尚未收口，读撞 SQLITE_BUSY 是瞬时的；重试覆盖这一窗口。
+ *  只由 `runWithSqliteBusyRetry` 消费：非锁族错误不重试、原样抛出。 */
+export const FILM_WATCH_READ = {
+  shape: "fixed",
+  baseMs: 500,
+  maxAttempts: 8,
+} as const;
+
 /** Ollama 冷启动就绪：20 次 × 2s（共 40s）—— 覆盖冷启动的常见耗时。 */
 /* SAFETY: 类型断言已复核 */
 export const OLLAMA_READY = {

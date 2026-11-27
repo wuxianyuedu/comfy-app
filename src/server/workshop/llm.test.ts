@@ -48,6 +48,25 @@ describe("completeWorkshopLLM 取消传播", () => {
     await expect(pending).rejects.toThrow("LLM 请求失败");
   });
 
+  it("配置不可用给出三类可行动文案（ISSUE #5145）", async () => {
+    await expect(
+      completeWorkshopLLM({ ...cfg, model: "" }, [{ role: "user", content: "ping" }]),
+    ).rejects.toThrow("尚未配置生效模型");
+    expect(safeFetchMock).not.toHaveBeenCalled();
+
+    safeFetchMock.mockResolvedValue(new Response("unauthorized", { status: 403 }));
+    await expect(completeWorkshopLLM(cfg, [{ role: "user", content: "ping" }])).rejects.toThrow(
+      /API Key 无效或未授权.*设置 → 远程模型/,
+    );
+
+    safeFetchMock.mockRejectedValue(
+      new TypeError("fetch failed", { cause: new Error("ECONNREFUSED 127.0.0.1:11434") }),
+    );
+    await expect(completeWorkshopLLM(cfg, [{ role: "user", content: "ping" }])).rejects.toThrow(
+      /本地模型服务未启动.*Ollama/,
+    );
+  });
+
   it("成功响应仍按原形状返回回复文本", async () => {
     safeFetchMock.mockResolvedValue(
       new Response(JSON.stringify({ choices: [{ message: { content: "pong" } }] }), {

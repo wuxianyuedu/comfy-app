@@ -23,6 +23,7 @@ import { z } from "zod";
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 import { logger } from "~/lib/core/logger";
 import { asRawWorkflow, extractPositions } from "~/lib/comfyui/raw";
+import { missingModelsForGraph } from "./model-availability";
 import { normalizeTaskType, VALID_TASK_TYPE_CODES } from "~/lib/workflow/workflow-types";
 
 /* ── 外部工作流 JSON 的形状契约（导入边界，规范 §5.5）──────────────────────
@@ -79,7 +80,7 @@ export function checksum(text: string): string {
  * 与 POST /api/workflows 的流水线保持一致，让「首次导入」与「实时重新导入」
  * behave identically.
  */
-export function parseWorkflowContent(
+export async function parseWorkflowContent(
   content: string,
   opts: {
     defaultName?: string;
@@ -129,7 +130,21 @@ export function parseWorkflowContent(
     logger.info(`[importSource] Unknown taskType "${taskType}", allowing as custom type`);
   }
 
-  return Promise.resolve({ rawJson, positions, taskType, warnings, format: "raw" });
+  /* 导入前预检（ISSUE #5144）：图里钉死的模型文件若本机没有，先给一条可读警告，
+   * 而不是等执行时报 `HostBuffer.read_file_slice failed` 那种看不出所以然的错。
+   * 本机清单取不到（ComfyUI 离线 / 表未就绪）不阻断导入。 */
+  try {
+    const missing = await missingModelsForGraph(rawJson);
+    if (missing.length > 0) {
+      warnings.push(
+        `工作流引用了本机未安装的模型文件：${missing.join("、")}。请先在 ComfyUI 中放入对应文件，或改用同模型的更小量化版本；否则执行时会因权重加载失败而报错。`,
+      );
+    }
+  } catch {
+    /* 预检不可用不阻断导入（与既有 logger 容错同口径）。 */
+  }
+
+  return { rawJson, positions, taskType, warnings, format: "raw" };
 }
 
 export type ImportedFromFile = {

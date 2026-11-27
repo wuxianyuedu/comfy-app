@@ -976,29 +976,28 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
     );
   });
 
-  it("监看循环自身 reject → 就地收口：影片判 FAILED、日志记 error、不冒进程级 rejection（ISSUE #4216）", async () => {
+  it("监看读数撞 SQLite 锁：重试穷尽后只留可读日志，不把在飞影片判死（ISSUE #5146）", async () => {
     rowsByStatus([{ id: "f-boom", status: "GENERATING" }]);
-    /* 让 watchLoop 的第一跳（findById）就炸——模拟 SQLite BUSY / 磁盘故障。 */
-    filmRepo.findById.mockRejectedValue(new Error("DB BUSY 模拟"));
+    /* 让 watchLoop 的第一跳（findById）连撞锁——重试穷尽后原样抛出。 */
+    filmRepo.findById.mockRejectedValue(
+      Object.assign(new Error("DB BUSY 模拟"), { code: "SQLITE_BUSY" }),
+    );
 
     const result = await resumeStalledFilms();
     expect(result.resumed).toEqual(["f-boom"]);
 
-    /* 后台循环是被 `void` 起的：从在飞表里拿同一条 promise 等它落地。
-     * 若收口缺失，这条 promise 就是 unhandledRejection，vitest 当场红。 */
     const inflight = (
       globalThis as { filmWatchInFlight_v1?: Map<string, Promise<void>> }
     ).filmWatchInFlight_v1?.get("f-boom");
     expect(inflight).toBeDefined();
     await inflight;
 
-    expect(filmRepo.markFailed).toHaveBeenCalledWith(
-      "f-boom",
-      expect.stringContaining("DB BUSY 模拟"),
-    );
+    /* 读失败 ≠ 任务失败：在飞镜头还有任务，判死就没人收产物。 */
+    expect(filmRepo.markFailed).not.toHaveBeenCalled();
     const msgs = filmRepo.appendLog.mock.calls.map((c) => c[1].msg);
-    expect(msgs.some((m) => m.includes("监看循环异常终止"))).toBe(true);
-    /* 收口后在飞表清空：不留假活的循环。 */
+    expect(msgs.some((m) => m.includes("瞬时锁冲突"))).toBe(true);
+    expect(loggerMock.error.mock.calls.map((c) => String(c[0])).join("|")).toContain("SQLITE_BUSY");
+    /* 退场后清在飞表：boot 扫描还能接回。 */
     const registry = (globalThis as { filmWatchInFlight_v1?: Map<string, Promise<void>> })
       .filmWatchInFlight_v1;
     expect(registry?.size).toBe(0);
