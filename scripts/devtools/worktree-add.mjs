@@ -14,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { resolveGitDir } from "../lib/git-dir.mjs";
 import { runGateStep } from "../launcher-core/shell.mjs";
 
 const ROOT = process.cwd();
@@ -21,10 +22,13 @@ const ROOT = process.cwd();
 /**
  * 落点判据。纯函数，便于用例直接喂形状。
  *
- * @param {{target:string, root:string, tmp?:string}} input
+ * `gitDir` 由调用方问 `resolveGitDir()` 取（链接工作树里 `.git` 是文件，硬拼指不到）；
+ * 本函数只判形状，不自己拼检出目录。
+ *
+ * @param {{target:string, root:string, tmp?:string, gitDir?:string}} input
  * @returns {{ok:boolean, reason:string}}
  */
-export function checkWorktreeLocation({ target, root, tmp = os.tmpdir() }) {
+export function checkWorktreeLocation({ target, root, tmp = os.tmpdir(), gitDir = "" }) {
   const p = path.resolve(target);
   /** @param {string} s */
   const norm = (s) => path.resolve(s).replaceAll("\\", "/").toLowerCase();
@@ -39,7 +43,7 @@ export function checkWorktreeLocation({ target, root, tmp = os.tmpdir() }) {
       reason: "落点不许在 .git/ 下（git 自己的簿记目录，且 vitest fs.deny 会 deny）",
     };
   }
-  if (inside(path.join(root, ".git"), p)) {
+  if (gitDir && inside(gitDir, p)) {
     return { ok: false, reason: "落点在仓库 .git/ 目录内" };
   }
   if (inside(path.join(root, ".worktrees"), p) || inside(tmp, p)) {
@@ -74,7 +78,11 @@ function main(argv) {
     process.stderr.write("[worktree:add] --branch 与 --detach 互斥，一次只选一种。\n");
     return 2;
   }
-  const verdict = checkWorktreeLocation({ target, root: ROOT });
+  const verdict = checkWorktreeLocation({
+    target,
+    root: ROOT,
+    gitDir: resolveGitDir(ROOT) ?? "",
+  });
   if (!verdict.ok) {
     process.stderr.write(`[worktree:add] ✗ ${verdict.reason}\n`);
     return 2;
