@@ -29,6 +29,7 @@ import { runStatus } from "./ship-status.mjs";
 import { closeIssues } from "./ship-close.mjs";
 import { runIssueAction } from "./ship-claim.mjs";
 import { runIssueComment, runNewIssue } from "./ship-issue-new.mjs";
+import { runEditIssue } from "./ship-issue-edit.mjs";
 import { runDiagnose } from "./ship-diagnose.mjs";
 import { resolveGhRepo, resolveGhToken, runGhLogs } from "./ship-gh-logs.mjs";
 import { runGhPrs } from "./ship-gh-prs.mjs";
@@ -107,6 +108,11 @@ function namedActions(opt, self) {
       "comment",
       (opt.comment !== null && opt.comment !== undefined) || opt.commentBad.length > 0,
       "--comment",
+    ],
+    [
+      "editIssue",
+      (opt.editIssue !== null && opt.editIssue !== undefined) || opt.editIssueBad.length > 0,
+      "--edit-issue",
     ],
     ["bodyFile", opt.bodyFile !== null && opt.bodyFile !== undefined, "--body-file"],
     /* `--pr-body-file` 是主流程那一段的输入（建 / 复用 PR 时注入正文），只读那几条
@@ -365,16 +371,20 @@ export async function runStandaloneAction(io) {
       ]),
     };
   }
-  /* `--issue-body-file` / `--priority` 是 --new-issue 的两格输入。单独给它们等于
-   * 「想建单却漏了旗标」—— 静默忽略会让这一跑退回主流程，而人以为单子建好了。 */
+  /* `--issue-body-file` / `--priority` 是 --new-issue 的两格输入，也服务 --edit-issue
+   * （ISSUE #5165：改单子正文的正文只从文件进）。单独给它们等于「想建 / 想改却漏了旗标」
+   * —— 静默忽略会让这一跑退回主流程，而人以为单子已经动了。 */
+  const wantsEditIssue =
+    (opt.editIssue !== null && opt.editIssue !== undefined) || opt.editIssueBad.length > 0;
   if (
     (opt.issueBodyFile !== null || opt.priority !== null) &&
     (opt.newIssue === null || opt.newIssue === undefined) &&
-    opt.newIssueBad.length === 0
+    opt.newIssueBad.length === 0 &&
+    !wantsEditIssue
   ) {
     log(
-      "[ship] [ERROR] --issue-body-file / --priority 只跟 --new-issue 一起用；" +
-        "单独给它们不会建任何单子。",
+      "[ship] [ERROR] --issue-body-file / --priority 只跟 --new-issue / --edit-issue 一起用；" +
+        "单独给它们不会建或改任何单子。",
     );
     return { handled: true, code: CODE.NOT_RUN };
   }
@@ -497,11 +507,13 @@ export async function runStandaloneAction(io) {
     opt.claims ||
     (opt.newIssue !== null && opt.newIssue !== undefined) ||
     (opt.comment !== null && opt.comment !== undefined) ||
+    (opt.editIssue !== null && opt.editIssue !== undefined) ||
     (opt.bodyFile !== null && opt.bodyFile !== undefined) ||
     opt.claimBad.length > 0 ||
     opt.releaseBad.length > 0 ||
     opt.newIssueBad.length > 0 ||
-    opt.commentBad.length > 0
+    opt.commentBad.length > 0 ||
+    opt.editIssueBad.length > 0
   ) {
     return {
       handled: true,
@@ -519,6 +531,7 @@ export async function runStandaloneAction(io) {
           mkTmp,
           createIssue: runNewIssue,
           commentIssue: runIssueComment,
+          editIssue: runEditIssue,
           dryRun: opt.dryRun,
         }),
       ]),

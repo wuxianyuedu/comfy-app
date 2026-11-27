@@ -146,10 +146,10 @@ export function parseIssueNumberToken(token) {
  * 图片走 `issues get-imgs` 官方通道，不再手拼 URL 撞 404。只读平台、与显式动作互斥。
  *
  * @param {string[]} argv 参数（不含 node 与脚本名）
- * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,fetchIssue:number|null,fetchIssueBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
+ * @returns {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,fetchIssue:number|null,fetchIssueBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],editIssue:number|null,editIssueBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果
  */
 export function parseArgs(argv) {
-  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,fetchIssue:number|null,fetchIssueBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
+  /** @type {{message:string|null,messageFile:string|null,title:string|null,branch:string|null,adds:string[],addMultiBad:string[],merge:boolean,noCommit:boolean,closeIssue:boolean,closeIssueNumbers:number[],closeIssueBad:string[],asMerged:number|null,asMergedBad:string[],cleanBranch:boolean,reap:boolean,allowStaged:boolean,dryRun:boolean,preflightD0:boolean,wait:boolean,whoami:boolean,claim:number|null,claimBad:string[],release:number|null,releaseBad:string[],claims:boolean,misclaim:boolean,branches:boolean,status:boolean,statusRef:string|null,statusBad:string[],result:boolean,resultJson:boolean,fetchIssue:number|null,fetchIssueBad:string[],newIssue:string|null,newIssueBad:string[],issueBodyFile:string|null,comment:number|null,commentBad:string[],editIssue:number|null,editIssueBad:string[],bodyFile:string|null,prBodyFile:string|null,priority:string|null,diagnose:boolean,diagnoseSn:string|null,stageLog:boolean,stageLogSn:string|null,stageLogRef:string|null,stageLogBad:string[],ghLogs:boolean,ghLogsRef:string|null,ghLogsBad:string[],ghPrs:boolean,ghPrsRef:string|null,ghPrsBad:string[],rerunCi:boolean,only:string|null,mode:string|null,modeBad:string[],unknown:string[]}} 解析结果 */
   const out = {
     message: null,
     messageFile: null,
@@ -190,6 +190,8 @@ export function parseArgs(argv) {
     issueBodyFile: null,
     comment: null,
     commentBad: [],
+    editIssue: null,
+    editIssueBad: [],
     bodyFile: null,
     prBodyFile: null,
     priority: null,
@@ -415,6 +417,23 @@ export function parseArgs(argv) {
         out.comment = n;
       } else {
         out.commentBad.push(`重复的 --comment（前一张 #${out.comment}）`);
+      }
+    } else if (a === "--edit-issue" || a.startsWith("--edit-issue=")) {
+      /* 与 `--comment` 同一条「像不像号」判据（ISSUE #5165）：改单子正文要人点名是哪一张，
+       * 脚本不猜。两种写法（空格 / 等号）走同一支，避免「一种能用、另一种被当未知旗标」。 */
+      let tok = "";
+      if (a.startsWith("--edit-issue=")) {
+        tok = a.slice("--edit-issue=".length);
+      } else if (i + 1 < argv.length && !String(argv[i + 1]).startsWith("-")) {
+        tok = String(argv[++i] ?? "");
+      }
+      const n = parseIssueNumberToken(tok);
+      if (n === null) {
+        out.editIssueBad.push(tok || "(缺号)");
+      } else if (out.editIssue === null) {
+        out.editIssue = n;
+      } else {
+        out.editIssueBad.push(`重复的 --edit-issue（前一张 #${out.editIssue}）`);
       }
     } else if (a === "--body-file") {
       out.bodyFile = argv[++i] ?? "";
@@ -723,6 +742,7 @@ export function singleActionSettled(opt) {
     opt.ghPrs ||
     opt.fetchIssue ||
     opt.comment !== null ||
+    opt.editIssue !== null ||
     opt.claim !== null ||
     opt.release !== null ||
     opt.misclaim ||

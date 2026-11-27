@@ -1,0 +1,2 @@
+## Added
+- `pnpm ship --edit-issue <号> --issue-body-file <文件> [--priority P1]`（#5165）：改单子正文此前只能手敲 `cnb issues update-issue --repo … --number … --body-file …` 三件套，参数顺序写错会静默改错单，且平台吞末尾换行、cnb 认不出的子命令还退 0。现在正文只从文件进（无内联 `-m`），写后独立 `get-issue` 回读，复用评论的末尾换行 / 图片链接归一口径逐字比对 —— 回读取不到退 2、正文或优先级不一致退 1；与 `--new-issue` / `--comment` 一次只做一张。同步更新 ship Skill / 规范 §13.10.12 与 ship.mjs 模块表，并补命令行形状、逐字归一同名与写后回读各分支的行为用例。
