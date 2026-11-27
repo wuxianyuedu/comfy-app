@@ -42,6 +42,11 @@ try {
 # Nested Join-Path (not -AdditionalChildPath) to stay PS 5.1 compatible.
 $allowedRoot = [System.IO.Path]::GetFullPath(
   (Join-Path (Join-Path (Join-Path $PSScriptRoot "..") "..") "generated"))
+# 多检出共享产物根：与 TS 侧 generatedRoot() 的 COMFYAPP_GENERATED_ROOT 覆盖同形。
+$envRoot = $env:COMFYAPP_GENERATED_ROOT
+if (-not [string]::IsNullOrWhiteSpace($envRoot)) {
+  $allowedRoot = [System.IO.Path]::GetFullPath($envRoot)
+}
 $sep = [System.IO.Path]::DirectorySeparatorChar
 if ($target -ne $allowedRoot -and -not $target.StartsWith($allowedRoot + $sep)) {
   # Outside the sandbox -> refuse.

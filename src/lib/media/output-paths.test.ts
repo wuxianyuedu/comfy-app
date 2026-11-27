@@ -16,7 +16,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it, afterAll } from "vitest";
+import { describe, expect, it, afterAll, afterEach } from "vitest";
 
 import {
   ARTIFACT_URL_PREFIX,
@@ -51,6 +51,28 @@ describe("generatedRoot", () => {
 
   it("缺省用 process.cwd()，与 /api/generated/[...path] 的根同一算法", () => {
     expect(generatedRoot()).toBe(path.resolve(process.cwd(), "generated"));
+  });
+
+  describe("COMFYAPP_GENERATED_ROOT 覆盖（ISSUE #5207）", () => {
+    afterEach(() => {
+      delete process.env.COMFYAPP_GENERATED_ROOT;
+    });
+
+    it("绝对路径原样、相对路径按 cwd 解析；空串回落默认根", () => {
+      process.env.COMFYAPP_GENERATED_ROOT = path.resolve(os.tmpdir(), "shared-generated");
+      expect(generatedRoot("/srv/app")).toBe(path.resolve(os.tmpdir(), "shared-generated"));
+      process.env.COMFYAPP_GENERATED_ROOT = "shared/artifacts";
+      expect(generatedRoot("/srv/app")).toBe(path.resolve("/srv/app", "shared/artifacts"));
+      process.env.COMFYAPP_GENERATED_ROOT = "   ";
+      expect(generatedRoot("/srv/app")).toBe(path.resolve("/srv/app", "generated"));
+    });
+
+    it("派生的子层与地址解析跟随覆盖后的根", () => {
+      process.env.COMFYAPP_GENERATED_ROOT = path.resolve(os.tmpdir(), "shared-generated-2");
+      const root = generatedRoot("/srv/app");
+      expect(materialsRoot(root)).toBe(path.join(root, "materials"));
+      expect(artifactDiskPath("/api/generated/a.png", root)).toBe(path.join(root, "a.png"));
+    });
   });
 
   it("根**不在 public/ 下**（台账 A13 的结构性关法：public 由 Next 静态直发、不经 handler）", () => {
