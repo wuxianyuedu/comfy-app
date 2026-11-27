@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 /** 共享 ResizeObserver 的接线契约（#5131）：N 个读数点只建 1 个 observer，
  *  同一批尺寸变化只排一次 rAF；注销后不再收到回调。 */
+import { readFileSync } from "node:fs";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type Listener = (entries: Array<{ target: Element }>, observer: unknown) => void;
@@ -92,5 +94,14 @@ describe("observeElementResize", () => {
     expect(() => {
       off();
     }).not.toThrow();
+  });
+});
+
+/* API 文档契约：被导出函数签名引用的类型必须导出，否则 typedoc 报
+ * 「referenced but not included」warning，API 文档自检把任何 warning 判红。 */
+describe("API 文档契约", () => {
+  it("Listener 已导出，typedoc 能收进文档", () => {
+    const source = readFileSync("src/lib/dom/shared-resize-observer.ts", "utf8");
+    expect(source).toMatch(/export type Listener\s*=/);
   });
 });

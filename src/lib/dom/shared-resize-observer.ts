@@ -11,7 +11,9 @@
 
 import { onNextFrame, type CancelNextFrame } from "~/lib/next-frame";
 
-type Listener = () => void;
+/** 读数回调的类型。导出以便 typedoc 收进文档：被导出函数的签名引用却不导出的
+ *  类型会触发「referenced but not included」warning，API 文档自检把任何 warning 判红。 */
+export type Listener = () => void;
 
 /** Element → 该元素上的全部读数回调。observer 本身只保留一份。 */
 const listeners = new Map<Element, Set<Listener>>();
