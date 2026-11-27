@@ -91,7 +91,9 @@ export async function checkoutStatus({
   for (const l of stashLines.slice(0, 10)) {
     log(`    ${l}`);
   }
-  const wts = worktreePaths(git(["worktree", "list", "--porcelain"]).stdout);
+  const wts = worktreePaths(
+    git(["-c", "core.quotePath=false", "worktree", "list", "--porcelain"]).stdout,
+  );
   log(`  worktree：${wts.length} 棵`);
   for (const w of wts) {
     log(`    ${w}`);

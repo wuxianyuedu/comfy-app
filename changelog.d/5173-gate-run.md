@@ -1,0 +1,2 @@
+## Added
+- `pnpm gate run <钩子标签|脚本名|文件 basename> [--staged|--changed]` 与 `pnpm format:files <文件…>`（#5173）：`gates:which` 给的是建议名，人还得翻译成 `node scripts/gates/check-xxx.cjs`；`base-check.mjs` 的按名入口是在干净 worktree 上复算基线，不是就地再跑一遍。现在只从 `.githooks/pre-commit` 的 `run "<标签>" <命令>` 与 `quality-gate.mjs` 导出的 `GATES` 解析，不另立清单；多名命中就报多条、不替人挑。`format:files` 用 `pnpmInvocation` 的唯一实现拼参数，不给文件退 2 不跑成全仓判据。补步骤解析、标签 / 脚本名 / basename 命中与多名命中用例。
