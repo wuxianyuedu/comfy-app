@@ -24,6 +24,11 @@ const synthesizeFirstFrame = vi.hoisted(() =>
   vi.fn((_opts: unknown): string | Promise<string> => "/api/generated/shot.png"),
 );
 vi.mock("~/lib/comfyui/firstframe", () => ({ synthesizeFirstFrame }));
+/* 草图预览（ISSUE #5216）是额外一条生图调用：默认返回「没出成」，保持既有「每镜一次正式生图」
+ * 的断言口径；草图本身的产出与回写另由 storyboard-quality 的用例判。 */
+vi.mock("~/server/film/preview", () => ({
+  generateShotPreview: vi.fn(() => Promise.resolve(null)),
+}));
 // 引擎经服务端成片编排起片（createFilmFromProject + startFilm），mock 掉避免真跑管线。
 vi.mock("~/server/film/orchestrator", () => ({
   createFilmFromProject: vi.fn(() => ({ id: "film-1", shots: 1 })),

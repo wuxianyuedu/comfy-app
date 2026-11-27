@@ -199,6 +199,25 @@ describe("planNextRunAction", () => {
     ).toEqual({ kind: "plan_storyboard" });
   });
 
+  it("镜头级审批：未批准不进生图，全部未批准时温和等点头（#5216）", () => {
+    const shots = [
+      { approved: false, hasClip: false, hasImage: false, id: "a", rev: 1 },
+      { hasClip: false, hasImage: false, id: "b", rev: 1 },
+    ];
+    expect(
+      planNextRunAction(
+        view({ characterCount: 1, hasScript: true, shots }),
+        run({ status: "running" }),
+      ),
+    ).toEqual({ kind: "render_images", shotIds: ["b"] });
+    expect(
+      planNextRunAction(
+        view({ characterCount: 1, hasScript: true, shots: shots.slice(0, 1) }),
+        run({ status: "running" }),
+      ),
+    ).toEqual({ kind: "await_approval", stage: "storyboard" });
+  });
+
   it("有镜头：缺图 / 被改（rev 高于快照）的镜头纳入待生图", () => {
     const shots = [
       { id: "a", rev: 1, hasImage: true, hasClip: false },
