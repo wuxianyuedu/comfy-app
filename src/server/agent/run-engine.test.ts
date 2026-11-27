@@ -280,7 +280,8 @@ describe("advanceRunLoop", () => {
         status: "running",
         approvalMode: "auto",
         imageWorkflowId: "wf-img",
-        processedShotRev: { a: 0 }, // 之前处理过 rev0，如今 rev1 → 这是退回后的重出
+        processedShotRev: { a: 0 },
+        videoShotRev: { a: 0 }, // 之前处理过 rev0，如今 rev1 → 这是退回后的重出
       },
     );
     await advanceRunLoop(USER, PROJ);
@@ -378,6 +379,7 @@ describe("advanceRunLoop · 自动评审", () => {
         approvalMode: "auto",
         autoReview: true,
         processedShotRev: { a: 1 },
+        videoShotRev: { a: 1 },
         ...settled(SCRIPT),
       },
     );
@@ -410,6 +412,7 @@ describe("advanceRunLoop · 自动评审", () => {
         autoReview: true,
         imageWorkflowId: "wf-img",
         processedShotRev: { a: 1 },
+        videoShotRev: { a: 1 },
         ...settled(SCRIPT),
       },
     );
@@ -450,6 +453,7 @@ describe("advanceRunLoop · 自动评审", () => {
         autoReview: true,
         imageWorkflowId: "wf-img",
         processedShotRev: { a: 1 },
+        videoShotRev: { a: 1 },
         ...settled(SCRIPT),
       },
     );
@@ -659,7 +663,12 @@ describe("advanceRunLoop · execFilm 起片恢复（#3962）", () => {
         shots: [{ id: "a", index: 0, prompt: "p", rev: 0, imageUrl: "/x.png" }],
         rendered: false,
       },
-      { status: "running", approvalMode: "auto", filmStartedAt: "2026-01-01T00:00:00.000Z" },
+      {
+        status: "running",
+        approvalMode: "auto",
+        filmStartedAt: "2026-01-01T00:00:00.000Z",
+        videoShotRev: { a: 0 },
+      },
     );
     await advanceRunLoop(USER, PROJ);
     expect(createFilmFromProject).not.toHaveBeenCalled();
@@ -690,13 +699,41 @@ describe("advanceRunLoop · execFilm 起片恢复（#3962）", () => {
         shots: [{ id: "a", index: 0, prompt: "p", rev: 0, imageUrl: "/x.png" }],
         rendered: false,
       },
-      { status: "running", approvalMode: "auto", filmStartedAt: "2026-01-01T00:00:00.000Z" },
+      {
+        status: "running",
+        approvalMode: "auto",
+        filmStartedAt: "2026-01-01T00:00:00.000Z",
+        videoShotRev: { a: 0 },
+      },
     );
     await advanceRunLoop(USER, PROJ);
     const run = normalizeProductionRun((await readRow())!.run);
     expect(run.filmStartedAt).toBe("");
     expect(run.status).toBe("failed");
     expect(run.error).toContain("未进入可恢复生成态");
+  });
+});
+
+describe("advanceRunLoop · 逐镜视频独立阶段（ISSUE #5211）", () => {
+  it("图齐后先起逐镜视频（skipCompose），写回 videoFilmId", async () => {
+    const { createFilmFromProject, startFilm } = await import("~/server/film/orchestrator");
+    vi.mocked(createFilmFromProject).mockClear();
+    vi.mocked(startFilm).mockClear();
+    await seed(
+      {
+        scriptMarkdown: "# S",
+        characters: [{ id: "c1" }],
+        shots: [{ id: "a", index: 0, prompt: "p", rev: 1, imageUrl: "/x.png" }],
+        rendered: false,
+      },
+      { status: "running", approvalMode: "stage", stage: "shots", videoShotRev: {} },
+    );
+    await advanceRunLoop(USER, PROJ);
+    expect(createFilmFromProject).toHaveBeenCalledWith(expect.objectContaining({ shotIds: ["a"] }));
+    expect(startFilm).toHaveBeenCalledWith("film-1", { skipCompose: true });
+    const run = normalizeProductionRun((await readRow())!.run);
+    expect(run.videoFilmId).toBe("film-1");
+    expect(run.videoStartedAt).not.toBe("");
   });
 });
 
@@ -723,7 +760,12 @@ describe("advanceRunLoop · render_film 等待挂 film 终态（#4223）", () =>
         shots: [{ id: "a", index: 0, prompt: "p", rev: 0, imageUrl: "/x.png" }],
         rendered: false,
       },
-      { status: "running", approvalMode: "auto", filmStartedAt: "2026-01-01T00:00:00.000Z" },
+      {
+        status: "running",
+        approvalMode: "auto",
+        filmStartedAt: "2026-01-01T00:00:00.000Z",
+        videoShotRev: { a: 0 },
+      },
     );
     return film.id;
   }

@@ -90,7 +90,10 @@ function inFlightFilms(): Map<string, Promise<void>> {
  *  任何人**在监看这部重新置为 GENERATING 的影片——进度永停、不合成也不判
  *  失败，只能等进程重启被恢复扫描捡回。改为「等旧循环退场 → 重读状态 →
  *  仍 GENERATING 才起新循环」的交接语义。 */
-export async function watchFilm(id: string, opts: { resumed?: boolean } = {}): Promise<void> {
+export async function watchFilm(
+  id: string,
+  opts: { resumed?: boolean; skipCompose?: boolean } = {},
+): Promise<void> {
   const inFlight = inFlightFilms();
   const previous = inFlight.get(id);
   if (previous) {
@@ -153,7 +156,7 @@ export async function watchFilm(id: string, opts: { resumed?: boolean } = {}): P
   return loop;
 }
 
-async function watchLoop(id: string, opts: { resumed?: boolean }) {
+async function watchLoop(id: string, opts: { resumed?: boolean; skipCompose?: boolean }) {
   if (opts.resumed === true) {
     /* 续跑要在行日志里留痕：否则用户看到的是「重启之后它自己动起来了」，
      * 而支持现场需要据这一行判断「是 boot 扫描接上的，还是原循环还活着」。 */
@@ -320,6 +323,13 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
         await filmRepository.markFailed(id, `${failed} 个镜头生成失败`);
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await appendFilmLog(id, "error", `影片生成失败：${failed} 个镜头失败`);
+        return;
+      }
+      /* 逐镜视频阶段（ISSUE #5211）：片段齐了先停在 GENERATING，不自动合成；
+       * 由 run 的 render_film 阶段显式调 composeFilm，片段审批才有停点。 */
+      if (opts.skipCompose === true) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：收口前必须留痕（与既有串行路径同口径）
+        await appendFilmLog(id, "info", "逐镜视频已就绪，等待成片阶段合成");
         return;
       }
       // 成功（或部分成功）→ 合成
