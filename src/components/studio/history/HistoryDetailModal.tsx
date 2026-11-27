@@ -249,6 +249,12 @@ export function HistoryDetailModal({
     () => deriveWorkflowParams(detail, workflowIO, detail?.type ?? null),
     [detail, workflowIO],
   );
+  /* 原始 JSON 展示文本在渲染期序列化，折叠时也会算一遍：topLevelEntries 已由
+   * workflowParams 缓存，这里把它包住，父组件因无关状态重渲时不再重复 stringify。 */
+  const rawJsonText = useMemo(
+    () => JSON.stringify(Object.fromEntries(workflowParams.topLevelEntries), null, 2),
+    [workflowParams.topLevelEntries],
+  );
   const firstImage = Array.isArray(detail?.images) ? detail.images[0] : undefined;
 
   if (detailId === null || detailId === "") {
@@ -505,7 +511,7 @@ export function HistoryDetailModal({
                         } 个字段`}
                       >
                         <pre className="border-border-subtle text-ink-faint text-2xs max-w-full border-t p-3 break-all whitespace-pre-wrap">
-                          {JSON.stringify(Object.fromEntries(topLevelEntries), null, 2)}
+                          {rawJsonText}
                         </pre>
                       </Disclosure>
                     )}
