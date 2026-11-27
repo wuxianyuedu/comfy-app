@@ -200,6 +200,12 @@ POSIX 上 `python3 -m venv` 缺 `ensurepip`（Debian/Ubuntu 系在单独的 `pyt
 时在「已就绪」路径自动补装；它只服务 MCP，安装失败不阻断启动，仅记日志并给出手工
 补装命令。
 
+**工作区 MCP 配置侧的前置**（`.mcp.json` 的 `comfy-mcp` 项）：那里登记的是上面的
+exe 路径，而 exe 由本引导产生。新检出 / 从没跑过应用时 exe 不存在，**不等于 MCP
+不可用**——先执行 `pnpm setup:comfy-cli-venv`（幂等，已就绪时零副作用），等 exe
+就位后再看连接状态。接入 OpenCode 侧时同理：`opencode.json` 的 `mcp.servers.comfy-mcp`
+指向同一 exe，装好前不要把它当成失效配置。
+
 硬约束（改这条链路前必读）：
 
 1. **不要因为「venv 已存在」就早退**：venv 存在也必须跑脚本，否则它一旦建好就再也
