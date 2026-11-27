@@ -53,6 +53,9 @@ pnpm ship --status [<PR号|分支名>]                # 只读：PR / CI 绿红 
 pnpm ship --result                  # 只读：本机 .git/ship-result.json 的状态快照 + 事件时间线（ISSUE #3923）。后台跑 ship 时轮询它取「走到哪了 / 结论」，不 sleep + grep 运行日志；--result=json 出原始 JSON。只读口自己不落盘，不覆盖后台那一跑的活读数
 pnpm ship:wait                      # 确定性等待：轮询上一格那份读数直到 ship 出终态（短间隔 + 明确终止条件 + 总上限；坏消息立即返回，不等满上限；超上限退 4）。等的是 status=running 的那一跑（念出 startedAt / 阶段，ISSUE #4510）；期间别的跑的结论不冒充终态。能立即返回就绝不 sleep —— 命令之间禁止插无意义 sleep（ISSUE #4118 / AGENTS 硬规则 32）
 pnpm ship --fetch-issue 3965       # 只读：把一张 issue 的正文 / 评论 / 图片一次取到 .tmp/issues/<号>/（ISSUE #3965；gitignored、按号分目录、重跑即更新；图片走 get-imgs 官方通道，不手拼 URL 撞 404）
+pnpm ship --find-issues "工具 日志" [--state open|closed|all] [--label P2]
+                                                   # 只读：开工前查重单（ISSUE #5167）；关键词是自由文本，
+                                                   # 翻页取不满报「没取到」退 2，不读成「没有同类单」
 pnpm ship --rerun-ci                         # CI 红/未判定要重跑：在**当前 PR 分支**推一笔空提交重新派生流水线（平台侧没有 PR 重跑入口）；动手前有一层只读前置读数（ISSUE #3341）：在跑的提醒先等终态、红的念红在哪些格与「重跑不会改变 infra 故障」、被取消的念「重跑正是对的」—— 读数不是闸，空提交照推
 pnpm ship --diagnose cnb-xxx-yyy                  # CI 红了：只读取回失败格 + 失败行（带行号）+ 日志链接（不给 sn 按 HEAD 的 sha 归属）
 pnpm ship --gh-prs                                # 只读：列 GitHub 仓库侧（镜像仓 wuxianyuedu/comfy-app）的 PR —— 号 / 标题 / 作者 / 分支 / mergeable / URL；

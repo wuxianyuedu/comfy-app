@@ -37,6 +37,7 @@ import { runStageLog } from "./ship-stage-log.mjs";
 import { runRerunCiStage } from "./ship-local.mjs";
 import { runResultQuery } from "./ship-result.mjs";
 import { runFetchIssue } from "./ship-fetch-issue.mjs";
+import { runFindIssues } from "./ship-find-issues.mjs";
 import { whoamiLines } from "./ship-ticket.mjs";
 
 /**
@@ -99,6 +100,11 @@ function namedActions(opt, self) {
     ["status", opt.status, "--status"],
     ["result", opt.result, "--result"],
     ["fetchIssue", opt.fetchIssue !== null && opt.fetchIssue !== undefined, "--fetch-issue"],
+    [
+      "findIssues",
+      (opt.findIssues !== null && opt.findIssues !== undefined) || opt.findIssuesBad.length > 0,
+      "--find-issues",
+    ],
     [
       "newIssue",
       (opt.newIssue !== null && opt.newIssue !== undefined) || opt.newIssueBad.length > 0,
@@ -494,6 +500,39 @@ export async function runStandaloneAction(io) {
     return {
       handled: true,
       code: settle([runFetchIssue({ run, log, slug, number: opt.fetchIssue, root })]),
+    };
+  }
+
+  /* ── `--find-issues`：查重单的只读入口（ISSUE #5167）──────────────
+   * 与 `--fetch-issue` 同一档：只读、一次只做一件事、不 probe 之外的动作。 */
+  if (opt.findIssues !== null || opt.findIssuesBad.length > 0) {
+    const clashes = namedActions(opt, "findIssues");
+    if (clashes.length > 0) {
+      log(`[ship] [ERROR] --find-issues 只读、一次只做一件：不与 ${clashes.join(" / ")} 同跑。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (opt.findIssuesBad.length > 0 || opt.findIssues === null) {
+      log(
+        `[ship] [ERROR] --find-issues 收的是关键词（自由文本）：${opt.findIssuesBad.join(" / ") || "(缺关键词)"} ⇒ 这一格没有结论。`,
+      );
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    if (!cnbOk || !slug) {
+      log(`[find-issues] 没有执行者（${cnbOk ? "仓库 slug 取不到" : "cnb 不在"}）⇒ 没有结论。`);
+      return { handled: true, code: CODE.NOT_RUN };
+    }
+    return {
+      handled: true,
+      code: settle([
+        runFindIssues({
+          run,
+          log,
+          slug,
+          keyword: opt.findIssues,
+          state: opt.findState ?? "all",
+          label: opt.findLabel,
+        }),
+      ]),
     };
   }
 
