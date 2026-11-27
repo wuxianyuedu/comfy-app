@@ -325,7 +325,7 @@ export function BrowserStatusBar() {
   return (
     <div
       aria-label="底部状态栏"
-      className="border-border bg-panel/95 text-ink-muted z-toast text-2xs fixed right-0 bottom-0 left-0 flex h-6 items-center gap-3 border-t px-3 backdrop-blur-sm"
+      className="border-border bg-panel text-ink-muted z-toast text-2xs fixed right-0 bottom-0 left-0 flex h-6 items-center gap-3 border-t px-3"
     >
       {/* ── 第 1 区：地址栏（固定宽度，点击复制完整地址到剪贴板） ── */}
       <div className="w-42.5 shrink-0">
