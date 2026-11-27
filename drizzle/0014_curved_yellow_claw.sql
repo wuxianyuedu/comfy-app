@@ -1,0 +1,1 @@
+ALTER TABLE `episode` ADD `delivery` text;

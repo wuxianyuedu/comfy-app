@@ -1732,13 +1732,14 @@
 
 #### FR-SR-05 剧集元数据与导出（交付清单）
 
-- 状态：计划中
+- 状态：集级 `delivery` 列 + 只读 JSON/SRT 导出已上线（ISSUE #5217）；界面导出按钮待接。
 - 需求：每集有标题 / 简介 / 封面 / 字幕，并能导出一份**交付清单**。
-- 行为与验收：① 导出清单逐集列出：成片路径、时长、分辨率、文件大小、字幕文件；
-  ② 封面可指定，默认取第一镜关键帧（不指定时也有确定行为）；
-  ③ 字幕文件与成片同源（改了字幕要能重新合成，不是另存一份）。
-- 落点（现状）：成片落 `generated/films/<id>.mp4`（`src/server/film/compose-film.ts`），
-  无剧集级元数据与清单导出
+- 行为与验收：① 导出清单逐集列出：成片路径、镜头版本、字幕 stem、封面与简介；
+  ② 封面可指定，缺省回落集行 coverUrl（空串也有确定行为）；
+  ③ 字幕文件与成片同源（清单只记 stem，`generated/films/<stem>.srt` 现读，改了字幕重新合成即生效）。
+- 落点（现状）：`episode.delivery` 列 + `series.updateEpisode` 写入 +
+  `GET /api/episodes/[id]/delivery` 只读导出（`src/lib/production/delivery-manifest.ts`），
+  成片落 `generated/films/<id>.mp4`（`src/server/film/compose-film.ts`）
 
 ---
 

@@ -184,6 +184,20 @@ describe("episode 列表 / 增改删", () => {
     await userCaller().deleteEpisode({ id: ep.id });
     expect(await userCaller().episodes({ seasonId: se.id })).toEqual([]);
   });
+  it("updateEpisode 落集级交付清单，只改交付不动其它字段（#5217）", async () => {
+    const { ep } = await makeHierarchy();
+    const updated = await userCaller().updateEpisode({
+      delivery: {
+        finalVideoPath: "/api/generated/films/f.mp4",
+        shotVersions: { s1: 2 },
+        subtitlePath: "f",
+      },
+      id: ep.id,
+    });
+    expect(updated?.delivery).toMatchObject({ shotVersions: { s1: 2 }, subtitlePath: "f" });
+    expect(updated?.title).toBe(ep.title);
+  });
+
   it("他人季下的集 → FORBIDDEN", async () => {
     const s = await addSeries(otherCaller(), "别人的");
     const se = await addSeason(s.id, otherCaller());

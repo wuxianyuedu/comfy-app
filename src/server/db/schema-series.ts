@@ -75,6 +75,9 @@ export const episode = sqliteTable(
     synopsis: text("synopsis").notNull().default(""),
     coverUrl: text("coverUrl"),
     targetDurationSec: integer("targetDurationSec"),
+    /** 集级交付清单（ISSUE #5217 / FR-SR-05）：封面 / 字幕 / 成片路径 + 镜头版本；
+     *  外来 JSON，读侧逐字段收窄，不与 `production` 的 JSON 列共用真值。 */
+    delivery: text("delivery", { mode: "json" }),
     /** draft | producing | done。 */
     status: text("status").notNull().default("draft"),
     createdAt: dateNotNull("createdAt")
