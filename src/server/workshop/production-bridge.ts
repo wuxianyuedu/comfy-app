@@ -6,6 +6,7 @@
 import { asc, eq } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 
+import { jsonEquals } from "~/lib/production/json-equals";
 import type { Character, Scene, Shot } from "~/lib/workshop/types";
 import { production, project, user, type Production } from "~/server/db/schema";
 import { workshopDb } from "./db";
@@ -162,10 +163,6 @@ export function mergeShotsById(current: Array<Shot>, mine: Array<Shot>): Array<S
   return merged;
 }
 
-function sameJson(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
 /** 逐列与基线比对（ISSUE #4730）：只把会话真正改过的列放进补丁——慢 IO 期间
  *  界面改动的其它列（剧本 / 角色卡 / 镜头提示词…）不再被旧快照整列覆盖。
  *  shots 改过时按 shotId 与当前 production 叠加合并，而非整列替换。
@@ -192,13 +189,13 @@ export function diffContentAgainstBaseline(
   if (next.scriptMarkdown !== baseline.scriptMarkdown) {
     patch.scriptMarkdown = next.scriptMarkdown;
   }
-  if (!sameJson(next.scenes, baseline.scenes)) {
+  if (!jsonEquals(next.scenes, baseline.scenes)) {
     patch.scenes = next.scenes;
   }
-  if (!sameJson(next.characters, baseline.characters)) {
+  if (!jsonEquals(next.characters, baseline.characters)) {
     patch.characters = next.characters;
   }
-  if (!sameJson(next.shots, baseline.shots)) {
+  if (!jsonEquals(next.shots, baseline.shots)) {
     patch.shots = mergeShotsById(current?.shots ?? [], next.shots);
   }
   return patch;

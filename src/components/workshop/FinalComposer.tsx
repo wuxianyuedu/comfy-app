@@ -70,15 +70,27 @@ export function FinalComposer({
   const [currentIdx, setCurrentIdx] = React.useState(0);
   const imageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const timeline: Array<TimelineEntry> = shots.map((shot) => ({
-    shot,
-    duration: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
-  }));
+  /* 分镜编辑期频繁渲染：timeline 与两次聚合原样重建 + 重扫（#5224 A8），
+   * shots 引用不变时直接复用。 */
+  const timeline: Array<TimelineEntry> = React.useMemo(
+    () =>
+      shots.map((shot) => ({
+        shot,
+        duration: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
+      })),
+    [shots],
+  );
 
-  const clipsDone = timeline.filter(
-    (entry) => entry.shot.clipUrl !== undefined && entry.shot.clipUrl !== "",
-  ).length;
-  const totalDuration = timeline.reduce((acc, entry) => acc + entry.duration, 0);
+  const clipsDone = React.useMemo(
+    () =>
+      timeline.filter((entry) => entry.shot.clipUrl !== undefined && entry.shot.clipUrl !== "")
+        .length,
+    [timeline],
+  );
+  const totalDuration = React.useMemo(
+    () => timeline.reduce((acc, entry) => acc + entry.duration, 0),
+    [timeline],
+  );
   const current = timeline[currentIdx];
 
   React.useEffect(() => {

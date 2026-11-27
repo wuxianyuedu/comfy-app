@@ -140,19 +140,32 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [schedule],
   );
 
+  /* 四个便捷方法各自 useCallback 稳住引用：原先内联在 context value 里，value 每次
+   * 重算都换出四个新函数，连带所有 toast 消费者重渲（#5224 A4）。 */
+  const success = useCallback(
+    (title: string, description?: string, duration?: number) =>
+      toast({ kind: "success", title, description, duration }),
+    [toast],
+  );
+  const error = useCallback(
+    (title: string, description?: string, duration?: number) =>
+      toast({ kind: "error", title, description, duration }),
+    [toast],
+  );
+  const info = useCallback(
+    (title: string, description?: string, duration?: number) =>
+      toast({ kind: "info", title, description, duration }),
+    [toast],
+  );
+  const loading = useCallback(
+    (title: string, description?: string) =>
+      toast({ kind: "loading", title, description, duration: 0 }),
+    [toast],
+  );
+
   const value = useMemo<ToastContextValue>(
-    () => ({
-      toast,
-      success: (title, description, duration) =>
-        toast({ kind: "success", title, description, duration }),
-      error: (title, description, duration) =>
-        toast({ kind: "error", title, description, duration }),
-      info: (title, description, duration) => toast({ kind: "info", title, description, duration }),
-      loading: (title, description) => toast({ kind: "loading", title, description, duration: 0 }),
-      update,
-      dismiss,
-    }),
-    [toast, update, dismiss],
+    () => ({ toast, success, error, info, loading, update, dismiss }),
+    [dismiss, error, info, loading, success, toast, update],
   );
 
   return (
