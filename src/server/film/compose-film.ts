@@ -36,6 +36,7 @@ import {
   subtitleTextOf,
 } from "./compose-steps";
 import { appendFilmLog } from "./film-log";
+import { checkFilmQuality, probeFilm } from "./film-quality";
 
 /** `filmShot.params`（JSON 列）里的台词。只认字符串，形状不对就当没有——
  *  字幕宁可回退标题，也不把「[object Object]」烧进画面。 */
@@ -430,6 +431,25 @@ export async function composeFilm(id: string) {
     );
     if (fullSrt !== "") {
       await fs.writeFile(path.join(filmsRoot(), `${id}.srt`), fullSrt, "utf8");
+    }
+
+    /* 成片质量闸（ISSUE #5214）：ffprobe 真数产物，缺片 / 无视频流 / 时长 0 /
+     * 分辨率不符不许静默 markDone。probe 拿不到只记「没量到」，不冒充通过或失败。 */
+    const probe = await probeFilm(finalPath);
+    if (probe === null) {
+      await appendFilmLog(id, "warn", "成片质量探针没跑起来（没量到，不等于通过）");
+    } else {
+      /* 部分镜头失败已在合成前写 warn（#4609 知情交付），不在这里重复当硬错；
+       * 只有产物本身的无视频流 / 时长 0 / 分辨率不符才拦。 */
+      const issues = checkFilmQuality(probe, { height: H, width: W });
+      if (issues.length > 0) {
+        throw new Error(`成片质量不合格：${issues.join("；")}`);
+      }
+      await appendFilmLog(
+        id,
+        "success",
+        `成片质检通过：${probe.width}×${probe.height} · ${String(probe.duration ?? "?")}s`,
+      );
     }
 
     await filmRepository.markDone(id, localPath);
