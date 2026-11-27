@@ -97,9 +97,7 @@ export function ShotRow({
                   onUpdate(shot.id, { shotType });
                 }
               }}
-              /* 清单的唯一出处是 readonly（类型由它派生），而 `SelectMenu.options` 至今是
-               * 可变 `string[]` —— 这一份浅拷贝是两边口径的接缝，不是新的真相。 */
-              options={[...SHOT_TYPES]}
+              options={SHOT_TYPES}
               placeholder="选择景别"
               value={shot.shotType}
             />

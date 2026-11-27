@@ -144,10 +144,10 @@ export function LibraryHostCard({
           <div className="border-border-subtle border-t">
             {outputs.map((output) => (
               <WorkflowNodeOutputsRow
-                inputs={[...inputs]}
+                inputs={inputs}
                 key={`${output.nodeId}:${output.name}`}
                 output={output}
-                outputs={[...outputs]}
+                outputs={outputs}
                 renderHandle={({ id, dir, type }) => (
                   <PortHandle
                     dir={dir}

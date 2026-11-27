@@ -91,6 +91,55 @@ describe("ISSUE #5225 B 档：渲染期派生计算记忆化", () => {
     expect(shell).not.toContain("group.sections.includes(item.id)");
   });
 
+  it("G 档：常量词表与 props 数组直接传，不在渲染期浅拷贝", () => {
+    const dialog = source("src/app/(main)/settings/components/ProviderModelDialog.tsx");
+    for (const expr of ["REMOTE_MODEL_KINDS", "LLM_API_FORMATS", "mediaOptions"]) {
+      expect(dialog, `${expr} 不再浅拷贝`).toContain(`options={${expr}}`);
+      expect(dialog, `${expr} 不许再展开`).not.toContain(`options={[...${expr}]}`);
+    }
+
+    const filters = source("src/components/studio/workflow-library/WorkflowLibraryFilters.tsx");
+    for (const expr of ["SOURCE_OPTIONS", "TYPE_OPTIONS"]) {
+      expect(filters, `${expr} 不再浅拷贝`).toContain(`options={${expr}}`);
+      expect(filters, `${expr} 不许再展开`).not.toContain(`options={[...${expr}]}`);
+    }
+
+    const hostCard = source("src/components/studio/workflow-library/LibraryHostCard.tsx");
+    expect(hostCard).toContain("inputs={inputs}");
+    expect(hostCard).toContain("outputs={outputs}");
+    expect(hostCard).not.toContain("inputs={[...inputs]}");
+    expect(hostCard).not.toContain("outputs={[...outputs]}");
+
+    const panel = source(
+      "src/components/studio/workflow-library/sections/WorkshopEncapsulationPanel.tsx",
+    );
+    expect(panel).toContain("options={modes}");
+    expect(panel).not.toContain("options={[...modes]}");
+
+    const shotRow = source("src/components/workshop/StoryboardPlanner.parts.tsx");
+    expect(shotRow).toContain("options={SHOT_TYPES}");
+    expect(shotRow).not.toContain("options={[...SHOT_TYPES]}");
+  });
+
+  it("G 档：SelectMenu / WorkflowNodeOutputsRow 的 options 接受 readonly 词表", () => {
+    const selectMenu = source("src/components/ui/select-menu.tsx");
+    expect(selectMenu.match(/options: ReadonlyArray<string>;/g)).toHaveLength(2);
+    expect(selectMenu).not.toContain("options: Array<string>;");
+
+    const parts = source("src/components/studio/workflow-form/WorkflowNodeParts.tsx");
+    expect(parts).toContain("inputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;");
+    expect(parts).toContain("outputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;");
+    expect(parts).toContain("ioLabel(output, [...inputs, ...outputs])");
+  });
+
+  it("G 档：搜索结果排序按 catalog 引用缓存", () => {
+    const modal = source(
+      "src/components/studio/workflow-library/reference-loader/ReferenceLoaderPresetModal.tsx",
+    );
+    expect(modal).toContain("}, [searchQ.data?.catalog]);");
+    expect(modal).not.toContain("}, [searchQ.data]);");
+  });
+
   it("其余渲染期派生（核心壳 / 弹窗 / 调试条 / 表单）走 useMemo", () => {
     expectMemo(source("src/components/studio/AppShell.tsx"), ["iframeTabs"]);
     expectMemo(source("src/components/studio/VideoQueueModal.tsx"), ["runningCount"]);

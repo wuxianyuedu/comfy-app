@@ -177,9 +177,9 @@ export function WorkflowNodeOutputsRow({
   outputs,
   renderHandle,
 }: {
-  inputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  inputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
   output: WorkflowIOEntry & { ioKey: string };
-  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  outputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
   renderHandle?: (arg: { dir: "out"; id: string; type: string }) => React.ReactNode;
 }) {
   const oLabel = ioLabel(output, [...inputs, ...outputs]);

@@ -175,7 +175,7 @@ export function WorkshopEncapsulationPanel({
             className="border-border-strong! text-2xs h-auto bg-transparent! px-2 py-0.5"
             labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
             onChange={onModeChange}
-            options={[...modes]}
+            options={modes}
             popoverMinWidth={160}
             value={mode ?? modes.at(0) ?? ""}
           />
