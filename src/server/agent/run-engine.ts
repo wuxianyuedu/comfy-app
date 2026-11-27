@@ -37,6 +37,7 @@ import type { ProductionStage } from "~/lib/production/progress";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { isProjectType, normalizeShotType } from "~/lib/workshop/types";
 import { execImages } from "~/server/agent/run-images";
+import { execCharacterRefs } from "~/server/agent/run-character-refs";
 import type { Character, Shot } from "~/lib/workshop/types";
 import type { Production } from "~/server/db/schema";
 import { sleep } from "~/lib/with-timeout";
@@ -96,6 +97,9 @@ function actionLabel(action: RunAction): string {
     case "extract_characters": {
       return "提取角色";
     }
+    case "render_character_refs": {
+      return "生成角色定妆照";
+    }
     case "plan_storyboard": {
       return "规划分镜";
     }
@@ -125,7 +129,8 @@ function gateStageFor(action: RunAction): ProductionStage | null {
     case "revise_script": {
       return "script";
     }
-    case "extract_characters": {
+    case "extract_characters":
+    case "render_character_refs": {
       return "character";
     }
     case "plan_storyboard": {
@@ -661,6 +666,11 @@ async function advanceRunLoopOnce(
         case "extract_characters": {
           // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
           res = await execCharacters(userId, projectId, row);
+          break;
+        }
+        case "render_character_refs": {
+          // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
+          res = await execCharacterRefs(userId, projectId, run, row);
           break;
         }
         case "plan_storyboard": {

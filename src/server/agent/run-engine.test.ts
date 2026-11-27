@@ -217,6 +217,37 @@ describe("advanceRunLoop", () => {
     expect(normalizeProductionRun(row!.run).awaitingStage).toBe("character");
   });
 
+  it("角色定妆照：可选一步出图回写角色卡，并置已尝试位不重复出（#5218）", async () => {
+    await seed(
+      {
+        characters: [
+          {
+            ageGender: "",
+            appearance: "短发少女",
+            costume: "",
+            id: "c1",
+            name: "阿宁",
+            negativePrompt: "",
+            params: {},
+            personality: "",
+            positivePrompt: "短发少女",
+            styleTags: [],
+            temperament: "",
+          },
+        ],
+        scriptMarkdown: "# 剧本",
+      },
+      { approvalMode: "stage", imageWorkflowId: "wf-img", status: "running" },
+    );
+    await advanceRunLoop(USER, PROJ);
+    const row = await readRow();
+    const characters = row?.characters;
+    assertRecordArray(characters, "characters");
+    expect(characters[0]?.portraitUrl).toBe("/api/generated/shot.png");
+    expect(normalizeProductionRun(row!.run).characterRefsDone).toBe(true);
+    expect(synthesizeFirstFrame).toHaveBeenCalledTimes(1);
+  });
+
   it("分镜步：产出 shots（带 index/rev/prompt），停在分镜阶段", async () => {
     completeLLMStructured.mockResolvedValueOnce([
       { sceneHeading: "海边", description: "日景" },

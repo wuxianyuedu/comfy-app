@@ -95,6 +95,7 @@ describe("toRunView", () => {
       hasScript: false,
       scriptDigest: scriptDigestOf(""),
       characterCount: 0,
+      portraitPendingCount: 0,
       shots: [],
       filmRendered: false,
       scriptHumanVerdict: null,
@@ -197,6 +198,32 @@ describe("planNextRunAction", () => {
     expect(
       planNextRunAction(view({ hasScript: true, characterCount: 2 }), run({ status: "running" })),
     ).toEqual({ kind: "plan_storyboard" });
+  });
+
+  it("角色定妆照：可选一步，已尝试 / 跳过 / 无图工作流都不再插入（#5218）", () => {
+    const withCharacter = view({
+      characterCount: 1,
+      hasScript: true,
+      portraitPendingCount: 1,
+    });
+    expect(
+      planNextRunAction(withCharacter, run({ imageWorkflowId: "wf-img", status: "running" })),
+    ).toEqual({ kind: "render_character_refs" });
+    expect(
+      planNextRunAction(
+        withCharacter,
+        run({ characterRefsDone: true, imageWorkflowId: "wf-img", status: "running" }),
+      ),
+    ).toEqual({ kind: "plan_storyboard" });
+    expect(
+      planNextRunAction(
+        withCharacter,
+        run({ imageWorkflowId: "wf-img", skipCharacterRefs: true, status: "running" }),
+      ),
+    ).toEqual({ kind: "plan_storyboard" });
+    expect(planNextRunAction(withCharacter, run({ status: "running" }))).toEqual({
+      kind: "plan_storyboard",
+    });
   });
 
   it("镜头级审批：未批准不进生图，全部未批准时温和等点头（#5216）", () => {
