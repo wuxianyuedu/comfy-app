@@ -48,6 +48,9 @@ const { llmServer, contracts, defaults, workshopLlm } = vi.hoisted(() => ({
   defaults: {
     /* 生效档缺省直通 DB 存档（合并逻辑的单元测试在 model-adapter-defaults.server.test.ts）。 */
     effectiveModelAdaptersDoc: vi.fn((_name: string, dbDoc: RemoteModelAdaptersDoc) => dbDoc),
+    /* 概览走预读基线 + 纯合并；测试里默认基线为空，DB 存档原样透传。 */
+    readModelAdapterDefaultDocs: vi.fn(() => Promise.resolve({})),
+    mergeModelAdapterDefaultDocs: vi.fn((_name: string, dbDoc: RemoteModelAdaptersDoc) => dbDoc),
   },
 }));
 
@@ -76,6 +79,8 @@ vi.mock("~/lib/workshop/mode-contract.server", () => ({
 }));
 vi.mock("~/lib/workshop/model-adapter-defaults.server", () => ({
   effectiveModelAdaptersDoc: defaults.effectiveModelAdaptersDoc,
+  readModelAdapterDefaultDocs: defaults.readModelAdapterDefaultDocs,
+  mergeModelAdapterDefaultDocs: defaults.mergeModelAdapterDefaultDocs,
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
@@ -622,6 +627,26 @@ describe("workshopAdapters —— 适配器形状与大写归一", () => {
     seedRemoteModel(tdb, { name: "bare-model" });
     const res = await caller().workshopAdaptersSummary();
     expect(res.models).toEqual([{ modes: ["T2I", "I2I"], name: "agnes-image" }]);
+  });
+
+  it("概览对整批模型只读一次基线文件（#5199），结果仍按模型名逐条对号", async () => {
+    for (let i = 0; i < 25; i += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- 用例准备数据逐条 seed，与被测并发无关
+      await Promise.resolve();
+      seedRemoteModel(tdb, {
+        name: `model-${i}`,
+        workshopAdapters: {
+          endpointPath: "",
+          adapters: [
+            { mode: "T2I", inputs: [{ type: "prompt", field: "prompt" }], outputField: "url" },
+          ],
+        },
+      });
+    }
+    const res = await caller().workshopAdaptersSummary();
+    expect(res.models).toHaveLength(25);
+    expect(defaults.readModelAdapterDefaultDocs).toHaveBeenCalledTimes(1);
+    expect(defaults.mergeModelAdapterDefaultDocs).toHaveBeenCalledTimes(25);
   });
 
   it("读取按名字取整份存档（模型级 envelope），不隐式带上全部模型", async () => {

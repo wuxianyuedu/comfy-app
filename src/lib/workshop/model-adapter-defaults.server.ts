@@ -73,22 +73,29 @@ export async function readModelAdapterDefaultDocs(
  * 压过；端点路径 DB 非空优先（它由「设置 → 远程模型」配置，本机存档说了算）。
  * 基线里没有这条模型 ⇒ 原样返回 DB 存档（多数模型走这一支，零合并成本）。
  */
+export function mergeModelAdapterDefaultDocs(
+  name: string,
+  dbDoc: RemoteModelAdaptersDoc,
+  docs: Record<string, RemoteModelAdaptersDoc>,
+): RemoteModelAdaptersDoc {
+  const code = docs[name];
+  if (!code) {
+    return dbDoc;
+  }
+  const byMode = new Map(code.adapters.map((a) => [a.mode, a]));
+  for (const adapter of dbDoc.adapters) {
+    byMode.set(adapter.mode, adapter);
+  }
+  return {
+    endpointPath: dbDoc.endpointPath === "" ? code.endpointPath : dbDoc.endpointPath,
+    adapters: [...byMode.values()],
+  };
+}
+
 export async function effectiveModelAdaptersDoc(
   name: string,
   dbDoc: RemoteModelAdaptersDoc,
   root: string = process.cwd(),
 ): Promise<RemoteModelAdaptersDoc> {
-  const docs = await readModelAdapterDefaultDocs(root);
-  const code = docs[name];
-  if (code) {
-    const byMode = new Map(code.adapters.map((a) => [a.mode, a]));
-    for (const adapter of dbDoc.adapters) {
-      byMode.set(adapter.mode, adapter);
-    }
-    return {
-      endpointPath: dbDoc.endpointPath === "" ? code.endpointPath : dbDoc.endpointPath,
-      adapters: [...byMode.values()],
-    };
-  }
-  return dbDoc;
+  return mergeModelAdapterDefaultDocs(name, dbDoc, await readModelAdapterDefaultDocs(root));
 }

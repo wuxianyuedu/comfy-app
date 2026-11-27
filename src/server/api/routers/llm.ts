@@ -31,7 +31,11 @@ import {
   resetModeContractOverride,
   saveModeContracts,
 } from "~/lib/workshop/mode-contract.server";
-import { effectiveModelAdaptersDoc } from "~/lib/workshop/model-adapter-defaults.server";
+import {
+  effectiveModelAdaptersDoc,
+  mergeModelAdapterDefaultDocs,
+  readModelAdapterDefaultDocs,
+} from "~/lib/workshop/model-adapter-defaults.server";
 
 /* workshopAdapters 文档的「读整份 → 合并 → 整份写回」按模型名串行化（ISSUE #3871）：
  * 「接口端点」（modelSave）与「模型适配」（workshopAdaptersSave）两处都基于各自
@@ -421,13 +425,16 @@ export const llmRouter = createTRPCRouter({
    *  项目默认（跟代码走）里配了的模型同样标「已配」—— 生成链路真的会用到它。 */
   workshopAdaptersSummary: authedProcedure.query(async () => {
     const rows = await remoteModelRepository.list();
+    /* 基线是同一份 JSON：一次读盘后逐模型只做内存合并（#5199）。原先每行
+     * effectiveModelAdaptersDoc 都现读一次盘，模型数 = 完整读盘往返次数；
+     * 合并本身零 IO，结果按 rows 原序拼回，归因仍靠模型名。 */
+    const defaults = await readModelAdapterDefaultDocs();
     const models: Array<{ modes: Array<string>; name: string }> = [];
     for (const row of rows) {
-      /* 逐模型现读基线（小 JSON）；串行与生成链路同序，便于日志归因。 */
-      // oxlint-disable-next-line no-await-in-loop -- 逐模型读盘为独立小文件，串行保持读数可归因
-      const doc = await effectiveModelAdaptersDoc(
+      const doc = mergeModelAdapterDefaultDocs(
         row.name,
         parseAdaptersDocJson(row.workshopAdapters),
+        defaults,
       );
       if (doc.adapters.length > 0) {
         models.push({ modes: doc.adapters.map((a) => a.mode), name: row.name });

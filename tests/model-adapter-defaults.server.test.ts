@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   effectiveModelAdaptersDoc,
+  mergeModelAdapterDefaultDocs,
   parseModelAdapterDefaults,
   readModelAdapterDefaultDocs,
 } from "../src/lib/workshop/model-adapter-defaults.server";
@@ -78,6 +79,26 @@ describe("readModelAdapterDefaultDocs", () => {
     fs.mkdirSync(path.dirname(defaultsFile()), { recursive: true });
     fs.writeFileSync(defaultsFile(), "{ 半截", "utf8");
     expect(await readModelAdapterDefaultDocs(root)).toEqual(bundledExpected);
+  });
+});
+
+describe("mergeModelAdapterDefaultDocs", () => {
+  it("纯函数合并：预读一次基线后可对整批模型复用，逐模型结果与逐条现读一致", async () => {
+    fs.mkdirSync(path.dirname(defaultsFile()), { recursive: true });
+    fs.writeFileSync(
+      defaultsFile(),
+      JSON.stringify({ version: 1, models: { M1: docWith("SHOT", "base-shot", "/base") } }),
+      "utf8",
+    );
+    /* 先读一次盘，再对多个模型走纯函数合并（概览批量路径）。 */
+    const docs = await readModelAdapterDefaultDocs(root);
+    const dbDoc = docWith("SHOT", "db-shot");
+    const merged = mergeModelAdapterDefaultDocs("M1", dbDoc, docs);
+    const viaAsync = await effectiveModelAdaptersDoc("M1", dbDoc, root);
+    expect(merged).toEqual(viaAsync);
+    expect(merged.endpointPath).toBe("/base");
+    /* 基线里没有的模型原样返回 DB 存档。 */
+    expect(mergeModelAdapterDefaultDocs("OTHER", dbDoc, docs)).toEqual(dbDoc);
   });
 });
 
