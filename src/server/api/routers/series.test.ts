@@ -603,6 +603,9 @@ describe("series asset entities（#5215）", () => {
     const caller = userCaller();
     const asset = await addAsset(s.id, "scene", "码头", caller);
     await caller.linkSeriesAsset({ assetId: asset.id, episodeId: ep.id });
+    const linked = await caller.episodeAssets({ episodeId: ep.id });
+    expect(linked.length).toBe(1);
+    expect(linked[0]?.asset.id).toBe(asset.id);
     const updated = await caller.updateSeriesAsset({ data: { desc: "清晨" }, id: asset.id });
     expect(updated?.version).toBe(2);
     await expect(caller.deleteSeriesAsset({ id: asset.id })).rejects.toThrow(/仍被 1 集引用/);
