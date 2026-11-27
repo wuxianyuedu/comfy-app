@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { useLibrarySelection } from "~/components/studio/hooks/use-library-selection";
+import { useDebouncedValue } from "~/components/ui/use-debounced-value";
 import { useInterval } from "~/components/ui/use-interval";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import type { RouterOutputs } from "~/trpc/react";
@@ -39,6 +40,9 @@ export type CharacterHistoryRow = RouterOutputs["characterLibrary"]["history"][n
 
 /** 生成对账的轮询间隔（有生成中角色时；确定性短间隔，ISSUE #4118 口径）。 */
 const SYNC_INTERVAL_MS = 5000;
+
+/** 搜索词防抖：输入框显示即时，喂给列表查询的值降频（#5205 / 规范 16 值侧唯一出口）。 */
+const SEARCH_DEBOUNCE_MS = 250;
 
 export type CharacterLibraryController = {
   /** 单条取消正在生成的角色任务（只对有 taskId 的生成中行生效）。 */
@@ -285,6 +289,8 @@ export function useCharacterLibrary(): CharacterLibraryController {
   } = useCharacterSelections();
 
   const [q, setQ] = useState("");
+  /* 显示即时、请求滞后：q 给输入框，debouncedQ 喂列表查询与空态（#5205）。 */
+  const debouncedQ = useDebouncedValue(q, SEARCH_DEBOUNCE_MS);
   const [status, setStatus] = useState<CharacterStatusFilter>("all");
   const [selectedTags, setSelectedTags] = useState<Array<string>>([]);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -296,7 +302,7 @@ export function useCharacterLibrary(): CharacterLibraryController {
 
   const listQ = useQuery(
     trpc.characterLibrary.list.queryOptions({
-      q,
+      q: debouncedQ,
       status,
       tags: selectedTags,
       take: 200,
@@ -592,14 +598,14 @@ export function useCharacterLibrary(): CharacterLibraryController {
   );
 
   const empty = useMemo(() => {
-    if (q.trim() === "" && selectedTags.length === 0 && status === "all") {
+    if (debouncedQ.trim() === "" && selectedTags.length === 0 && status === "all") {
       return {
         title: "角色库还是空的",
         hint: "先「预置角色」批量生成一批档案，再用「批量生图」给它们逐一立绘。",
       };
     }
     return { title: "没有匹配的角色", hint: "换个关键词、少选几个标签，或切一个状态档试试。" };
-  }, [q, selectedTags.length, status]);
+  }, [debouncedQ, selectedTags.length, status]);
 
   return {
     cancelOne: cancelControl.cancelOne,
