@@ -203,10 +203,14 @@ function ModelNav({
 }) {
   /* 类别 → 是否展开。**初始全部展开**（把每个类别先表一次态），收起是「先看
      别的类别」的临时动作，默认折着等于把当前模型藏起来。 */
-  const groups = MODEL_KIND_GROUPS.map((group) => ({
-    ...group,
-    models: candidates.filter((c) => c.kind === group.kind),
-  })).filter((group) => group.models.length > 0);
+  const groups = React.useMemo(
+    () =>
+      MODEL_KIND_GROUPS.map((group) => ({
+        ...group,
+        models: candidates.filter((c) => c.kind === group.kind),
+      })).filter((group) => group.models.length > 0),
+    [candidates],
+  );
   const categoryExpansion = useExpansionSet(Object.fromEntries(groups.map((g) => [g.kind, true])));
 
   return (
@@ -428,7 +432,7 @@ export function ModelAdaptersView() {
     [summary],
   );
 
-  const availableModes = ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative);
+  const availableModes = React.useMemo(() => ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative), []);
 
   /* 未点选 chip 时回落第一份草稿（新选模型 / 删掉激活模式后都有得看）。 */
   const current = draft.find((a) => a.mode === activeMode) ?? draft[0] ?? null;

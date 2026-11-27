@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
@@ -27,17 +28,20 @@ export function ShotFilmStrip({
   onJump: (shot: Shot) => void;
   shots: Array<Shot>;
 }) {
+  const doneCount = useMemo(() => shots.filter((shot) => shot.status === "done").length, [shots]);
+  const failedCount = useMemo(
+    () => shots.filter((shot) => shot.status === "failed").length,
+    [shots],
+  );
+  const reviewedCount = useMemo(
+    () =>
+      shots.filter((shot) => normalizeReviewVerdict(asRecord(shot)?.review)?.pass === true).length,
+    [shots],
+  );
+
   if (shots.length === 0) {
     return null;
   }
-
-  const doneCount = shots.filter((shot) => shot.status === "done").length;
-  const failedCount = shots.filter((shot) => shot.status === "failed").length;
-  /* 评审状态复用已有的 shot.review（不新增第二套状态类型，也不加 DB 列）：
-   * 共享 DB 下另一个检出审过的镜头，这里一眼可见。 */
-  const reviewedCount = shots.filter(
-    (shot) => normalizeReviewVerdict(asRecord(shot)?.review)?.pass === true,
-  ).length;
 
   return (
     <section

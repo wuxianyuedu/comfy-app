@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Trash } from "lucide-react";
 import { Hint } from "~/components/ui/hint";
 import { SelectMenu } from "~/components/ui/select-menu";
@@ -55,7 +56,10 @@ export function ShotRow({
   shot: Shot;
   styles: Array<StyleRef>;
 }) {
-  const linkedChars = characters.filter((character) => shot.characterIds.includes(character.id));
+  const linkedChars = useMemo(() => {
+    const ids = new Set(shot.characterIds);
+    return characters.filter((character) => ids.has(character.id));
+  }, [characters, shot.characterIds]);
   /* 本镜头的实时生成进度（ComfyUI 当前节点 + 百分比）。 */
   const progress = progressByShot?.[shot.id];
   const progressLabel = progress?.label;
