@@ -143,13 +143,85 @@ describe("pushProduction", () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it("请求抛错 → 静默吞掉，不抛给调用方（下次自动保存再补推）", async () => {
+  it("请求抛错 → 不抛给调用方，结论落 failed（下次自动保存再补推）", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(() => {
         throw new Error("network down");
       }),
     );
-    await expect(pushProduction("proj_1", payload)).resolves.toBeUndefined();
+    await expect(pushProduction("proj_1", payload)).resolves.toBe("failed");
+  });
+});
+
+/* ── 写侧结论三态（ISSUE #5147）─────────────────────────────
+ *
+ * 此前 `pushProduction` 回 `void`、把「写成功 / 被拒（stale）/ 网络失败」压成
+ * 同一种静默 —— 而 #5147 的现场正是「覆盖发生了，界面却以为保存成功」。
+ */
+describe("pushProduction 的三态结论（#5147）", () => {
+  const patch = { scriptMarkdown: "# 剧本" };
+
+  function stubResponse(status: number, body: unknown) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), { status }))),
+    );
+  }
+
+  it("成功 → written，并把 baseUpdatedAt 一起发出去", async () => {
+    const spy = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(new Response(JSON.stringify({ ok: true, updatedAt: 42 }), { status: 200 })),
+    );
+    vi.stubGlobal("fetch", spy);
+    await expect(
+      pushProduction("proj_1", patch, { expectedUpdatedAt: "2026-01-01T00:00:00.000Z" }),
+    ).resolves.toBe("written");
+    const init = spy.mock.calls[0]?.[1];
+    const raw: unknown = init?.body;
+    if (typeof raw !== "string") {
+      throw new TypeError(`body 应当是 JSON 串，实际是 ${typeof raw}`);
+    }
+    expect(JSON.parse(raw)).toEqual({
+      project: "proj_1",
+      production: patch,
+      ifUpdatedAt: "2026-01-01T00:00:00.000Z",
+    });
+  });
+
+  it("服务端回 stale:true → stale（库没被覆盖，界面据此提示「采用服务端内容」）", async () => {
+    stubResponse(200, { ok: true, stale: true, updatedAt: 42, production: { title: "AI 的" } });
+    await expect(
+      pushProduction("proj_1", patch, { expectedUpdatedAt: "2026-01-01T00:00:00.000Z" }),
+    ).resolves.toBe("stale");
+  });
+
+  it("4xx / 5xx → failed（没有落地证明，不许读成 saved）", async () => {
+    /* 三种状态各判一次：它们的结论必须一致 —— 客户端只区分「有事发生」与
+     * 「没落地」，具体码归服务端日志。 */
+    const results: Array<string> = [];
+    for (const status of [400, 403, 500]) {
+      stubResponse(status, { error: "不行" });
+      // oxlint-disable-next-line no-await-in-loop -- 逐档换桩再判，顺序即语义
+      results.push(await pushProduction("proj_1", patch));
+    }
+    expect(results).toEqual(["failed", "failed", "failed"]);
+  });
+
+  it("网络抛错 → failed（下次自动保存再补推）", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        throw new Error("network down");
+      }),
+    );
+    await expect(pushProduction("proj_1", patch)).resolves.toBe("failed");
+  });
+
+  it("空 projectId → failed，且一次请求都不发", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    await expect(pushProduction("", patch)).resolves.toBe("failed");
+    expect(spy).not.toHaveBeenCalled();
   });
 });
