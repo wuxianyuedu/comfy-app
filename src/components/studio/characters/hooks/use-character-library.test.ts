@@ -25,44 +25,46 @@ let items: Array<{
 vi.mock("~/lib/task-cancel-client", () => ({ cancelTask: cancelTaskMock }));
 vi.mock("~/components/studio/ToastProvider", () => ({ useToast: () => toast }));
 
-vi.mock("~/trpc/react", () => ({
-  useTRPC: () => ({
-    characterLibrary: {
-      list: { queryOptions: () => ({ queryKey: ["characterLibrary", "list"] }) },
-      detail: { queryOptions: () => ({ queryKey: ["characterLibrary", "detail"] }) },
-      history: { queryOptions: () => ({ queryKey: ["characterLibrary", "history"] }) },
-      syncGeneration: {
-        mutationOptions: () => ({ mutationKey: ["characterLibrary", "syncGeneration"] }),
-      },
-      delete: { mutationOptions: () => ({ mutationKey: ["characterLibrary", "delete"] }) },
-      create: { mutationOptions: () => ({ mutationKey: ["characterLibrary", "create"] }) },
-      update: { mutationOptions: () => ({ mutationKey: ["characterLibrary", "update"] }) },
-      seed: { mutationOptions: () => ({ mutationKey: ["characterLibrary", "seed"] }) },
-      scoreAllQuality: {
-        mutationOptions: () => ({ mutationKey: ["characterLibrary", "scoreAllQuality"] }),
-      },
-      scoreQuality: {
-        mutationOptions: () => ({ mutationKey: ["characterLibrary", "scoreQuality"] }),
-      },
-      regenerateFlagged: {
-        mutationOptions: () => ({ mutationKey: ["characterLibrary", "regenerateFlagged"] }),
-      },
-      deletePortraits: {
-        mutationOptions: () => ({ mutationKey: ["characterLibrary", "deletePortraits"] }),
-      },
-      enqueueGeneration: {
-        mutationOptions: () => ({ mutationKey: ["characterLibrary", "enqueueGeneration"] }),
-      },
+const stableTrpc = {
+  characterLibrary: {
+    list: { queryOptions: () => ({ queryKey: ["characterLibrary", "list"] }) },
+    detail: { queryOptions: () => ({ queryKey: ["characterLibrary", "detail"] }) },
+    history: { queryOptions: () => ({ queryKey: ["characterLibrary", "history"] }) },
+    syncGeneration: {
+      mutationOptions: () => ({ mutationKey: ["characterLibrary", "syncGeneration"] }),
     },
-    workflow: { list: { queryOptions: () => ({ queryKey: ["workflow", "list"] }) } },
-  }),
-}));
+    delete: { mutationOptions: () => ({ mutationKey: ["characterLibrary", "delete"] }) },
+    create: { mutationOptions: () => ({ mutationKey: ["characterLibrary", "create"] }) },
+    update: { mutationOptions: () => ({ mutationKey: ["characterLibrary", "update"] }) },
+    seed: { mutationOptions: () => ({ mutationKey: ["characterLibrary", "seed"] }) },
+    scoreAllQuality: {
+      mutationOptions: () => ({ mutationKey: ["characterLibrary", "scoreAllQuality"] }),
+    },
+    scoreQuality: {
+      mutationOptions: () => ({ mutationKey: ["characterLibrary", "scoreQuality"] }),
+    },
+    regenerateFlagged: {
+      mutationOptions: () => ({ mutationKey: ["characterLibrary", "regenerateFlagged"] }),
+    },
+    deletePortraits: {
+      mutationOptions: () => ({ mutationKey: ["characterLibrary", "deletePortraits"] }),
+    },
+    enqueueGeneration: {
+      mutationOptions: () => ({ mutationKey: ["characterLibrary", "enqueueGeneration"] }),
+    },
+  },
+  workflow: { list: { queryOptions: () => ({ queryKey: ["workflow", "list"] }) } },
+};
+
+vi.mock("~/trpc/react", () => ({ useTRPC: () => stableTrpc }));
+
+const stableQueryClient = { invalidateQueries: vi.fn() };
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof TanStackQuery>();
   return {
     ...actual,
-    useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+    useQueryClient: () => stableQueryClient,
     useQuery: (options: { queryKey: Array<unknown> }) => {
       const key = options.queryKey;
       if (key[0] === "characterLibrary" && key[1] === "list") {
@@ -80,11 +82,25 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
       }
       return { data: [], isSuccess: true, isFetching: false };
     },
-    useMutation: (options: { mutationKey: Array<unknown> }) => ({
-      mutateAsync:
-        options.mutationKey[1] === "syncGeneration" ? syncMutate : vi.fn(() => Promise.resolve({})),
-      isPending: false,
-    }),
+    useMutation: (() => {
+      const cache = new Map<
+        string,
+        { isPending: boolean; mutateAsync: ReturnType<typeof vi.fn> }
+      >();
+      return (options: { mutationKey: Array<unknown> }) => {
+        const name = String(options.mutationKey[1]);
+        const cached = cache.get(name);
+        if (cached !== undefined) {
+          return cached;
+        }
+        const entry = {
+          mutateAsync: name === "syncGeneration" ? syncMutate : vi.fn(() => Promise.resolve({})),
+          isPending: false,
+        };
+        cache.set(name, entry);
+        return entry;
+      };
+    })(),
   };
 });
 
@@ -137,5 +153,34 @@ describe("useCharacterLibrary.cancelOne（ISSUE #5098）", () => {
     });
     expect(mockedCancel).toHaveBeenCalledTimes(1);
     expect(syncMutate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("useCharacterLibrary 传给 memo 卡片的引用稳定性（ISSUE #5198）", () => {
+  it("openDetail / openRemove / cancelOne 跨重渲染保持同一引用", () => {
+    const { result, rerender } = renderHook(() => useCharacterLibrary());
+    const first = {
+      cancelOne: result.current.cancelOne,
+      openDetail: result.current.openDetail,
+      openRemove: result.current.openRemove,
+    };
+    rerender();
+    expect(result.current.cancelOne).toBe(first.cancelOne);
+    expect(result.current.openDetail).toBe(first.openDetail);
+    expect(result.current.openRemove).toBe(first.openRemove);
+  });
+
+  it("selectedCharacterIdSet 随勾选更新，语义与 selectedCharacterIds 一致", () => {
+    const { result } = renderHook(() => useCharacterLibrary());
+    expect(result.current.selectedCharacterIdSet.size).toBe(0);
+    act(() => {
+      result.current.toggleCharacterSelection("char-1");
+    });
+    expect(result.current.selectedCharacterIdSet.has("char-1")).toBe(true);
+    expect(result.current.selectedCharacterIds).toContain("char-1");
+    act(() => {
+      result.current.toggleCharacterSelection("char-1");
+    });
+    expect(result.current.selectedCharacterIdSet.has("char-1")).toBe(false);
   });
 });

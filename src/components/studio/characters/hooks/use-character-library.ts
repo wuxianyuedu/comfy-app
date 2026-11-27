@@ -116,6 +116,8 @@ export type CharacterLibraryController = {
   seeding: boolean;
   /** 角色卡多选（批量生图只对选中的 id 入队）。 */
   selectedCharacterIds: Array<string>;
+  /** 选中 id 的集合视图：卡片判 selected 用 O(1) 的 has，不再逐项 includes。 */
+  selectedCharacterIdSet: ReadonlySet<string>;
   /** 详情里勾选待删的候选立绘 url。 */
   selectedPortraitUrls: Array<string>;
   /** 当前选中的标签（多选，AND 语义）。 */
@@ -153,10 +155,12 @@ export type CharacterLibraryController = {
 function useCharacterSelections() {
   const characters = useLibrarySelection<string>();
   const portraits = useLibrarySelection<string>();
+  const selectedCharacterIdSet = useMemo(() => new Set(characters.selected), [characters.selected]);
 
   return {
     clearCharacterSelection: characters.clear,
     clearPortraitSelection: portraits.clear,
+    selectedCharacterIdSet,
     selectedCharacterIds: characters.selected,
     selectedPortraitUrls: portraits.selected,
     toggleCharacterSelection: characters.toggle,
@@ -248,6 +252,7 @@ export function useCharacterLibrary(): CharacterLibraryController {
   const {
     clearCharacterSelection,
     clearPortraitSelection,
+    selectedCharacterIdSet,
     selectedCharacterIds,
     selectedPortraitUrls,
     toggleCharacterSelection,
@@ -555,6 +560,18 @@ export function useCharacterLibrary(): CharacterLibraryController {
     );
   }, []);
 
+  /* 传给 memo 卡片的回调：必须跨渲染稳定，否则卡片 memo 形同虚设（规范 14 C7）。 */
+  const openDetail = useCallback(
+    (id: string) => {
+      setDetailId(id);
+      clearPortraitSelection();
+    },
+    [clearPortraitSelection],
+  );
+  const openRemove = useCallback((id: string) => {
+    setRemoveTarget(id);
+  }, []);
+
   const empty = useMemo(() => {
     if (q.trim() === "" && selectedTags.length === 0 && status === "all") {
       return {
@@ -594,18 +611,14 @@ export function useCharacterLibrary(): CharacterLibraryController {
     isCancelBusy: cancelControl.isCancelBusy,
     items,
     loading: listQ.isPending,
-    openDetail: (id: string) => {
-      setDetailId(id);
-      clearPortraitSelection();
-    },
-    openRemove: (id: string) => {
-      setRemoveTarget(id);
-    },
+    openDetail,
+    openRemove,
     q,
     refresh: invalidateList,
     removeTarget,
     seed,
     seeding: seedMut.isPending,
+    selectedCharacterIdSet,
     selectedCharacterIds,
     selectedPortraitUrls,
     selectedTags,

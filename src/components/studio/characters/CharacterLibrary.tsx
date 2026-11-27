@@ -368,15 +368,11 @@ export function CharacterLibrary() {
               cancellingGeneration={c.isCancelBusy(item.id)}
               character={item}
               key={item.id}
-              onCancelGeneration={(id) => {
-                void c.cancelOne(id);
-              }}
+              onCancelGeneration={c.cancelOne}
               onOpenDetail={c.openDetail}
-              onRemove={(target) => {
-                c.openRemove(target.id);
-              }}
+              onRemove={c.openRemove}
               onToggleSelection={c.toggleCharacterSelection}
-              selected={c.selectedCharacterIds.includes(item.id)}
+              selected={c.selectedCharacterIdSet.has(item.id)}
               selectionMode={selectingCharacters}
             />
           ))}
