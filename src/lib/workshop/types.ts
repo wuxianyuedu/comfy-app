@@ -352,6 +352,9 @@ export const shotInputSchema = z
     transition: optionalEnum(TRANSITIONS), // 与下一镜的转场
     clipStatus: optionalEnum(SHOT_STATUSES),
     clipUrl: z.string().optional(), // 生成的视频片段地址
+    /** 跨镜接力（ISSUE #5212）：从这一镜的尾帧抽图当本镜首帧；留空 = 用定稿图。
+     *  只在服务端建片时消费，用户手改不会破坏已有片段。 */
+    continuityFromShotId: z.string().optional(),
     /** 本机视频任务的 id（同 `taskId`：随草稿持久化，重挂载后据此恢复失联任务）。
      *  API 直连通道的 remoteTaskId 是另一套体系，不落这里。 */
     clipTaskId: z.string().optional(),

@@ -126,6 +126,20 @@ const resolveFirstFrameMock = vi.hoisted(() =>
   vi.fn<(value: string) => Promise<string>>((value) => Promise.resolve(value)),
 );
 vi.mock("./first-frame", () => ({ resolveFilmFirstFrame: resolveFirstFrameMock }));
+/* 成片质检的 ffprobe 是外部能力（ISSUE #5214）：用例里给一份合格读数，
+ * 不让「本机没装 ffprobe」的 warn 混进「全部镜头成功」的日志断言。 */
+vi.mock("./film-quality", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  probeFilm: vi.fn(() =>
+    Promise.resolve({
+      duration: 12,
+      hasAudio: true,
+      hasVideo: true,
+      height: 720,
+      width: 1280,
+    }),
+  ),
+}));
 /* 监看循环的 4 秒轮询在测试里不能真睡：几百轮预算的判决面用例（#4595）靠
  * 把 sleep 桩成空转才跑得动。withTimeoutResult 等其余导出保持原实现。 */
 vi.mock("~/lib/with-timeout", async (importOriginal) => ({
