@@ -562,12 +562,24 @@ export function modeTabsForKind(
    *  要在「N 模型」里可见，否则只有工作流候选的页签会显示 0 模型。 */
   workflowCandidates: ReadonlyArray<WorkshopWorkflowOption> = [],
 ): Array<ModeTab> {
+  const modelsByMode = new Map<string, number>();
+  for (const adapters of Object.values(adaptersByModel)) {
+    for (const mode of new Set(adapters.map((a) => a.mode))) {
+      modelsByMode.set(mode, (modelsByMode.get(mode) ?? 0) + 1);
+    }
+  }
+  const candidatesByMode = new Map<string, number>();
+  for (const workflow of workflowCandidates) {
+    for (const type of ALL_WORKFLOW_TYPES) {
+      if (type.isGenerative && workflowSupportsMode(workflow, type.code)) {
+        candidatesByMode.set(type.code, (candidatesByMode.get(type.code) ?? 0) + 1);
+      }
+    }
+  }
   return ALL_WORKFLOW_TYPES.filter((t) => t.isGenerative && t.category === kind).map((t) => ({
     mode: t.code,
     label: t.label,
-    modelCount:
-      Object.values(adaptersByModel).filter((adapters) => adapters.some((a) => a.mode === t.code))
-        .length + workflowCandidates.filter((w) => workflowSupportsMode(w, t.code)).length,
+    modelCount: (modelsByMode.get(t.code) ?? 0) + (candidatesByMode.get(t.code) ?? 0),
   }));
 }
 

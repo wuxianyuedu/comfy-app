@@ -343,6 +343,24 @@ describe("buildShotsFromEntries 条目写入分镜", () => {
     expect(shots[1]?.dialogue).toBeUndefined();
     expect(matchSceneByHeading("不存在的场景", scenes)).toBeUndefined();
   });
+
+  it("同一角色名在条目里重复出现时只关联一次", () => {
+    const shots = buildShotsFromEntries(
+      [
+        {
+          sceneHeading: "1-1 场景 外 旧城区天台(黄昏)",
+          shotType: "wide",
+          description: "天台初遇",
+          characterNames: ["小满", "小满", " 小满 "],
+          dialogue: "",
+        },
+      ],
+      0,
+      [makeScene()],
+      [makeCharacter()],
+    );
+    expect(shots[0]?.characterIds).toEqual(["char_1"]);
+  });
 });
 
 /* ── LLM 消息构建 ─────────────────────────────────────────── */

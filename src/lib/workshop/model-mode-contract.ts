@@ -447,14 +447,15 @@ export function parseModeContracts(raw: unknown): Array<ModeContract> {
     }
     /* 必备口：只收契约里真的存在的口（`required` 缺失 = 没配过 → 存 undefined，
      *  由 `requiredInputsFor` 回落内置默认）。 */
+    const inputIds = new Set<string>(inputs);
     const required = Array.isArray(rec.required)
       ? rec.required.filter(
-          (i): i is ModeContractInputId => isModeContractInputId(i) && inputs.includes(i),
+          (i): i is ModeContractInputId => isModeContractInputId(i) && inputIds.has(i),
         )
       : undefined;
     /* 只留本契约真的用到的自定义口定义：`inputs` 里已删掉的口，定义跟着消失
      *  （否则注册表会随每次「加一个又删一个」永久膨胀）。 */
-    const usedCustomInputs = customInputs.filter((def) => inputs.includes(def.id));
+    const usedCustomInputs = customInputs.filter((def) => inputIds.has(def.id));
     seen.add(mode);
     out.push({
       mode,
