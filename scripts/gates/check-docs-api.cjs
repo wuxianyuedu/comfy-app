@@ -232,6 +232,37 @@ async function loadTypedocConfig() {
 }
 
 /**
+ * 把仓库根变成「可移植」判据的探针（ISSUE #5163）。
+ *
+ * 旧版拿裸 root 做 `text.includes()`：root 恰好是源码里常见的路径片段（本仓容器里的
+ * `/workspace` 命中 `app/workspace/page.tsx`）时必然假红 —— 散文里的相对路径片段被
+ * 误认成烤进来的本机绝对路径。这里改成**有边界**的匹配，只认两类落点：
+ *
+ *   · root 作为完整路径的前缀，后面紧跟路径分隔符（`/` 或 `\`）—— typedoc 真正烤进
+ *     源码链接 / 搜索索引 / 面包屑的就是这种；
+ *   · root 作为独立 token 出现在空白 / 引号 / HTML 定界符 / 字符串结尾前 —— 覆盖
+ *     `href="/workspace"` 这类"路径正好是根"的写法。
+ *
+ * 前置必须是字符串开头或非路径字符，于是 `x/workspace/src`、`/workspace-extra/x`
+ * 这类"root 只是子串"的形态一律不命中。root 的三种分隔符形态（原样 / 全 `/` /
+ * 全 `\`）都收进去：POSIX 根只可能有前两种，Windows 根三种都可能出现在产物里
+ * （源码链接用 `/`，搜索索引用 `\`，取决于 typedoc 的版本与字段）。
+ *
+ * @param {string} root 仓库根
+ * @returns {RegExp[]}
+ */
+function rootNeedles(root) {
+  /** 正则元字符转义（路径里的 `.` `(` 等一律按字面量匹配）。 */
+  const esc = (s) => s.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+  const forms = new Set(
+    [root, root.replaceAll("\\", "/"), root.replaceAll("/", "\\")].filter((v) => v !== ""),
+  );
+  return [...forms].map(
+    (n) => new RegExp(String.raw`(?:^|[^A-Za-z0-9_./\\-])${esc(n)}(?=[\\/]|[\s"'<>)]|$)`, "g"),
+  );
+}
+
+/**
  * 判产物「可用」：**骨架齐全** + **可移植** + **输出目录确实被清空过**。
  *
  * 三条各自的判据与理由：
@@ -273,7 +304,7 @@ function judgeProduct(outDir, root = ROOT, typedocCfg = {}) {
     problems.push("产物里没有任何模块页（modules/ 下没有 .html）—— 这份 API 文档没有内容");
   }
 
-  const needles = [root, root.replaceAll("\\", "/")].filter((n) => n !== "");
+  const needles = rootNeedles(root);
   for (const [rel, abs] of files) {
     let text;
     try {
@@ -281,7 +312,7 @@ function judgeProduct(outDir, root = ROOT, typedocCfg = {}) {
     } catch {
       continue;
     }
-    if (needles.some((n) => text.includes(n))) {
+    if (needles.some((re) => re.test(text))) {
       problems.push(`产物里烤进了本机绝对路径（${rel}）—— 这份副本换台机器就不成立`);
       break;
     }
@@ -433,6 +464,7 @@ module.exports = {
   matchedInputs,
   walk,
   judgeProduct,
+  rootNeedles,
   judgeTypedocTail,
   OUT_REL,
 };
