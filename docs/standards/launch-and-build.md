@@ -1524,6 +1524,13 @@ log/
 | `log/latest.txt`                                                                                                                    | dev-launcher.mjs 收尾                                                                                                                      | 最近一次**正常完成**的运行目录名。崩溃补做**不覆盖**它 —— 这一栏的语义是「上一次好好结束的是哪一包」，改成崩溃那次的目录名反而让排障的人走错方向                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 每次正常退出覆盖                                                                                                     |
 | `log/current/run.json`                                                                                                              | dev-launcher.mjs 启动写、各进程补字段                                                                                                      | 本次运行的环境快照：runId / 启动时刻 / 应用版本 / branch / commit（读 `.git/HEAD`，不 spawn git）/ 启动参数 / 各进程 pid / 结束时刻 / 耗时 / 退出码 / `crashed` / `timings`（逐阶段耗时，ISSUE #4185，跨运行对比基线）。**用户反馈 bug 时第一个要看的文件**（§4.0）                                                                                                                                                                                                                                                                                                                              | 每次运行覆盖                                                                                                         |
 
+**开发侧两个统一入口**（ISSUE #5157）：`pnpm dev:log` 启动 dev server 并把
+stdout/stderr 按次命名落到 `log/current/dev/dev-<时刻>-<pid>.log`（不固定名，
+避免残留句柄锁死，见硬规则 4），退出时由 dev.mjs → dev-launcher 收整棵进程树；
+`pnpm logs [分区] [-n N] [-f]` 从 `log/current/<分区>` 取最新一份日志的尾部，
+分区就是上表的布局（缺省列出各分区）。**排查时不再手敲 `Tee-Object` /
+`Get-Content -Tail`** —— 固定操作收成工具（硬规则 27）。
+
 ### 4.1 四份常驻服务日志：一次启动一份文件（ISSUE #1326）
 
 `log/current/services/` 下的四份日志（`comfyui-runtime` / `drizzle-studio-runtime` /
