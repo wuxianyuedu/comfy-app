@@ -184,9 +184,8 @@ describe("narrowProductionWrite（#5147 窄写入）", () => {
 });
 
 describe("shouldAdoptProduction（#5147 挂载采纳）", () => {
-  /** 本机草稿的写入时刻：2026-01-01T00:00:00.100Z（与服务端那几档同一量级，
-   *  两侧才可比 —— 混着用 epoch 毫秒与 ISO 串会让判据看起来在工作、实际在比 apples
-   *  and oranges）。 */
+  /** 本机草稿的写入时刻（与服务端那几档同一量级，两侧才可比 —— 混着用 epoch
+   *  毫秒与 ISO 串会让判据看起来在工作、实际在比不可比的两个数）。 */
   const LOCAL_AT = Date.parse("2026-01-01T00:00:00.100Z");
 
   const filled = {
