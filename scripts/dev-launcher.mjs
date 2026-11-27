@@ -63,6 +63,7 @@ import { createLaunchTimeline, formatLaunchTimeline } from "./launcher-core/time
 // 模块，少一层转发就少一处要同步的面（没有任何仓内调用方走本文件这道门）。
 import { describeDownstreamExit, runtimeExitRecord } from "./launcher-core/downstream-exit.mjs";
 import { isWindows } from "./launcher-core/shell.mjs";
+import { resolveDevHandle } from "./platform/dev-handle.mjs";
 import {
   concludeDownstreamExit,
   spawnDevServer as downstreamSpawnDevServer,
@@ -189,6 +190,9 @@ export const RUN_ID = runId;
 // 让被 spawn 的子进程（executor-host / standalone server）也带上同一个 runId ——
 // 「grep runId 一把梭」要求所有通道都写这一列，靠各进程自己生成就散了。
 process.env.COMFYAPP_RUN_ID = runId;
+/* 协作活动流的来源标签（ISSUE #5251）：从既有 handle 取值链算出后注入应用级变量，
+ * 不把 `COMFYAPP_DEV_HANDLE` 本身带进运行期 / 客户端。 */
+process.env.COMFYAPP_ACTIVITY_SOURCE = resolveDevHandle({ root: ROOT, env: process.env }).name;
 
 const launcherLogDir = currentDirOf("launcher", ROOT);
 const nextjsLogDir = currentDirOf("nextjs", ROOT);

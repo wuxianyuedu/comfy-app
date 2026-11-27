@@ -129,5 +129,14 @@ describe("ShotFilmStrip", () => {
     });
     render(<ShotFilmStrip onJump={vi.fn()} shots={[reviewed]} />);
     expect(screen.getByText(/评审通过 1 镜/)).toBeTruthy();
+    expect(screen.getByText("已评审")).toBeTruthy();
+  });
+
+  it("未通过的镜头不显示评审角标（ISSUE #5251）", () => {
+    const pending: Shot = Object.assign(shot({ index: 2, id: "r2" }), {
+      review: { pass: false },
+    });
+    render(<ShotFilmStrip onJump={vi.fn()} shots={[pending]} />);
+    expect(screen.queryByText("已评审")).toBeNull();
   });
 });

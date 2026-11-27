@@ -106,6 +106,9 @@ const ALLOWED_SCRIPTS = new Set([
   // 检查侧漏 = 把合法产物判成违规）。
   "executor-host.runtime.mjs",
   "executor-host.build.json",
+  // 协作活动流来源（ISSUE #5251）：dev-launcher.mjs 顶层静态 import，缺它编排器
+  // 加载期 ERR_MODULE_NOT_FOUND。与 RUNTIME_SCRIPTS 同源，缺一份即红。
+  "platform/dev-handle.mjs",
   "lockfile/render-lock-diff.mjs",
   "lockfile/lock-diff.mjs",
   // 编排器的内部分件（逐项登记；与 RUNTIME_SCRIPTS 同源）
