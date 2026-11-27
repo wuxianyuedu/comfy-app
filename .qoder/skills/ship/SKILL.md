@@ -55,6 +55,7 @@ pnpm ship:wait                      # 确定性等待：轮询上一格那份读
 pnpm ship:cleanup [--dry-run] [--yes] # 合并后分支 / worktree 的三态收尾计划（ISSUE #5183）；默认只读，落地只认 PR 的 is_merged
 pnpm ci:attribute [sn] [--gate <标签>] [--file <文件>]  # CI 红归因编排（ISSUE #5182）：diagnose → base-check → 仅超时指纹时隔离复跑，不新增第六态
 pnpm doc:stale-scan [docs/**] [--kind path|symbol|command|anchor|count] [--json]  # 文档陈旧候选只读探针（ISSUE #5181），只出候选不自动改
+pnpm ship --screenshot-reply <号> --file <png> [--body-file <文案>]  # 截图上传 + Issue 回帖一步（ISSUE #5191）：自动取 asset_link 拼署名正文，写后逐字回读
 pnpm ship --fetch-issue 3965       # 只读：把一张 issue 的正文 / 评论 / 图片一次取到 .tmp/issues/<号>/（ISSUE #3965；gitignored、按号分目录、重跑即更新；图片走 get-imgs 官方通道，不手拼 URL 撞 404）
 pnpm ship --find-issues "工具 日志" [--state open|closed|all] [--label P2]
                                                    # 只读：开工前查重单（ISSUE #5167）；关键词是自由文本，
