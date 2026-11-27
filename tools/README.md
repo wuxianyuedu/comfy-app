@@ -166,7 +166,8 @@ comfy-cli 做 UI→API 转换，它固定使用：
 
 该路径缺失时提交任务会直接 `spawn ... ENOENT`，用户无从下手；版本过旧时子图
 wrapper 的覆盖不生效（提示词/种子整段失效，1.20 才修）。按需执行
-`scripts/devtools/setup-comfy-cli-venv.ps1`（原先由 Python 启动器每次启动后台触发，
+`pnpm setup:comfy-cli-venv`（跨平台入口，Windows 双击走
+`scripts/devtools/setup-comfy-cli-venv.ps1`；原先由 Python 启动器每次启动后台触发，
 启动器已移除），由脚本统一决定做什么：
 
 - **venv 缺失 / `comfy_cli` 不可导入** → 安装：
