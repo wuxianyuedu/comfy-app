@@ -74,7 +74,13 @@ export {
  * URL 前缀（`ARTIFACT_URL_PREFIX`）与磁盘根**是两件事**：库里存的正是前者
  * （`TaskImage.localPath` / `Film.localPath`），所以搬根不动 URL，历史行照常读得到。 */
 export function generatedRoot(cwd: string = process.cwd()): string {
-  return path.resolve(cwd, ARTIFACT_ROOT_DIR);
+  /* 多检出协作（ISSUE #5207）：UI-only 检出要与主控共享同一批产物，磁盘根可经
+   * COMFYAPP_GENERATED_ROOT 覆盖（绝对路径原样，相对路径按 cwd）。URL 前缀不变，
+   * 库里存的 `/api/generated/...` 历史行照常读得到。 */
+  const override = process.env.COMFYAPP_GENERATED_ROOT?.trim();
+  return override === undefined || override === ""
+    ? path.resolve(cwd, ARTIFACT_ROOT_DIR)
+    : path.resolve(cwd, override);
 }
 
 /** 历史产物根：`<cwd>/public/generated`。

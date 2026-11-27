@@ -294,4 +294,11 @@ describe("四个启动入口都接线（回归到「没人起宿主」的那道�
       "spawnExecutorHost(childEnv, stamp, APP_DATA_DIR)",
     );
   });
+
+  it("桌包也走同一份 SKIP 判决：UI-only 检出不再多拉一个宿主（ISSUE #5207）", () => {
+    const src = readScript("scripts/standalone-runtime.mjs");
+    expect(src).toContain("planExecutorHostSpawn(");
+    expect(src).not.toContain("resolveExecutorMode({ procEnv: process.env })");
+    expect(src).toContain("if (!shouldSpawn)");
+  });
 });
