@@ -1,3 +1,5 @@
+import { createContext, useContext } from "react";
+
 /** AuroraBackground —— 与 Ardot 设计体系一致的共享装饰性背景：页面底色之上叠屏幕混合的径向光晕（紫 / 青 / 薄荷）。
  * 深色 `mix-blend-screen` 配强光晕；浅色回落 `normal` 并降透明度（`screen` 在白 / 浅色表面不可见），色标 alpha 与 opacity 按模式各自调过。
  * 在透明（非不透明）页面靠近根处放一次；fixed + `pointer-events-none`，永不干扰布局或交互。
@@ -41,6 +43,43 @@ export function AuroraBackground({ className = "" }: { className?: string }) {
       />
     </div>
   );
+}
+
+/* ── 单实例宿主 ────────────────────────────────────────────────────────────────
+ * 「页签常驻挂载 + 每页一份全屏背景」会让打开 N 页就叠 N 层全屏 blur（ISSUE #5197）。
+ * 宿主在栈外层只渲染一份 <AuroraBackground />，经 context 告诉内部各屏「背景已由宿主提供」；
+ * 各屏的 backdrop 改用 <AuroraBackdrop />，挂在宿主内就渲染空节点（视觉仍是同一份铺底），
+ * 独立路由（不在宿主内）则照常渲染自己那份 —— 两种形态共用一段代码，不复制背景实现。 */
+const AuroraHostContext = createContext(false);
+
+/** 栈外层调用：全栈只渲染这一份极光背景。首页由 `visible` 决定是否显示（隐藏用 opacity，
+ * 不卸载 —— 切页签时只改合成层的一个属性，不触发全屏 blur 的重挂/重绘）。 */
+export function AuroraBackgroundHost({
+  children,
+  visible = true,
+}: {
+  children: React.ReactNode;
+  visible?: boolean;
+}) {
+  return (
+    <AuroraHostContext.Provider value>
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 -z-10 transition-opacity duration-300"
+        data-testid="aurora-host"
+        style={{ opacity: visible ? 1 : 0 }}
+      >
+        <AuroraBackground />
+      </div>
+      {children}
+    </AuroraHostContext.Provider>
+  );
+}
+
+/** 视图的铺底：宿主内渲染空节点（背景已由 `AuroraBackgroundHost` 提供），
+ * 独立路由（没有宿主）仍渲染自己那份 `<AuroraBackground />`，视觉不回退。 */
+export function AuroraBackdrop() {
+  return useContext(AuroraHostContext) ? null : <AuroraBackground />;
 }
 
 /** AuroraGlow — 单个极光晕。`AuroraBackground` 之外的页面（登录页 / 首页 / FilmStudio 整屏）要局部或自定义强度时用它，不要各自再抄 `radial-gradient`（历史四处色值不一致 0.48 / 0.42 / 0.40 的来源）。

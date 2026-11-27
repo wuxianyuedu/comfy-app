@@ -9,7 +9,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { Badge } from "~/components/ui/badge";
 import { PageHeader } from "~/components/ui/page-header";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
-import { AuroraBackground } from "~/components/ui/aurora-background";
+import { AuroraBackdrop } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -410,7 +410,7 @@ export function ProjectOutputs() {
   if (projectId === null || projectId === "") {
     return (
       <DocumentFrame
-        backdrop={<AuroraBackground />}
+        backdrop={<AuroraBackdrop />}
         className="grid min-h-[60vh] place-items-center px-6 text-center"
         width="medium"
       >
@@ -426,7 +426,7 @@ export function ProjectOutputs() {
 
   return (
     <DocumentFrame
-      backdrop={<AuroraBackground />}
+      backdrop={<AuroraBackdrop />}
       className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       width="medium"
     >

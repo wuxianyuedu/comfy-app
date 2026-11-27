@@ -19,7 +19,7 @@ import {
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { pageHeaderTitle, type WorkspaceView } from "~/components/studio/NavItems";
 import { ModelCascadeSelect } from "~/components/workshop/ModelCascadeSelect";
-import { AuroraBackground } from "~/components/ui/aurora-background";
+import { AuroraBackdrop } from "~/components/ui/aurora-background";
 import { Button } from "~/components/ui/button";
 import { FormField } from "~/components/ui/form-field";
 import { Input } from "~/components/ui/input";
@@ -96,7 +96,7 @@ export function ResearchLibraryView<P extends ResearchPreset>({
 
   return (
     <DocumentFrame
-      backdrop={<AuroraBackground />}
+      backdrop={<AuroraBackdrop />}
       className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       width="full"
     >
