@@ -638,6 +638,26 @@ describe("生图暂停闸（ISSUE #5055）", () => {
     expect(cli.executeViaComfyCli).not.toHaveBeenCalled();
   });
 
+  it("暂停闸挡路时把「生图已暂停」写进排队任务，且只写一次（ISSUE #5143）", async () => {
+    openWs();
+    const repo = fakeRepo({
+      getGenerationPauseState: vi.fn(() =>
+        Promise.resolve({ paused: true, pausedAt: new Date(0) }),
+      ),
+      peekNextQueued: vi.fn(() => Promise.resolve({ id: "t-img", type: "T2I" })),
+      claimNextQueued: vi.fn(() => Promise.resolve(["t-img"])),
+      listQueuedIds: vi.fn(() => Promise.resolve(["t-img", "t-img-2"])),
+    });
+    mod.configureDispatch({ taskRepo: repo, owner: "inline" });
+
+    await mod.claimAndDispatchOnce();
+    await mod.claimAndDispatchOnce();
+
+    expect(logsOf("t-img").filter((m) => m.includes("生图已暂停"))).toHaveLength(1);
+    expect(logsOf("t-img-2").filter((m) => m.includes("生图已暂停"))).toHaveLength(1);
+    expect(repo.claimNextQueued).not.toHaveBeenCalled();
+  });
+
   it("暂停中 + 队首是视频任务：照常领取（暂停只作用在生图）", async () => {
     openWs();
     const repo = fakeRepo({

@@ -34,7 +34,7 @@
 
 import { errorText } from "~/lib/error-message";
 import { fireAndForget } from "~/lib/async-action";
-import { HISTORY_READ } from "../retry-policy";
+import { COMFY_JOB_TIMEOUT_MS, HISTORY_READ } from "../retry-policy";
 import { lastSegments } from "~/lib/path-display";
 import { createEmptyState, type LogEntry, type RunnerState } from "./runner-state-shape";
 
@@ -42,7 +42,8 @@ export const CLIENT_ID = process.env.COMFY_CLIENT_ID ?? "comfy-app-web";
 
 export const MAX_CONCURRENCY = 1; // single GPU — serial execution
 
-export const JOB_TIMEOUT_MS = 5 * 60 * 1000;
+/** WS 执行器的单任务超时：与执行链 / 等候方共用 retry-policy 的唯一口径（#5140）。 */
+export const JOB_TIMEOUT_MS = COMFY_JOB_TIMEOUT_MS;
 
 /** ComfyUI 先发 `executing:null` / `execution_success`，随后才把结果写进 history。
 

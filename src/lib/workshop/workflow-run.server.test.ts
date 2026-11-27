@@ -31,6 +31,14 @@ const wfRepoStub = vi.hoisted(() => ({
   findByIdForUser: vi.fn(),
 }));
 
+/* COMBO 候选来自 ComfyUI object_info，测试里用视图层同一份派生出口的桩代替。 */
+const detailStub = vi.hoisted(() => ({
+  buildWorkflowDetailFull: vi.fn(),
+}));
+vi.mock("~/lib/comfyui/workflow-detail", () => ({
+  buildWorkflowDetailFull: detailStub.buildWorkflowDetailFull,
+}));
+
 /* `repository` 是 server-only 的 Drizzle 实现（import 即读库），本用例只想验
  * 编排判决，故两个仓储整体换桩（与 server/film/orchestrator.test.ts 同一口径）。 */
 vi.mock("~/lib/core/repository", () => ({
@@ -38,10 +46,11 @@ vi.mock("~/lib/core/repository", () => ({
   taskRepository: taskRepo,
 }));
 
-import { createWorkflowRunTask } from "./workflow-run.server";
+import { createWorkflowRunTask, prepareWorkflowRun } from "./workflow-run.server";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  detailStub.buildWorkflowDetailFull.mockResolvedValue({ workflowIO: {} });
 });
 
 const IO = {
@@ -118,6 +127,59 @@ describe("createWorkflowRunTask", () => {
     expect(createdRaw.execPayload).toBeDefined();
     expect(createdRaw.claimedBy).toBe("inline");
     expect(kickMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("COMBO 尺寸口用富化后的候选全称，不落裸比例（ISSUE #5137）", async () => {
+    detailStub.buildWorkflowDetailFull.mockResolvedValue({
+      workflowIO: {
+        "2::widget::aspect_ratio": { options: ["1:1 (Square)", "16:9 (Widescreen)"] },
+      },
+    });
+    wfRepoStub.findByIdForUser.mockResolvedValue({
+      id: "wf-combo",
+      name: "库生图",
+      taskType: "T2I",
+      modes: "[]",
+      defaultMode: null,
+      rawJson: { nodes: [{ id: "2", type: "ResolutionSelector" }] },
+      workflowIO: {
+        "2::widget::aspect_ratio": {
+          direction: "input",
+          kind: "widget",
+          nodeId: "2",
+          name: "aspect_ratio",
+          type: "COMBO",
+        },
+      },
+      paramMap: { source: { "mode:T2I": { size: "2::widget::aspect_ratio" } } },
+    });
+    const ctx = await prepareWorkflowRun("u1", "wf-combo");
+    /* 身份字段仍以库行为准，只把 object_info 的候选拷回来。 */
+    expect(ctx?.io["2::widget::aspect_ratio"]).toMatchObject({
+      nodeId: "2",
+      name: "aspect_ratio",
+      direction: "input",
+      options: ["1:1 (Square)", "16:9 (Widescreen)"],
+    });
+    expect(detailStub.buildWorkflowDetailFull).toHaveBeenCalledWith("u1", "wf-combo");
+  });
+
+  it("富化失败时按库里 IO 回落，不阻断入队（ISSUE #5137）", async () => {
+    detailStub.buildWorkflowDetailFull.mockRejectedValue(new Error("comfy offline"));
+    wfRepoStub.findByIdForUser.mockResolvedValue({
+      id: "wf-offline",
+      name: "库生图",
+      taskType: "T2I",
+      modes: "[]",
+      defaultMode: null,
+      rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
+      workflowIO: IO,
+      paramMap: { source: { "mode:T2I": { prompt: "1::widget::prompt" } } },
+    });
+    await expect(
+      createWorkflowRunTask({ userId: "u1", workflowId: "wf-offline", values: { prompt: "猫" } }),
+    ).resolves.toMatchObject({ taskId: "task-1" });
+    expect(taskRepo.createQueued).toHaveBeenCalledTimes(1);
   });
 
   it("无 rawJson → 抛「没有可执行内容」，不建任务也不踢领取", async () => {

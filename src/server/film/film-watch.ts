@@ -12,6 +12,11 @@ import { sleep } from "~/lib/with-timeout";
 import { errorText } from "~/lib/error-message";
 import { asRecord } from "~/lib/is-record";
 import type { ShotStatus } from "~/lib/film/film-status";
+import {
+  FILM_WATCH_BASE_MAX_ITER as WATCH_BASE_MAX_ITER,
+  FILM_WATCH_PER_SHOT_ITER as WATCH_PER_SHOT_ITER,
+  FILM_WATCH_TICK_MS as WATCH_POLL_MS,
+} from "~/lib/film/film-wait";
 import { appendFilmLog } from "./film-log";
 import { composeFilm } from "./compose-film";
 
@@ -28,10 +33,7 @@ function isResultImages(v: unknown): v is Array<{ localPath?: string; mediaType?
  *   零变化」才判超时——健康的长任务每拍都有进展，不会被这把尺误伤；
  * · **绝对上限**：底仓 + 每镜一档，兜「进度在两档间抖动」这类永不静止的
  *   病态循环，保证收口必然到达。 */
-const WATCH_POLL_MS = 4000;
 const WATCH_IDLE_MAX_ITER = 900;
-const WATCH_BASE_MAX_ITER = 240;
-const WATCH_PER_SHOT_ITER = 600;
 const WATCH_IDLE_MIN = Math.round((WATCH_POLL_MS * WATCH_IDLE_MAX_ITER) / 60_000);
 
 /** 超时收口（#4595）：与 cancelFilm 同款的补偿——先逐个撤在飞任务，再同一事务
