@@ -70,7 +70,7 @@
 | **AI 的用法** | MCP `workshop_build_storyboard` / `workshop_set_storyboard`；自主 run 的 `plan_storyboard` |
 | **质量验收口径** | ① 每镜都能指到一个场景，且**出场角色都在 `Character[]` 里**（指向不存在的角色 = 红）；② 提示词由场景 + 角色卡 + `skill` 风格模板拼出（`src/lib/workshop/prompt-builder.ts`），改任一输入重跑，提示词必须变化；③ 镜头时长之和与成片目标时长在同一个量级（时长全为空或全为 0 = 分镜不可用）；④ 镜头表可导出、可回读（不丢顺序） |
 | **当前状态** | 已上线（`FR-WP-01`）；支持批量编辑 |
-| **已知缺口** | 镜头是 **JSON 列**（`production.shots` / `workshopDraft.shots`），不是独立实体 ⇒ 无法按镜头建索引、做跨集复用与版本（`FR-SR-03`）；无分镜**预览图 / 草图**（跳过了「先画再出图」的廉价试错层）；无镜头级审批停点（AI 侧） |
+| **已知缺口** | 项目内镜头仍是 **JSON 列**（`production.shots` / `workshopDraft.shots`），但系列级镜头模板已实体化（`FR-SR-03` / #5215）；低草图预览与镜头级审批已上线（ISSUE #5216：`Shot.previewUrl` / `approved`，未批准不进正式生图，三条质量口径只读检查），审批 UI 按钮仍待接；按镜头建索引与跨集版本仍需项目内列迁移 |
 | **代码落点** | `src/components/workshop/useStoryboardPlanner.ts`；`src/lib/workshop/types.ts`（`Shot`） |
 
 ---

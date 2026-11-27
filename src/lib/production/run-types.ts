@@ -16,6 +16,7 @@ import {
 } from "~/lib/production/progress";
 import { tailWindow } from "~/lib/page-window";
 import { asRecord } from "~/lib/is-record";
+import { approvableShotIds } from "~/lib/workshop/storyboard-quality";
 import {
   normalizeHumanRating,
   normalizeHumanVerdict,
@@ -246,6 +247,7 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
 
 /** 规划器消费的镜头视图（从 `production.shots` 的未知项归一）。 */
 export type ShotRunView = {
+  approved?: boolean;
   hasClip: boolean;
   hasImage: boolean;
   /** 人工评分 0~5（#2480，校准读数的人侧输入）；没评 → null/缺省。 */
@@ -301,6 +303,8 @@ export function toRunView(production: ProductionLike | null): ProductionRunView 
     }
     shots.push({
       id: rec.id,
+      /* 镜头级审批（ISSUE #5216）：只认显式 false，缺省的历史镜头当已批准。 */
+      ...(rec.approved === false ? { approved: false } : {}),
       rev: typeof rec.rev === "number" && Number.isFinite(rec.rev) ? rec.rev : 0,
       hasImage: Boolean(rec.imageUrl),
       hasClip: Boolean(rec.clipUrl),
@@ -396,19 +400,23 @@ export function planNextRunAction(view: ProductionRunView, run: ProductionRun): 
   if (run.autoReview && run.storyboardScriptDigest !== view.scriptDigest) {
     return { kind: "plan_storyboard" };
   }
-  const needImage = view.shots
-    .filter((s) => {
-      if (!s.hasImage) {
-        return true;
-      }
-      // 仅当「本 run 之前处理过该镜」且当前 rev 又变新（用户在其后改过 / 退回），才重做；
-      // 从未被本 run 处理过（快照缺省）时，已有图的镜头视为已完成、不纳入。
-      const done = run.processedShotRev[s.id];
-      return done !== undefined && done < s.rev;
-    })
-    .map((s) => s.id);
-  if (needImage.length > 0) {
-    return { kind: "render_images", shotIds: needImage };
+  const pendingShots = view.shots.filter((s) => {
+    if (!s.hasImage) {
+      return true;
+    }
+    // 仅当「本 run 之前处理过该镜」且当前 rev 又变新（用户在其后改过 / 退回），才重做；
+    // 从未被本 run 处理过（快照缺省）时，已有图的镜头视为已完成、不纳入。
+    const done = run.processedShotRev[s.id];
+    return done !== undefined && done < s.rev;
+  });
+  /* 镜头级审批（ISSUE #5216）：正式生图只喂已批准镜头；全部待生图镜头都没批准时
+   * 温和停在 storyboard 等点头，不把它们标成已处理。 */
+  const approval = approvableShotIds(pendingShots);
+  if (approval.ids.length > 0) {
+    return { kind: "render_images", shotIds: approval.ids };
+  }
+  if (approval.blocked.length > 0) {
+    return { kind: "await_approval", stage: "storyboard" };
   }
   // 自动评审：图齐后，把「已出图但评审定稿快照落后于当前 rev」的镜头纳入待评审。
   // 评审不合格的抽卡会抬高该镜 rev → 重新出现在 needImage → 重出后再评，直到通过或达上限。

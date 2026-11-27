@@ -361,6 +361,10 @@ export const shotInputSchema = z
     voice: voiceBindingSchema.optional(),
     /** 逐镜配音产物地址（ISSUE #5213）：TTS 链路回写，成片合成混入对白轨。 */
     audioUrl: z.string().optional(),
+    /** 镜头级审批（ISSUE #5216）：显式 false = 未批准，正式生图跳过；缺省 = 沿用旧行为（已批准）。 */
+    approved: z.boolean().optional(),
+    /** 低草图预览地址（ISSUE #5216）：正式生图前的廉价试错层，失败不影响正式出图。 */
+    previewUrl: z.string().optional(),
     motion: optionalEnum(MOTION_LEVELS), // 运动强度（I2V）
     duration: z.number().optional(), // 镜头时长（秒）
     transition: optionalEnum(TRANSITIONS), // 与下一镜的转场

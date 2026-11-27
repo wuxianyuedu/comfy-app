@@ -11,14 +11,9 @@ import { logger } from "~/lib/core/logger";
 import { productionRepository } from "~/lib/core/repository-production";
 import { completeLLM, completeLLMStructured, getLLMConfig } from "~/lib/llm/server";
 import { buildScriptMarkdownMessages } from "~/lib/llm/prompts";
-import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
-import { shotSizeFor } from "~/lib/film/film-size";
 import { filmWaitTicksFor } from "~/lib/film/film-wait";
-import { asRecord } from "~/lib/is-record";
-import { randomSeed } from "~/lib/comfyui/random-seed";
 import { workshopUid } from "~/lib/workshop/script-parser";
 import {
-  markActionProcessed,
   normalizeProductionRun,
   planNextRunAction,
   scriptDigestOf,
@@ -41,6 +36,7 @@ import { recoverFilmStart } from "~/server/agent/run-film-recovery";
 import type { ProductionStage } from "~/lib/production/progress";
 import { errorMessage, errorText } from "~/lib/error-message";
 import { isProjectType, normalizeShotType } from "~/lib/workshop/types";
+import { execImages } from "~/server/agent/run-images";
 import type { Character, Shot } from "~/lib/workshop/types";
 import type { Production } from "~/server/db/schema";
 import { sleep } from "~/lib/with-timeout";
@@ -311,84 +307,6 @@ async function execStoryboard(
     ok: true,
     summary: `已规划 ${shots.length} 个镜头`,
     run: { ...run, storyboardScriptDigest: digest },
-  };
-}
-
-async function execImages(
-  userId: string,
-  projectId: string,
-  run: ProductionRun,
-  row: Production,
-  io: { shotIds: Array<string>; view: ProductionRunView },
-): Promise<ExecResult> {
-  const { view, shotIds } = io;
-  if (!run.imageWorkflowId) {
-    return {
-      ok: false,
-      error: "缺少图类工作流（imageWorkflowId），无法逐镜生图",
-    };
-  }
-  /* shots 是本引擎自己经 patchContent 写库的 `Array<Shot>`（写入端可信）：
-   * 运行期只判「是数组」这一层（同 draft-sync-shared 的 isShotList 口径，
-   * 元素形状问题由 draft-integrity 在读侧判），不再对 any[] 做盲断言。 */
-  const shots = isShotArray(row.shots) ? row.shots : [];
-  const want = new Set(shotIds);
-  /* 先收集本轮产出、不落库（ISSUE #3864）：生图是分钟级慢 IO，必须留在
-   * 内容写锁外；锁内只做「重读最新 shots → 叠加本轮产出 → 写回」。 */
-  const produced = new Map<string, { imageUrl?: string; status: "done" | "failed" }>();
-  for (const shot of shots) {
-    if (!want.has(shot.id)) {
-      continue;
-    }
-    // 「种子」算高级输入、默认随机：每次自主出图都带一个新的随机 seed（首刷与抽卡重出一样），
-    // 让同提示词每次重跑都能换图。seed 只经「种子」对外参数下发（synthesizeFirstFrame →
-    // createWorkflowRunTask → buildEncapsulatedInputs → applyParamMapping），落到作者在工作流里
-    // 连好的 seed / noise_seed 端口上；作者没连这一口 → 落进 unmatched、不写任何节点，工作流用它
-    // 图内自带的 seed。运行期绝不直接改写工作流节点（不动 control_after_generate、不注图内 seed）。
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
-      const path = await synthesizeFirstFrame({
-        userId,
-        workflowId: run.imageWorkflowId,
-        prompt: shot.prompt,
-        negative: shot.negativePrompt || undefined,
-        projectId,
-        seed: randomSeed(),
-        /* 与逐镜视频任务同一份场景无关画幅（ISSUE #5138）：首帧与潜空间同尺寸。 */
-        size: shotSizeFor(asRecord(shot.params)?.size),
-      });
-      produced.set(shot.id, { imageUrl: path, status: "done" });
-    } catch {
-      // 单镜失败：记为 failed，不阻断其它镜；已处理 rev 仍写，避免无限重试同一坏镜。
-      produced.set(shot.id, { status: "failed" });
-    }
-  }
-  /* 回写收进 per-project 内容写锁（ISSUE #3864）：锁内重读最新 shots，把本轮
-   * 产出只叠到本轮动过的镜头上——不再用拍首旧快照整列覆盖（生图期间用户改词 /
-   * 评分 / 自动保存的并发修改不再被打回）。 */
-  await withProductionContentLock(projectId, async () => {
-    const fresh = await productionRepository.getForUser(userId, projectId);
-    const freshShots = isShotArray(fresh?.shots) ? fresh.shots : [];
-    const merged = freshShots.map((shot) => {
-      const p = produced.get(shot.id);
-      if (p === undefined) {
-        return shot;
-      }
-      return {
-        ...shot,
-        ...(p.imageUrl === undefined ? {} : { imageUrl: p.imageUrl }),
-        status: p.status,
-      };
-    });
-    await productionRepository.patchContent(userId, projectId, { shots: merged });
-  });
-  const doneCount = [...produced.values()].filter((p) => p.status === "done").length;
-  const failedCount = shotIds.length - doneCount;
-  // 记录这些镜头「已按当前 rev 处理」——用户之后再改（rev 变大）会被重新纳入。
-  return {
-    ok: true,
-    summary: `逐镜生图：${doneCount} 成功${failedCount > 0 ? ` / ${failedCount} 失败` : ""}`,
-    run: markActionProcessed(run, view, { kind: "render_images", shotIds }),
   };
 }
 
