@@ -4,7 +4,14 @@
  * SlotOutlet —— 「把子树渲染到别处的一个落点」的全库唯一实现（规范 §12.18）。`createPortal` 能做，但散在视图层各写一遍就说不清哪些地方在传送、为什么；视图只表达意图。
  * 与 `ui/dialog` / `ui/popover` 的分工：那几个是浮层（有定位、遮罩、焦点锁），本件是结构（被传送内容是宿主处的普通子节点，不浮、不遮、不抢焦点）。三条边界：没挂落点时原地渲染 / 只在客户端传送（SSR 无 DOM，走 `useSyncExternalStore`）/ 落点唯一。
  */
-import { createContext, useContext, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 
 import { cn } from "~/lib/utils";
@@ -15,14 +22,15 @@ type SlotOutletContextValue = {
   setNode: (node: HTMLElement | null) => void;
 };
 
-const SlotOutletContext = createContext<SlotOutletContextValue | null>(null);
+export const SlotOutletContext = createContext<SlotOutletContextValue | null>(null);
 
 /** 提供者 —— 挂在**同时包含落点与内容**的那一层上。 */
 export function SlotOutletProvider({ children }: { children: ReactNode }) {
   const [node, setNode] = useState<HTMLElement | null>(null);
-  return (
-    <SlotOutletContext.Provider value={{ node, setNode }}>{children}</SlotOutletContext.Provider>
-  );
+  /* setNode 来自 useState、引用稳定；只有落点变化才需要换 value，
+   * 否则每次 provider 重渲都会把所有 SlotContent 消费者连带重渲（E5）。 */
+  const value = useMemo<SlotOutletContextValue>(() => ({ node, setNode }), [node, setNode]);
+  return <SlotOutletContext.Provider value={value}>{children}</SlotOutletContext.Provider>;
 }
 
 /** 落点 —— 内容最终出现在这里。`className` 由调用处给（落点的排布是布局决定）。 */

@@ -75,8 +75,10 @@ type PollSource = (typeof POLL_SOURCES)[number];
 
 /** 轮询间隔：日志「实时感」与请求量的折中（对齐规范 07 §7.8 的增量轮询）。 */
 const POLL_MS = 2000;
-/** 面板关闭时的放宽间隔：无人看时间线，5s 足够（新数据仍会进缓冲与计数徽标）。 */
-const POLL_IDLE_MS = 5000;
+/** 面板关闭时的放宽间隔：无人看时间线，日志照进缓冲与计数徽标，间隔放宽到
+ *  30s 把六路请求的后台空转压下来（E3：实测静置 12s 有 18 次 `/api/logs/current`）。
+ *  不暂停：启动期日志与 console 中继仍要靠这一拍入库，暂停会让故障现场丢条目。 */
+export const POLL_IDLE_MS = 30_000;
 
 export function LogProvider({ children }: { children: React.ReactNode }) {
   const addEntry = useLogStore((s) => s.addEntry);

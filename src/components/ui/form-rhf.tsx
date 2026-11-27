@@ -26,14 +26,20 @@ type FormFieldContextValue<
   name: TName;
 };
 
-const FormFieldContext = React.createContext<FormFieldContextValue | null>(null);
+export const FormFieldContext = React.createContext<FormFieldContextValue | null>(null);
 
 function FormField<
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
 >({ ...props }: ControllerProps<TFieldValues, TName>) {
+  /* Context value 每次渲染现造对象会让所有消费者重渲（E4）；name 是原始值，
+   * 依赖写清后只有字段名变化才换引用。 */
+  const contextValue = React.useMemo<FormFieldContextValue>(
+    () => ({ name: props.name }),
+    [props.name],
+  );
   return (
-    <FormFieldContext.Provider value={{ name: props.name }}>
+    <FormFieldContext.Provider value={contextValue}>
       <Controller {...props} />
     </FormFieldContext.Provider>
   );
@@ -43,7 +49,7 @@ type FormItemContextValue = {
   id: string;
 };
 
-const FormItemContext = React.createContext<FormItemContextValue | null>(null);
+export const FormItemContext = React.createContext<FormItemContextValue | null>(null);
 
 function useFormField() {
   const fieldContext = React.useContext(FormFieldContext);
@@ -73,9 +79,11 @@ function useFormField() {
 
 function FormItem({ className, ...props }: React.ComponentProps<"div">) {
   const id = React.useId();
+  /* useId 在组件生命周期内稳定，value 只需算一次；每次重渲换引用会让字段下所有消费者跟着重渲。 */
+  const contextValue = React.useMemo<FormItemContextValue>(() => ({ id }), [id]);
 
   return (
-    <FormItemContext.Provider value={{ id }}>
+    <FormItemContext.Provider value={contextValue}>
       <div className={cn("grid gap-2", className)} data-slot="form-item" {...props} />
     </FormItemContext.Provider>
   );
