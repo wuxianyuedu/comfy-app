@@ -1,0 +1,2 @@
+## Added
+- `pnpm ship:branch-clean <分支名> [--yes]`（#5166）：删已合并分支此前要手敲「`git ls-remote` → `git push origin --delete` → `git checkout --detach` → `git branch -D`」四步，squash 拓扑下 `-d` 恒假、必须用 `-D`，删错只能靠 reflog；本次会话连续三次 ship 在收尾这一步退 1。现在落地判据只认 PR 的 `is_merged`（复用 `branchLandingRows` 的取数窗口，没取到退 2、未合并退 1），删除与两边回读直接复用 `ship-platform.mjs` 的 `cleanBranch`（不在调用点写第二套），当前检出占着分支时删前先 `checkout --detach <sha>` 打印恢复线；不带 `--yes` 只念判定、一次不删，显式拒绝批量。规范 §13.6.5 / ship Skill 同步登记，并补「未落地不删 / 窗口没取到 / 只读 / 删除两边回读 / 当前检出先切走 / 删失败落红」行为用例。
