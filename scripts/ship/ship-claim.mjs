@@ -226,6 +226,7 @@ function isStringArray(value) {
  *   mkTmp:(name:string,text:string)=>string|null,
  *   createIssue?:any,
  *   commentIssue?:any,
+ *   editIssue?:any,
  *   dryRun?:boolean,
  * }} ctx
  * @returns {number} `CODE` 之一
@@ -244,6 +245,7 @@ export function runIssueAction(ctx) {
     mkTmp,
     createIssue,
     commentIssue,
+    editIssue,
     dryRun = false,
   } = ctx;
   /** @type {unknown} */
@@ -254,20 +256,24 @@ export function runIssueAction(ctx) {
   const rawNewIssueBad = opt.newIssueBad;
   /** @type {unknown} */
   const rawCommentBad = opt.commentBad;
+  /** @type {unknown} */
+  const rawEditIssueBad = opt.editIssueBad;
   const claimBad = isStringArray(rawClaimBad) ? rawClaimBad : [];
   const releaseBad = isStringArray(rawReleaseBad) ? rawReleaseBad : [];
   const newIssueBad = isStringArray(rawNewIssueBad) ? rawNewIssueBad : [];
   const commentBad = isStringArray(rawCommentBad) ? rawCommentBad : [];
+  const editIssueBad = isStringArray(rawEditIssueBad) ? rawEditIssueBad : [];
   const bad = [
     ...claimBad.map((x) => `--claim ${x}`),
     ...releaseBad.map((x) => `--release ${x}`),
     ...newIssueBad.map((x) => `--new-issue ${x}`),
     ...commentBad.map((x) => `--comment ${x}`),
+    ...editIssueBad.map((x) => `--edit-issue ${x}`),
   ];
   if (bad.length > 0) {
     log(
-      `[ship] [ERROR] --claim / --release / --comment 收的是一张单的号（2 位以上数字，可写 #2179）、` +
-        `--new-issue 收的是标题；这一次这些不能当号 / 标题用：${bad.join(" ")}`,
+      `[ship] [ERROR] --claim / --release / --comment / --edit-issue 收的是一张单的号` +
+        `（2 位以上数字，可写 #2179）、--new-issue 收的是标题；这一次这些不能当号 / 标题用：${bad.join(" ")}`,
     );
     log("[ship] 一个都不认 ⇒ 不动任何单子，也不去猜是哪一张。");
     return CODE.NOT_RUN;
@@ -293,12 +299,15 @@ export function runIssueAction(ctx) {
   const wantsNewIssue =
     (opt.newIssue !== null && opt.newIssue !== undefined) || newIssueBad.length > 0;
   const wantsComment = (opt.comment !== null && opt.comment !== undefined) || commentBad.length > 0;
+  const wantsEditIssue =
+    (opt.editIssue !== null && opt.editIssue !== undefined) || editIssueBad.length > 0;
   const wanted = [
     opt.claim === null || opt.claim === undefined ? null : "--claim",
     opt.release === null || opt.release === undefined ? null : "--release",
     opt.claims ? "--claims" : null,
     wantsNewIssue ? "--new-issue" : null,
     wantsComment ? "--comment" : null,
+    wantsEditIssue ? "--edit-issue" : null,
   ].filter(Boolean);
   if (wanted.length > 1) {
     log(`[ship] [ERROR] 一次只做一件事：拿到 ${wanted.join(" + ")}`);
@@ -357,6 +366,25 @@ export function runIssueAction(ctx) {
   }
   /* `--comment` 不需要「谁」：写一条读数不是「谁在做什么」，未配留痕时署名会写「未配」
    * 但评论照发（`--new-issue` 同一条边界）。所以它排在下面对 handle 的硬性检查之前。 */
+  /* `--edit-issue` 不需要「谁」：正文文件里的人写署名优先（`withCommentHeader`
+   * 幂等保留已有署名行），未配留痕时补的是「未配」，不阻断这一格。 */
+  if (wantsEditIssue) {
+    if (typeof editIssue !== "function") {
+      log("[ship] [ERROR] --edit-issue 没有接上执行者（装配层漏传）⇒ 没有结论。");
+      return CODE.NOT_RUN;
+    }
+    return editIssue({
+      run,
+      log,
+      slug,
+      number: opt.editIssue,
+      handle,
+      root,
+      opt,
+      mkTmp,
+      dryRun,
+    });
+  }
   if (wantsComment) {
     if (typeof commentIssue !== "function") {
       log("[ship] [ERROR] --comment 没有接上执行者（装配层漏传）⇒ 没有结论。");

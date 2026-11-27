@@ -17,7 +17,10 @@ import {
  * `get-issue` 的回读 → 这一层要的四件原值。
  *
  * @param {{run:any, slug:string, number:number}} ctx
- * @returns {{number:number,state:string,title:string,priority:string,labels:any[]} | null} 取不到回 null
+ * `body` 也在这里读回：`--edit-issue` 写后要与发出的正文逐字比对（ISSUE #5165），
+ * 单独再写一份 `get-issue` 就是第二套平台形状解析。
+ *
+ * @returns {{number:number,state:string,title:string,priority:string,body:string,labels:any[]} | null} 取不到回 null
  */
 export function readIssue({ run, slug, number }) {
   const got = cnbJson(run, [
@@ -38,6 +41,7 @@ export function readIssue({ run, slug, number }) {
     state: String(d.state ?? ""),
     title: String(d.title ?? ""),
     priority: String(d.priority ?? "?"),
+    body: String(d.body ?? ""),
     labels: Array.isArray(d.labels) ? d.labels : [],
   };
 }
