@@ -10,6 +10,7 @@ import { WorkspaceFrame } from "../ViewContainer";
 import { markSubviewOpenStart } from "../subview-open-log";
 import { DeleteWorkflowModal } from "../DeleteWorkflowModal";
 import { WorkflowImportPanel } from "../WorkflowImportPanel";
+import { AnimeWorkflowPackPanel } from "./sections/AnimeWorkflowPackPanel";
 import { WorkflowLibraryHeader } from "./WorkflowLibraryHeader";
 import { WorkflowLibraryList } from "./WorkflowLibraryList";
 import { WorkflowLibraryDetail } from "./WorkflowLibraryDetail";
@@ -76,6 +77,7 @@ export function WorkflowLibrary({
         }}
         onModelFilterChange={c.setModelFilter}
         onSourceFilterChange={c.setSourceFilter}
+        onToggleAnimePack={c.toggleAnimePack}
         onToggleImport={c.toggleImport}
         onTypeFilterChange={c.setTypeFilter}
         sourceCounts={c.sourceCounts}
@@ -83,6 +85,8 @@ export function WorkflowLibrary({
         typeCounts={c.typeCounts}
         typeFilter={c.typeFilter}
       />
+
+      {c.showAnimePack && <AnimeWorkflowPackPanel />}
 
       {c.showImport && (
         <WorkflowImportPanel

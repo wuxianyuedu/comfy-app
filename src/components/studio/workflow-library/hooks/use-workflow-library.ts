@@ -106,10 +106,12 @@ export type WorkflowLibraryController = {
   setShowModelManager: (value: boolean) => void;
   setSourceFilter: (value: SourceFilter) => void;
   setTypeFilter: (value: TypeFilter) => void;
+  showAnimePack: boolean;
   showImport: boolean;
   showModelManager: boolean;
   sourceCounts: ReturnType<typeof countBySource>;
   sourceFilter: SourceFilter;
+  toggleAnimePack: () => void;
   toggleImport: () => void;
   typeCounts: ReturnType<typeof countByType>;
   typeFilter: TypeFilter;
@@ -152,6 +154,8 @@ export function useWorkflowLibrary(
   const [modelFilter, setModelFilter] = useState<string>("all");
 
   const [showModelManager, setShowModelManager] = useState(false);
+  /* 漫剧推荐包面板（#5265）：与导入弹窗分开的独立入口，避免打开时被弹窗遮住。 */
+  const [showAnimePack, setShowAnimePack] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{
     id: string;
     name: string;
@@ -361,6 +365,9 @@ export function useWorkflowLibrary(
   const closeImport = useCallback(() => {
     importState.setShowImport(false);
   }, [importState]);
+  const toggleAnimePack = useCallback(() => {
+    setShowAnimePack((previous) => !previous);
+  }, []);
   const cancelDelete = useCallback(() => {
     setPendingDelete(null);
   }, []);
@@ -417,6 +424,8 @@ export function useWorkflowLibrary(
     setEditingId,
     showModelManager,
     setShowModelManager,
+    showAnimePack,
+    toggleAnimePack,
     showImport: importState.showImport,
     toggleImport,
     closeImport,
