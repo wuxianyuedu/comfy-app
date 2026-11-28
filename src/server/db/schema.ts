@@ -601,6 +601,8 @@ export const filmProject = sqliteTable(
     fps: integer("fps").notNull().default(16),
     framesPerShot: integer("framesPerShot").notNull().default(49),
     subtitleOn: integer("subtitleOn", { mode: "boolean" }).notNull().default(true),
+    /** 词级字幕开关（ISSUE #5277）：打开后 SRT 按词打点，缺省仍用整句口径。 */
+    wordSubtitleOn: integer("wordSubtitleOn", { mode: "boolean" }).notNull().default(false),
     bgmName: text("bgmName"),
     status: text("status").notNull().default("PARSING"),
     progress: integer("progress").notNull().default(0),
