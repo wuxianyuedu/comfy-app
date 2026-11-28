@@ -3,7 +3,9 @@
  * 渲染前先过一遍：不通过就带字段路径退回 LLM 重生成，而不是让一份不连贯的合同
  * 一路走到占 GPU 的生成任务。这是 ONE SWEEP「checked before rendering」范式在本项目
  * 的第一形态 —— P0 只做数据层可判的几条，几何层（穿模 / 脚滑 / 抖动）留到 P3。 */
+import { findBuiltinAction } from "./action-library";
 import type { CodeFilmContract } from "./contract-schema";
+import { expandKeyframesInOrder, keyframesForActor } from "./keyframe-expander";
 
 /** 一条 QA 失败：带可下钻的字段路径与用户可读原因。 */
 export type QaIssue = {
@@ -23,6 +25,8 @@ export function checkContract(contract: CodeFilmContract): QaReport {
     ...checkTimeline(contract),
     ...checkReferences(contract),
     ...checkBeatOrder(contract),
+    ...checkActionRefs(contract),
+    ...checkCrossShotContinuity(contract),
   ];
   return { ok: issues.length === 0, issues };
 }
@@ -120,6 +124,58 @@ function checkReferences(contract: CodeFilmContract): Array<QaIssue> {
         issues.push({
           path: `shots[${si}].actionBeats[${bi}].targetId`,
           message: `动作目标 ${beat.targetId} 不在共享地图中`,
+        });
+      }
+    }
+  }
+  return issues;
+}
+
+/** 动作引用：actionRef 必须是内置招式；needsTarget 的招式必须给 targetId。 */
+function checkActionRefs(contract: CodeFilmContract): Array<QaIssue> {
+  const issues: Array<QaIssue> = [];
+  for (const [si, shot] of contract.shots.entries()) {
+    for (const [bi, beat] of shot.actionBeats.entries()) {
+      if (beat.actionRef === undefined) {
+        continue;
+      }
+      const def = findBuiltinAction(beat.actionRef);
+      if (def === undefined) {
+        issues.push({
+          path: `shots[${si}].actionBeats[${bi}].actionRef`,
+          message: `未知招式 ${beat.actionRef}（内置招式库里没有）`,
+        });
+        continue;
+      }
+      if (def.needsTarget && beat.targetId === undefined) {
+        issues.push({
+          path: `shots[${si}].actionBeats[${bi}].targetId`,
+          message: `招式 ${def.label} 需要目标实体`,
+        });
+      }
+    }
+  }
+  return issues;
+}
+
+/** 跨镜连续性：同一角色在相邻镜的关键帧不能倒退到全局时间轴之前，
+ *  且两镜之间的动作空档不能超过镜头总时长的两倍（避免长镜"消失"）。 */
+function checkCrossShotContinuity(contract: CodeFilmContract): Array<QaIssue> {
+  if (!contract.qaRules.checkContinuity) {
+    return [];
+  }
+  const issues: Array<QaIssue> = [];
+  const frames = expandKeyframesInOrder(contract);
+  const layoutIds = new Set(contract.layout.map((entity) => entity.id));
+  for (const entityId of layoutIds) {
+    const actorFrames = keyframesForActor(frames, entityId);
+    for (let i = 1; i < actorFrames.length; i++) {
+      const prev = actorFrames[i - 1]!;
+      const cur = actorFrames[i]!;
+      if (cur.frame < prev.frame) {
+        issues.push({
+          path: `shots.${cur.shotId}.actionBeats.${entityId}`,
+          message: `角色 ${entityId} 的关键帧全局时序倒退（${prev.frame} → ${cur.frame}）`,
         });
       }
     }

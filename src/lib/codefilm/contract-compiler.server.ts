@@ -38,7 +38,9 @@ const SYSTEM_PROMPT = `你是动画分镜导演。把用户给的剧本拆成一
 - shots 按 index 从 0 递增，每镜给唯一 id、duration（秒）、shotType、description、characterIds。
 - layout 列出所有出现的角色 / 场景 / 道具，每个给唯一 id 与 kind；镜头与动作节拍只能引用这里的 id。
 - timeline.shots 按镜头顺序首尾相接：第一镜 startFrame=0，下一镜 startFrame=上一镜 endFrame，最后一镜 endFrame=totalFrames；帧数 = duration × fps。
-- actionBeats 的 t 在镜内单调不减，action 用简短动词（蓄力/挥拳/闪避/冲击…）。
+- actionBeats 的 t 在镜内单调不减；优先给 actionRef 引用内置招式：
+  charge(蓄力)/punch(挥拳)/dodge(闪避)/impact(冲击)/knockback(被击退)/sweep(一扫)，
+  需要目标的招式(punch/dodge/impact)必须给 targetId；也可给自定义 keyframes 覆盖。
 - 打斗场景给足镜头数，动作要有起承转合。`;
 
 /** 编译合同：LLM 生成 + 有界 QA 修复重试。失败抛含最后一次原因的 Error。 */

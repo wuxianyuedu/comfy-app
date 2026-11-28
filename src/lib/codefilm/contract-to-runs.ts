@@ -7,6 +7,7 @@
  * 保持「工作流唯一来源是库里的 rawJson + 落点只认作者连的线」的既有红线。 */
 import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
 import type { CodeFilmContract, ShotSpec } from "./contract-schema";
+import { expandKeyframes } from "./keyframe-expander";
 
 /** 一次镜头运行的入参（userId / workflowId 由调用方在执行时注入）。 */
 export type ContractRunInput = {
@@ -29,13 +30,14 @@ export function contractToRuns(
 ): Array<ContractRunInput> {
   const fps = options.fps ?? contract.meta.fps;
   const includeBeats = options.includeBeatsInPrompt !== false;
+  const frames = expandKeyframes(contract);
   return [...contract.shots]
     .sort((a, b) => a.index - b.index)
     .map((shot) => ({
       shotId: shot.id,
       index: shot.index,
       values: {
-        prompt: buildPrompt(shot, includeBeats),
+        prompt: buildPrompt(shot, includeBeats, frames),
         negativePrompt: "low quality, blurry, deformed, watermark, text, distorted",
         duration: shot.duration,
         frames: Math.max(1, Math.round(shot.duration * fps)),
@@ -44,11 +46,19 @@ export function contractToRuns(
 }
 
 /** 提示词 = 画面描述 + 景别 + 动作节拍摘要。
- *  动作节拍只取 action 名（不把 actorId 这类内部 id 喂给模型），保持可读。 */
-function buildPrompt(shot: ShotSpec, includeBeats: boolean): string {
+ *
+ *  P2：优先用展开后的姿态描述（含动作库的招式细节），同一镜内按帧序去重；
+ *  没有展开帧时退化为 beat.action（兼容 P0 合同）。actorId 这类内部 id 不喂给模型。 */
+function buildPrompt(
+  shot: ShotSpec,
+  includeBeats: boolean,
+  frames: ReturnType<typeof expandKeyframes>,
+): string {
   const parts = [shot.description.trim(), `${shot.shotType} shot`];
   if (includeBeats && shot.actionBeats.length > 0) {
-    const actions = [...shot.actionBeats].sort((a, b) => a.t - b.t).map((beat) => beat.action);
+    const poses = frames.filter((frame) => frame.shotId === shot.id).map((frame) => frame.pose);
+    const actions =
+      poses.length > 0 ? [...new Set(poses)] : shot.actionBeats.map((beat) => beat.action);
     parts.push(`actions: ${actions.join(", ")}`);
   }
   return parts.filter(Boolean).join("; ");

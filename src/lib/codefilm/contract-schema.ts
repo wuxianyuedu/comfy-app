@@ -7,6 +7,8 @@
  * 纯逻辑、无 IO、无 Node 内建、无 server-only —— 客户端预览与服务端校验共用同一份。 */
 import { z } from "zod";
 
+import { poseKeyframeSchema } from "./action-library";
+
 /** 世界里的一个实体（场景 / 道具 / 角色）：共享地图的条目。
  *  id 在镜头动作节拍里被引用，静态 QA 据此判引用可解析。 */
 export const layoutEntitySchema = z
@@ -29,15 +31,22 @@ export const layoutEntitySchema = z
   .strict();
 
 /** 动作节拍：镜内某一时刻某实体做的动作。
- *  t 为镜内相对秒数；actorId 必须引用 layout 中的实体（QA 校验）。 */
+ *  t 为镜内相对秒数；actorId 必须引用 layout 中的实体（QA 校验）。
+ *
+ *  P2 起可引用动作库 id（`actionRef`）；`keyframes` 给自定义关键帧覆盖。
+ *  两者都不给时退化为 P0 的自由文本 `action`（向后兼容旧合同）。 */
 export const actionBeatSchema = z
   .object({
-    t: z.number().nonnegative(),
-    actorId: z.string().min(1),
     action: z.string().min(1),
-    targetId: z.string().min(1).optional(),
+    /** 引用 `action-library` 里的招式 id；QA 校验可解析。 */
+    actionRef: z.string().min(1).optional(),
+    actorId: z.string().min(1),
     easing: z.string().optional(),
     fxRef: z.string().optional(),
+    /** 自定义关键帧（覆盖动作库的默认关键帧）。 */
+    keyframes: z.array(poseKeyframeSchema).optional(),
+    t: z.number().nonnegative(),
+    targetId: z.string().min(1).optional(),
   })
   .strict();
 

@@ -13,7 +13,9 @@ const MAX_ATTEMPTS = 3;
 const SYSTEM_PROMPT = `你是动画分镜导演。把剧本拆成制片合同 JSON，严格按 schema 输出，不要多余文字。
 shots 按 index 从 0 递增、id 唯一；layout 列出所有角色/场景/道具及唯一 id；
 镜头与动作节拍只能引用 layout 里的 id；timeline 切片首尾相接、末镜 endFrame=totalFrames。
-actionBeats 的 t 单调不减。打斗场景给足镜头数，动作有起承转合。`;
+actionBeats 的 t 单调不减；优先用 actionRef 引用招式：
+charge/punch/dodge/impact/knockback/sweep（punch/dodge/impact 需 targetId），也可给自定义 keyframes。
+打斗场景给足镜头数，动作有起承转合。`;
 
 export type McpCompileResult = {
   attempts: number;

@@ -5,6 +5,7 @@
  *
  * 输出保持 `shotInputSchema` 的形状：调用方可直接交给 `shotListInputSchema.parse`。 */
 import type { CodeFilmContract } from "./contract-schema";
+import { expandKeyframes } from "./keyframe-expander";
 
 /** 合同 → Shot 数组。id 用合同已有的镜号 id（硬规则：不生成第二套身份）。 */
 export function contractToShots(contract: CodeFilmContract): Array<{
@@ -21,6 +22,7 @@ export function contractToShots(contract: CodeFilmContract): Array<{
   status: "idle";
   transition: "cut" | "dissolve" | "fade";
 }> {
+  const frames = expandKeyframes(contract);
   return contract.shots.map((shot) => ({
     id: shot.id,
     index: shot.index,
@@ -38,6 +40,7 @@ export function contractToShots(contract: CodeFilmContract): Array<{
       contractId: contract.meta.title,
       camera: shot.camera,
       actionBeats: shot.actionBeats,
+      keyframes: frames.filter((frame) => frame.shotId === shot.id),
       timeline: contract.timeline.shots.find((slice) => slice.shotId === shot.id) ?? null,
     },
   }));

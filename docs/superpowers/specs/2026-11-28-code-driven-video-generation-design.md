@@ -161,7 +161,8 @@
 | --- | --- | --- |
 | **P0（已落地，PR #5294）** | 合同 schema + 静态 QA + 合同→Shot / RunWorkflowInput 纯映射 + `code-film` API 的 compile/validate/toShots + 测试 + 文档同步 | 纯函数与 API 可测，不依赖 ComfyUI 是否运行 |
 | **P1（已落地，待提交）** | 编译器接 LLM（有界 QA 修复重试）、落库 `production.shots` + 逐镜 `createWorkflowRunTask` 入队 + 失败补偿取消、`generate`/`render`/`status` 三口、MCP 三工具、Agent stub 可行动提示 | 逐镜入队可测；真出图需用户配好视频工作流 |
-| P2 | `actionBeats` 动作库、全局时钟、多镜头连续、整季批量复用 | 打斗分镜动作编排可验收 |
+| **P2（已落地，待提交）** | 动作库（6 个内置打斗招式）、关键帧展开成全局帧、跨镜连续性 QA、关键帧进 Shot.params 与提示词 | 打斗分镜动作编排可验收 |
+| P2′（未做） | 整季批量复用 `seriesGeneration.batchGenerateSeason`、剧集级动作衔接 | 多集连续 |
 | P3 | Three.js 代码渲染后端 + headless 帧渲染 + ffmpeg；QA 移植穿模 / 脚滑 / 抖动 / 突现检测 | 打斗场景纯代码渲染 |
 
 > P0 刻意不落库、不接渲染：这样门禁可全绿、行为可验证，避免「依赖本机 ComfyUI 恰好在跑」的不确定性。
