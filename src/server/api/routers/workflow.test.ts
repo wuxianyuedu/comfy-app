@@ -90,6 +90,14 @@ beforeEach(() => {
 
 // ───────────────────────────────────── list ─────────────────────────────────────
 
+describe("workflow.animePackCandidates", () => {
+  it("没有配置本地根目录时只读返回空候选（#5265）", async () => {
+    seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+    const caller = createCaller(makeCtx());
+    expect(await caller.animePackCandidates()).toEqual([]);
+  });
+});
+
 describe("workflow.list", () => {
   it("空库返回空列表且 localRoots 为 null", async () => {
     seedUser(tdb, { id: "user-a", email: "a@test.dev" });

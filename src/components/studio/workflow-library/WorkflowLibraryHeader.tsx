@@ -6,7 +6,7 @@
 // 排不下时整组换行（根容器 `flex-wrap`）。筛选组单独包一层 `flex-nowrap`，
 // 组内换行会让「来源 / 类型 / 模型」落在三行、动作组跟错位。
 
-import { FolderInput } from "lucide-react";
+import { FolderInput, Sparkles } from "lucide-react";
 
 import { pageHeaderTitle } from "../NavItems";
 import { Button } from "~/components/ui/button";
@@ -25,6 +25,7 @@ type WorkflowLibraryHeaderProps = {
   onManageModels: () => void;
   onModelFilterChange: (v: string) => void;
   onSourceFilterChange: (v: SourceFilter) => void;
+  onToggleAnimePack: () => void;
   onToggleImport: () => void;
   onTypeFilterChange: (v: TypeFilter) => void;
   sourceCounts: { all: number; local: number; online: number };
@@ -34,6 +35,7 @@ type WorkflowLibraryHeaderProps = {
 };
 
 export function WorkflowLibraryHeader({
+  onToggleAnimePack,
   onToggleImport,
   sourceFilter,
   onSourceFilterChange,
@@ -75,6 +77,10 @@ export function WorkflowLibraryHeader({
       </div>
 
       <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">
+        <Button className={HEADER_ACTION_OUTLINE_BTN} onClick={onToggleAnimePack} variant="outline">
+          <Sparkles data-icon="inline-start" size={13} />
+          漫剧工作流包
+        </Button>
         {/* 导入按钮与右侧两枚动作按钮同款（ISSUE #3759）：描边 + 弱底，不再单独
             用实心品牌色抬高。 */}
         <Button className={HEADER_ACTION_OUTLINE_BTN} onClick={onToggleImport} variant="outline">

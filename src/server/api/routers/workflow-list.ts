@@ -16,6 +16,11 @@ import {
   scanLocalWorkflowRoots,
   type LocalWorkflowFile,
 } from "~/lib/comfyui/localWorkflows";
+import { readLocalFile } from "~/lib/comfyui/importSource";
+import {
+  analyzeAnimeWorkflowPack,
+  type AnimePackAnalysis,
+} from "~/lib/workshop/anime-workflow-pack";
 import {
   getWorkflowType,
   getWorkflowTypesByCategory,
@@ -40,7 +45,44 @@ import {
  *  挂起而不抛错，没预算的请求一直不返回、前端无限转圈。 */
 const SCAN_TIMEOUT_MS = 30_000;
 
+type AnimePackCandidate = { analysis: AnimePackAnalysis; name: string; path: string };
+
 export const workflowListProcedures = {
+  /** 漫剧推荐包候选（ISSUE #5265）：只读扫描用户导入的 RAW JSON 并给导入前报告，
+   *  不落库、不下载模型、不改工作流库唯一来源。 */
+  animePackCandidates: authedProcedure.query(async () => {
+    const roots = getLocalWorkflowRoots();
+    if (roots.length === 0) {
+      return [] as Array<AnimePackCandidate>;
+    }
+    const { allFiles } = await withTimeout(
+      scanLocalWorkflowRoots(roots, { recursive: true }),
+      SCAN_TIMEOUT_MS,
+      { label: "扫描本地工作流目录" },
+    );
+    const results = await Promise.all(
+      allFiles.slice(0, 50).map(async (file): Promise<AnimePackCandidate | null> => {
+        try {
+          const { text } = await readLocalFile(file.absPath);
+          let raw: unknown;
+          try {
+            raw = JSON.parse(text);
+          } catch {
+            return null;
+          }
+          const analysis = analyzeAnimeWorkflowPack(raw);
+          if (analysis.mode === null) {
+            return null;
+          }
+          return { analysis, name: file.name, path: file.absPath };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    return results.filter((item): item is AnimePackCandidate => item !== null);
+  }),
+
   list: authedProcedure
     .input(
       z
