@@ -4,6 +4,7 @@
  * 读出侧按 `generated/films/<stem>.srt` / `.mp4` 解析，不另存一份字幕。
  */
 import { asRecord } from "~/lib/is-record";
+import { localizationsOf } from "~/lib/film/localization";
 
 export type EpisodeDelivery = {
   coverUrl: string | null;
@@ -62,6 +63,7 @@ export function buildDeliveryManifest(episode: {
         : 0,
     finalVideoPath: delivery.finalVideoPath ?? "",
     id: episode.id,
+    localizations: localizationsOf(episode.delivery),
     shotVersions: delivery.shotVersions,
     subtitlePath: delivery.subtitlePath ?? "",
     synopsis: delivery.synopsis === "" ? (text(episode.synopsis) ?? "") : delivery.synopsis,
