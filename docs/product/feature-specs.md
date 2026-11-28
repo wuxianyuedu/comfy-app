@@ -1704,6 +1704,8 @@
   引用表；按 ①~③ 同口径验收：引用而非拷贝、反向查询 `seriesAssetEpisodes` 列出受影响集、
   正文变更版本递增且被引用时禁止删除。旧 `series.styleSlug` / `production.scenes` /
   `production.shots` JSON 列保留，逐项录入即可迁移，不自动改写存量。
+  ⑤ 视觉圣经作为 `kind=style` 资产的 `data` 录入后，可通过 `film.create` 的 `visualBible` /
+  `negativeExtra` 并入每镜正向 / 负向提示词（ISSUE #5283）——不新增 DB 列，与 `styleSlug` 风格锚可同时生效。
 - 落点（现状）：`character` 实体表与 `episode_character` 关联表（`series` 级角色库，字段对齐
   `Character`）；系列角色库 tRPC router（`characters` / `createCharacter` / `updateCharacter` /
   `deleteCharacter` / `episodeCharacters` / `characterEpisodes` / `linkCharacter` /
@@ -1712,7 +1714,7 @@
   UI 面板 `src/components/studio/project-home/SeriesCharacterLibrary.tsx`；与 `production.characters`
   双向同步：提升 = 项目角色按 `name` 幂等并入系列库并关联本集，注入 = 本集关联角色按 `name`
   合并回项目（同名覆盖字段、不同名追加）。镜头仍走 `production.shots` JSON 列；
-  风格锚仅 `series.styleSlug`、场景仍走 `production.scenes` JSON 列（均未实体化，见状态行）。
+  风格锚 / 场景 / 镜头模板的实体化见状态行 ④：实体在 `seriesAsset` + `episode_asset`，旧 JSON 列只作存量保留，不再声称「未实体化」。
 
 #### FR-SR-04 剧集级排期与批量（整季调度 / 断点续跑）
 

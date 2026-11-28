@@ -60,6 +60,8 @@ export type CreateFilmInput = {
   framesPerShot?: number;
   /** 文生视频镜头合成首帧用的**图类工作流 id**；镜头自带首帧时不需要。 */
   imageWorkflowId?: string | null;
+  /** 视觉圣经的禁止项，追加到每镜负向提示词（与 FILM_NEGATIVE 基底并列）。 */
+  negativeExtra?: string | null;
   script: string;
   /** 成片画幅（尺寸表达：比例 + 分辨率 / 比例 + 百万像素 + 倍数）。缺省走视频
    *  场景 16:9 1k；仍传 "1280x720" 这类老字符串时由 `toSizeSpec` 归一。 */
@@ -73,6 +75,8 @@ export type CreateFilmInput = {
   userId: string;
   /** 逐镜生成用的**工作流库视频工作流 id**（本地链路唯一来源，内置模板已移除）。 */
   videoWorkflowId?: string | null;
+  /** 系列视觉圣经（ISSUE #5283）：跨镜共用的色板 / 光线 / 材质 / 禁止清单，随逐镜提示词下发。 */
+  visualBible?: string | null;
 };
 
 const FILM_NEGATIVE =
@@ -305,6 +309,23 @@ export async function createFilm(input: CreateFilmInput) {
       stylePrompt = skill.promptTemplate || undefined;
       styleNegative = skill.negativePrompt ?? undefined;
     }
+  }
+
+  /* 视觉圣经（ISSUE #5283）与风格锚同层汇入：风格锚给「画风」，视觉圣经给「这部剧的规矩」，
+   * 二者都不是新的提示词通道，只是 parseScriptToShots 已有的 stylePrompt/styleNegative 入参。 */
+  if (
+    input.visualBible !== undefined &&
+    input.visualBible !== null &&
+    input.visualBible.trim() !== ""
+  ) {
+    stylePrompt = [stylePrompt, input.visualBible.trim()].filter(Boolean).join(", ");
+  }
+  if (
+    input.negativeExtra !== undefined &&
+    input.negativeExtra !== null &&
+    input.negativeExtra.trim() !== ""
+  ) {
+    styleNegative = [styleNegative, input.negativeExtra.trim()].filter(Boolean).join(", ");
   }
 
   const shots = await parseScriptToShots(

@@ -81,6 +81,9 @@ const SCOPED_DOCS = [
   /* 多检出协作指南（ISSUE #5207）：里面写着的四个 env 键、DB 路径形态与产物根覆盖
    * 都来自启动链与产物布局的唯一出处，漂了就会指着一个不存在的开关让多检出互相误杀。 */
   "docs/guides/multi-checkout-collaboration.md",
+  /* 《出端之刃》制作 playbook（ISSUE #5283）：里面写着的 tRPC 出口、params 字段与
+   * film.create 的 visualBible / negativeExtra 都来自源码，漂了会让录制口径指向不存在的开关。 */
+  "docs/guides/production-playbook-chuduan-zhi-ren.md",
   /* 产品需求文档（ISSUE #2421）：产品功能与需求的唯一口径。里面大量引用代码落点
    * （router / 组件 / 表名）与功能状态，漂了就会指着一个不存在的实现说需求 ——
    * 与功能流程图同类，纳入校验。 */
