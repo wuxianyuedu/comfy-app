@@ -105,6 +105,30 @@ export function parsePorcelain(stdout) {
 }
 
 /**
+ * `unstagedModified` / `untracked` 两份路径清单 → `--no-commit` 那一跳的读数行。
+ *
+ * `--no-commit` 的语义是「已提交的 HEAD 原样推进、跳过提交段」。它与「解冲突后工作区
+ * 还留着修正」组合时，提交段跳过 = 这些修正既不会进 HEAD、也不会进 PR；人若把它们误当成
+ * 「已包含在 HEAD 里」，就会推一个内容落后的分支，白跑一轮 CI。这里把它们逐条点名，
+ * 让「这些改动不在 HEAD 里、平台不会看到」成为显式读数 —— 只念不拦（是否阻断另议），
+ * 也不改 `--no-commit` 跳过提交段的原语义。
+ *
+ * @param {{unstagedModified: string[], untracked: string[]}} dirty
+ * @returns {string[]} 读数行（没有改动时空数组）
+ */
+export function noCommitOutsideHeadReading({ unstagedModified, untracked }) {
+  const paths = [...unstagedModified, ...untracked];
+  if (paths.length === 0) {
+    return [];
+  }
+  return [
+    "[ship] --no-commit：以下改动不在 HEAD 里、平台不会看到（本次跳过提交段，不会替你提交）：",
+    ...paths.map((p) => `[ship]   · ${p}`),
+    "[ship]   若这些改动属于这一笔，先自己提交它们再重跑；否则保持工作区原样。",
+  ];
+}
+
+/**
  * `git diff --cached --name-only -z` 的输出 → 路径清单。
  *
  * 为什么用 `-z`：本仓文档名含中文与前导点，而 `core.quotePath` 默认会把非 ASCII
