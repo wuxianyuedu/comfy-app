@@ -64,6 +64,7 @@ describe("useDebouncedLoader", () => {
     /* 新轮次先落地；旧轮次此时才返回，它的 commit 必须被丢弃。 */
     await expect.poll(() => writes).toEqual(["b"]);
     resolveFirst?.("a-late");
+    // sleep-ok: 等一个「不会发生的事」——旧轮次的 commit 作废后不得再落地（轮询表达不了「一直没发生」）
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(writes).toEqual(["b"]);
   });
@@ -125,6 +126,7 @@ describe("useDebouncedLoader", () => {
     await expect.poll(() => load.mock.calls.length).toBe(1);
     unmount();
     resolveLoad?.("late");
+    // sleep-ok: 等一个「不会发生的事」——卸载后旧轮次的 commit 不得落地（轮询表达不了「一直没发生」）
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(writes).toEqual([]);
   });
