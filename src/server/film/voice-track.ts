@@ -8,6 +8,7 @@ import { asRecord } from "~/lib/is-record";
 /** 声音绑定：音色 / 方言 / 语速；顺序按字典排（perfectionist）。 */
 export type VoiceBinding = {
   dialect?: string;
+  language?: string;
   speed?: number;
   timbre?: string;
 };
@@ -69,9 +70,12 @@ export function ttsParamsOf(opts: {
 }): Record<string, unknown> {
   const { dialogue, voice, workflowId } = opts;
   const params: Record<string, unknown> = { text: dialogue.trim() };
-  const { dialect, speed, timbre } = voice;
+  const { dialect, language, speed, timbre } = voice;
   if (dialect !== undefined) {
     params.dialect = dialect;
+  }
+  if (language !== undefined && language !== "") {
+    params.language = language;
   }
   if (speed !== undefined) {
     params.speed = speed;

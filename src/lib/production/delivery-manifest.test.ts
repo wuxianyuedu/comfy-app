@@ -59,6 +59,7 @@ describe("buildDeliveryManifest", () => {
       episodeNumber: 3,
       finalVideoPath: "f.mp4",
       id: "ep_1",
+      localizations: [],
       shotVersions: { s1: 2 },
       subtitlePath: "f",
       synopsis: "集简介",
