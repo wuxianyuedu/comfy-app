@@ -71,6 +71,8 @@ export const filmRouter = createTRPCRouter({
         ttsWorkflowId: z.string().optional(),
         /** 词级字幕开关（ISSUE #5277）；默认整句口径。 */
         wordSubtitleOn: z.boolean().optional(),
+        /** 选型来源（ISSUE #5278）：用户指定 / 推荐包导入。 */
+        workflowSource: z.enum(["user", "pack"]).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -94,6 +96,7 @@ export const filmRouter = createTRPCRouter({
         imageWorkflowId: input.imageWorkflowId,
         ttsWorkflowId: input.ttsWorkflowId,
         wordSubtitleOn: input.wordSubtitleOn,
+        workflowSource: input.workflowSource,
       });
       return { id, shots };
     }),
@@ -110,6 +113,8 @@ export const filmRouter = createTRPCRouter({
         ttsWorkflowId: z.string().optional(),
         /** 词级字幕开关（ISSUE #5277）。 */
         wordSubtitleOn: z.boolean().optional(),
+        /** 选型来源（ISSUE #5278）。 */
+        workflowSource: z.enum(["user", "pack"]).optional(),
         title: z.string().min(1).max(200).optional(),
         type: z.string().min(1).optional(),
         size: z.union([sizeSpecSchema, z.string()]).optional(),
