@@ -5614,9 +5614,13 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
   });
 
   /* ── P87「整块容器自带 backdrop-blur」（硬闸，ISSUE #2031 · 规范 03 §3.13）──
-   * 判据见 scripts/ui-primitives/ui-primitives-rules-p67-p86.cjs 里 P87 的注释。锚点是
-   * **一行里 `backdrop-blur` 与贴边定位是否同现** —— 所以正反两侧各一条，
-   * 且反面要覆盖「贴边条放行」与「注释里的不算」两件事。
+   * 判据见 scripts/ui-primitives/ui-primitives-rules-p87.cjs 里 P87 的注释。
+   * 收紧后（ISSUE #5269）锚点是两道闸：一行里出现 `backdrop-blur` 后，
+   * ① 必须「两条对边贴齐」（inset-x-0 / inset-y-0 / inset-0，或 top-0+bottom-0 /
+   *    left-0+right-0）—— 单独一个 `fixed` 不再放行；② 贴边条底色不得带
+   *    /85~95 高不透明半透档。两道任一不满足即判红。
+   * 正反两侧覆盖：卡片整块 / 纯 fixed 浮层 / 贴边+半透三条判红；
+   * 贴边条 / 注释里不算 / dialog-overlay 遮罩三条放行。
    */
 
   test("P87 卡片/弹窗自己带 backdrop-blur → 阻断", ({ repo }) => {
@@ -5638,10 +5642,53 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
     expect(output).toContain("P87Card.tsx");
   });
 
-  test("P87 贴边条（铺满一段、下面真有内容流过）放行", ({ repo }) => {
+  test("P87 纯 fixed 浮层（无两条对边贴齐）带 blur → 阻断", ({ repo }) => {
+    /* ISSUE #5269：`fixed` 只说明脱文档流，不能单独短路放行。带 blur 的浮层
+     * 若没有第二条对边贴齐，就是整块容器那一档（AgentOverlay 曾凭一个 fixed 漏过）。 */
+    repo.write(
+      "src/components/studio/P87FixedOnly.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <div className="bg-panel-deep fixed top-3 right-3 rounded-xl p-4 backdrop-blur-xl">',
+        "      x",
+        "    </div>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("P87");
+    expect(output).toContain("P87FixedOnly.tsx");
+  });
+
+  test("P87 贴边条 + bg-*/95 半透 + blur → 阻断", ({ repo }) => {
+    /* ISSUE #5269：贴边条「留模糊、去半透」—— 高不透明半透档 + 模糊是同一笔
+     * 合成税的两半（BrowserStatusBar 曾以 bg-panel/95 + blur 漏过）。 */
+    repo.write(
+      "src/components/studio/P87EdgeTranslucent.tsx",
+      [
+        "export function V() {",
+        "  return (",
+        '    <footer className="bg-panel/95 fixed inset-x-0 bottom-0 flex h-10 items-center backdrop-blur-sm">',
+        "      x",
+        "    </footer>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(1);
+    expect(output).toContain("P87");
+    expect(output).toContain("P87EdgeTranslucent.tsx");
+  });
+
+  test("P87 贴边条（两条对边贴齐、底色不带半透）放行", ({ repo }) => {
     /* 顶栏 / 页脚 / 状态栏这一档是模糊唯一有意义的位置：内容从条底下滚过。
-     * 形态判据是「两条对边贴齐」（`inset-x-0` / `fixed` / 上下或左右各归零），
-     * 不是白名单 —— 新增一屏的顶栏不必登记就该过。 */
+     * 形态判据是「两条对边贴齐」（inset-x-0 / inset-y-0 / inset-0 / 上下或
+     * 左右各归零）+ 底色不带 /85~95 半透，不是白名单 —— 新增一屏的顶栏
+     * 不必登记就该过。 */
     repo.write(
       "src/components/studio/P87EdgeBar.tsx",
       [
@@ -5665,6 +5712,21 @@ describe("check-ui-primitives.cjs（提交门槛，规范 §16.2.3）", () => {
         "export function V() {",
         "  /* 这里曾经是 bg-panel/90 + backdrop-blur-md，已按扁平规范撤掉 */",
         '  return <div className="bg-panel rounded-xl border p-4">x</div>;',
+        "}",
+      ].join("\n"),
+    );
+    const { code, output } = repo.run();
+    expect(code, output).toBe(0);
+  });
+
+  test("P87 dialog-overlay 遮罩（inset-0 + bg-scrim、无半透）放行", ({ repo }) => {
+    /* ISSUE #5269 收紧后仍豁免：`ui/dialog-overlay` 的遮罩铺满视口、bg-scrim
+     * 不带 /85~95 半透，两道闸都过（规范 03 §3.13 明确豁免）。 */
+    repo.write(
+      "src/components/ui/fixture-dialog-overlay.ts",
+      [
+        "export function dialogBackdropClass(className?: string): string {",
+        '  return `fixed top-title-bar inset-0 z-modal bg-scrim duration-100 supports-backdrop-filter:backdrop-blur-xs ${className ?? ""}`;',
         "}",
       ].join("\n"),
     );

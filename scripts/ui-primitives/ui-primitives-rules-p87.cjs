@@ -24,15 +24,26 @@ module.exports = {
    *
    *   · **贴边条**（有两条对边贴齐容器）就坐在滚动的画布上，模糊在那里是
    *     「内容从底下流过」的唯一可读线索 —— 留；与它成对的 `bg-*` 85-95 档
-   *     也一并留（模糊 + 半透是一件事的两半，只留半边等于把可读性交给运气）。
+   *     半透则**不许留**（模糊 + 半透是「同一笔合成税的两半」，§3.13 表格
+   *     要求贴边条「留模糊、不再叠半透」，ISSUE #5269 收紧补上这一半）。
    *   · **整块容器**（卡片 / 弹窗 / 浮层 / 提示条）下面是一层带色遮罩或静止
    *     页面：模糊 0 像素效果，代价是把自身与背后的每一份内容拖进一个
    *     backdrop-filter 图层。这一档禁止。
    *
-   * 判据按**行**取锚（不是整文件、也不是整串 class）：只要某一行里
-   * `backdrop-blur*` 与**贴边定位**（`inset-x-0|inset-y-0|inset-0|fixed` 这类
-   * 铺满一段的声明，或 `top-0|bottom-0|left-0|right-0` 里出现两个相对的）
-   * 同现，就判定为贴边条、放行；其余一律算整块容器。
+   * 判据按**行**取锚（不是整文件、也不是整串 class）：一行里出现
+   * `backdrop-blur*` 之后，依次过两道闸——
+   *   ① **两条对边贴齐**（`inset-x-0` / `inset-y-0` / `inset-0`，或
+   *      `top-0`+`bottom-0` / `left-0`+`right-0`）。单独一个 `fixed` 只说明
+   *      脱文档流、不说明贴住了容器两条边，**不足以放行**（ISSUE #5269：
+   *      `AgentOverlay` 的 `bg-panel-deep/95 ... fixed ... backdrop-blur-xl`
+   *      与 `GlobalStepLogPanel` 的 `fixed top-16 right-3 ... backdrop-blur-sm`
+   *      都曾凭一个 `fixed` 漏过）。
+   *   ② 即便形状是贴边条，底色也不得带 `/85~95` 高不透明半透档
+   *      (`bg-panel/95` + `backdrop-blur-sm` 的 `BrowserStatusBar` 曾漏过)。
+   *
+   * 两道任一不满足即判红；`ui/dialog-overlay.ts` 的遮罩是
+   * `fixed ... inset-0 ... bg-scrim ... backdrop-blur-xs`：`inset-0` 过①、
+   * `bg-scrim` 不带 `/85~95` 过②，继续豁免（§3.13 明确）。
    *
    * 为什么锚「贴边」而不是白名单文件：白名单会随新增屏漂移（同 P86 的教训），
    * 而「这一条是不是贴着容器边」是**从形状读得出来的**。
@@ -41,7 +52,7 @@ module.exports = {
    * 基元自己带模糊是更贵的一处 —— 它下面所有调用点会一起绕开这条规范。 */
   P87: {
     label:
-      "整块容器自带 backdrop-blur（卡片/弹窗/浮层下面没有活的内容，模糊 0 像素效果却整树多一个图层；贴边条不在此账）",
+      "整块容器自带 backdrop-blur（卡片/弹窗/浮层下面没有活的内容，模糊 0 像素效果却整树多一个图层；贴边条要求两条对边贴齐且底色不带 /85~95 半透）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       let n = 0;
@@ -49,15 +60,19 @@ module.exports = {
         if (!/backdrop-blur/.test(line)) {
           continue;
         }
-        /* 贴边条：模糊要盖住的是一段会流动的内容，形态上必然「两条对边贴齐」。
-         * 写法集合按实测取：整段铺满（inset-x-0 / inset-y-0 / inset-0 / fixed）、
-         * 或两条对边各自归零（top-0+bottom-0 / left-0+right-0）。 */
+        /* 闸①：两条对边贴齐才算贴边条。`fixed` 刻意不在集合里 —— 它只说明
+         * 元素脱文档流，不能单独短路（ISSUE #5269 收紧）。 */
         const spansBoth =
-          /\b(?:inset-[xy]-0|inset-0|fixed)\b/.test(line) ||
-          (/\b(?:top|bottom)-0\b/.test(line) &&
-            /\b(?:top|bottom)-0\b/.test(line.replace(/^.*?(?:top-0|bottom-0)/, ""))) ||
+          /\b(?:inset-[xy]-0|inset-0)\b/.test(line) ||
+          (/\btop-0\b/.test(line) && /\bbottom-0\b/.test(line)) ||
           (/\bleft-0\b/.test(line) && /\bright-0\b/.test(line));
         if (!spansBoth) {
+          n++;
+          continue;
+        }
+        /* 闸②：贴边条也不许再叠 /85~95 的高不透明半透底色 —— 模糊 + 半透
+         * 是同一笔合成税的两半，§3.13 表格要求贴边条「留模糊、去半透」。 */
+        if (/\bbg-[\w-]+\/(?:8[5-9]|9[0-5])\b/.test(line)) {
           n++;
         }
       }
