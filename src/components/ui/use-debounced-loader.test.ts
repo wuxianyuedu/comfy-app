@@ -21,7 +21,9 @@ describe("useDebouncedLoader", () => {
       loaded.push(q);
     });
     let value = "a";
-    const { rerender } = renderHook(() => useDebouncedLoader({ value, delayMs: DELAY_MS, load }));
+    const { rerender } = renderHook(() => {
+      useDebouncedLoader({ value, delayMs: DELAY_MS, load });
+    });
     /* 首帧防抖值即 "a"，也会跑一轮加载；等它落地后再开始计数。 */
     await expect.poll(() => load.mock.calls.length).toBe(1);
     expect(load).toHaveBeenLastCalledWith("a", expect.any(Function));
@@ -49,11 +51,15 @@ describe("useDebouncedLoader", () => {
     const load = vi.fn((v: string, commit: (write: () => void) => void) => {
       void (async () => {
         const result = v === "a" ? await firstPending : v;
-        commit(() => writes.push(result));
+        commit(() => {
+          writes.push(result);
+        });
       })();
     });
 
-    const { rerender } = renderHook(() => useDebouncedLoader({ value, delayMs: DELAY_MS, load }));
+    const { rerender } = renderHook(() => {
+      useDebouncedLoader({ value, delayMs: DELAY_MS, load });
+    });
     await expect.poll(() => load.mock.calls.length).toBe(1);
 
     act(() => {
@@ -75,13 +81,14 @@ describe("useDebouncedLoader", () => {
       loaded.push(q);
     });
     const { rerender } = renderHook(
-      ({ q }: { q: string }) =>
+      ({ q }: { q: string }) => {
         useDebouncedLoader({
           value: q,
           delayMs: DELAY_MS,
           load,
           immediateWhen: (v) => v === "",
-        }),
+        });
+      },
       { initialProps: { q: "赛" } },
     );
 
@@ -98,8 +105,9 @@ describe("useDebouncedLoader", () => {
   it("deps 变化时重开一轮（切分类 / 刷新票据）", async () => {
     const load = vi.fn();
     const { rerender } = renderHook(
-      ({ ticket }: { ticket: number }) =>
-        useDebouncedLoader({ value: "赛", delayMs: DELAY_MS, load, deps: [ticket] }),
+      ({ ticket }: { ticket: number }) => {
+        useDebouncedLoader({ value: "赛", delayMs: DELAY_MS, load, deps: [ticket] });
+      },
       { initialProps: { ticket: 0 } },
     );
     await expect.poll(() => load.mock.calls.length).toBe(1);
@@ -117,12 +125,16 @@ describe("useDebouncedLoader", () => {
       resolveLoad = resolve;
     });
     const load = vi.fn((_v: string, commit: (write: () => void) => void) => {
-      void pending.then((result) => commit(() => writes.push(result)));
+      void pending.then((result) => {
+        commit(() => {
+          writes.push(result);
+        });
+      });
     });
 
-    const { unmount } = renderHook(() =>
-      useDebouncedLoader({ value: "赛", delayMs: DELAY_MS, load }),
-    );
+    const { unmount } = renderHook(() => {
+      useDebouncedLoader({ value: "赛", delayMs: DELAY_MS, load });
+    });
     await expect.poll(() => load.mock.calls.length).toBe(1);
     unmount();
     resolveLoad?.("late");
