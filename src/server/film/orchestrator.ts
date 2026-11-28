@@ -7,7 +7,12 @@ import { TRPCError } from "@trpc/server";
 import { clamp } from "~/lib/clamp";
 import "server-only";
 import { db } from "~/lib/db";
-import { filmRepository, filmShotRepository, skillRepository } from "~/lib/core/repository";
+import {
+  filmRepository,
+  filmShotRepository,
+  skillRepository,
+  workflowTemplateRepository,
+} from "~/lib/core/repository";
 import { productionRepository } from "~/lib/core/repository-production";
 import { logger } from "~/lib/core/logger";
 import { characterListInputSchema, isProjectType } from "~/lib/workshop/types";
@@ -30,6 +35,13 @@ import { resolveFilmFirstFrame } from "./first-frame";
 import { extractTailFrameUrl } from "./tail-frame";
 import { resolveVoice, ttsParamsOf, type VoiceBinding } from "./voice-track";
 import { ensureShotAudio } from "./audio-task";
+import {
+  buildSelectionLog,
+  selectionCandidatesOf,
+  selectionSummary,
+  type SelectionLog,
+  type SelectionSource,
+} from "~/lib/production/selection-log";
 /* 监看（无响应看门狗 / 超时收口 / 重启恢复扫描）在 film-watch.ts，这里只取入口。 */
 import { watchFilm } from "./film-watch";
 
@@ -46,6 +58,8 @@ export type FilmShotInput = {
   negative?: string;
   order: number;
   prompt: string;
+  /** 工作流选型决策日志（ISSUE #5278）：随 params 落库，复盘时回答「用了什么/花了多少」。 */
+  selection?: SelectionLog;
   /** 关联的统一镜头 id（Phase 5 逐镜回写用）；自由建片（剧本自解析）时无来源，留空。 */
   shotId?: string;
   /** 跨镜接力的上一镜片段地址（ISSUE #5212）：生成时抽尾帧当本镜首帧。 */
@@ -79,6 +93,8 @@ export type CreateFilmInput = {
   visualBible?: string | null;
   /** 词级字幕开关（ISSUE #5277）。 */
   wordSubtitleOn?: boolean;
+  /** 选型来源（ISSUE #5278）：用户指定或推荐包导入，默认用户。 */
+  workflowSource?: SelectionSource;
 };
 
 const FILM_NEGATIVE =
@@ -268,6 +284,8 @@ async function persistFilmWithShots(args: {
             imageWorkflowId: args.imageWorkflowId,
             /* TTS 工作流 id（ISSUE #5244）：逐镜对白任务从 params 读它，不另起配置面。 */
             ttsWorkflowId: args.ttsWorkflowId ?? "",
+            /* 选型决策日志（ISSUE #5278）：只留痕，不改变实际使用的工作流。 */
+            ...(shot.selection === undefined ? {} : { selection: shot.selection }),
             ...(shot.firstFrame === undefined || shot.firstFrame === ""
               ? {}
               : { firstFrame: shot.firstFrame }),
@@ -296,6 +314,33 @@ async function persistFilmWithShots(args: {
     },
     { behavior: "immediate" },
   );
+}
+
+/** 选型留痕（ISSUE #5278）：只记录用户/推荐包已选定的工作流与当时候选，不替用户改选。
+ *  工作流库读失败不让建片失败——留痕是增强，不是判据。 */
+async function selectionFor(opts: {
+  fps: number;
+  frames: number;
+  size: string;
+  source: SelectionSource;
+  userId: string;
+  workflowId: string;
+}): Promise<SelectionLog | null> {
+  if (opts.workflowId === "") {
+    return null;
+  }
+  let library: unknown;
+  try {
+    library = await workflowTemplateRepository.listByUser(opts.userId);
+  } catch {
+    library = [];
+  }
+  return buildSelectionLog({
+    candidates: selectionCandidatesOf(library),
+    cost: { frames: opts.frames, fps: opts.fps, size: opts.size },
+    source: opts.source,
+    workflowId: opts.workflowId,
+  });
 }
 
 export async function createFilm(input: CreateFilmInput) {
@@ -339,6 +384,15 @@ export async function createFilm(input: CreateFilmInput) {
     styleNegative,
   );
 
+  const selection = await selectionFor({
+    fps,
+    frames: framesPerShot,
+    size: JSON.stringify(sizeSpec),
+    source: input.workflowSource ?? "user",
+    userId: input.userId,
+    workflowId: input.videoWorkflowId ?? "",
+  });
+
   const filmId = await persistFilmWithShots({
     userId: input.userId,
     title: input.title,
@@ -354,10 +408,13 @@ export async function createFilm(input: CreateFilmInput) {
     imageWorkflowId: input.imageWorkflowId ?? "",
     ttsWorkflowId: input.ttsWorkflowId ?? null,
     wordSubtitleOn: input.wordSubtitleOn,
-    shotInputs: shots,
+    shotInputs: shots.map((shot) => ({ ...shot, selection: selection ?? undefined })),
   });
 
   await appendFilmLog(filmId, "success", `已生成分镜，共 ${shots.length} 个镜头`);
+  if (selection !== null) {
+    await appendFilmLog(filmId, "info", selectionSummary(selection));
+  }
   return { id: filmId, shots: shots.length };
 }
 
@@ -382,6 +439,8 @@ export type CreateFilmFromProjectInput = {
   videoWorkflowId?: string | null;
   /** 词级字幕开关（ISSUE #5277）。 */
   wordSubtitleOn?: boolean;
+  /** 选型来源（ISSUE #5278）。 */
+  workflowSource?: SelectionSource;
 };
 
 /** 从统一项目的 `production.shots` 直接建片（Phase 5 接入，设计 §6.3）：
@@ -434,6 +493,15 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
     duration: shot.duration,
   }));
 
+  const selection = await selectionFor({
+    fps,
+    frames: framesPerShot,
+    size: JSON.stringify(sizeSpec),
+    source: input.workflowSource ?? "user",
+    userId: input.userId,
+    workflowId: input.videoWorkflowId ?? "",
+  });
+
   const filmId = await persistFilmWithShots({
     userId: input.userId,
     projectId: input.projectId,
@@ -449,10 +517,13 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
     imageWorkflowId: input.imageWorkflowId ?? "",
     ttsWorkflowId: input.ttsWorkflowId ?? null,
     wordSubtitleOn: input.wordSubtitleOn,
-    shotInputs,
+    shotInputs: shotInputs.map((shot) => ({ ...shot, selection: selection ?? undefined })),
   });
 
   await appendFilmLog(filmId, "success", `从项目镜头建片，共 ${shotInputs.length} 个镜头`);
+  if (selection !== null) {
+    await appendFilmLog(filmId, "info", selectionSummary(selection));
+  }
   return { id: filmId, shots: shotInputs.length };
 }
 
