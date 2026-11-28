@@ -269,6 +269,8 @@ const voiceBindingSchema = z.object({
   timbre: z.string().optional(), // 音色名 / 音色 id
   dialect: z.string().optional(), // 方言（如「普通话」「四川话」）
   speed: z.number().positive().optional(), // 语速倍率（>0）
+  /** 目标语言（ISSUE #5280）：多语配音时下发给 TTS 工作流。 */
+  language: z.string().optional(),
 });
 
 export const characterPortraitInputSchema = z.object({
