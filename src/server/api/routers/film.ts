@@ -66,6 +66,8 @@ export const filmRouter = createTRPCRouter({
         imageWorkflowId: z.string().optional(),
         /** 逐镜对白 T2S 工作流 id（ISSUE #5244）；不配则只出字幕不出配音。 */
         ttsWorkflowId: z.string().optional(),
+        /** 词级字幕开关（ISSUE #5277）；默认整句口径。 */
+        wordSubtitleOn: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -86,6 +88,7 @@ export const filmRouter = createTRPCRouter({
         videoWorkflowId: input.videoWorkflowId,
         imageWorkflowId: input.imageWorkflowId,
         ttsWorkflowId: input.ttsWorkflowId,
+        wordSubtitleOn: input.wordSubtitleOn,
       });
       return { id, shots };
     }),
@@ -100,6 +103,8 @@ export const filmRouter = createTRPCRouter({
         imageWorkflowId: z.string().optional(),
         /** 逐镜对白 T2S 工作流 id（ISSUE #5244）。 */
         ttsWorkflowId: z.string().optional(),
+        /** 词级字幕开关（ISSUE #5277）。 */
+        wordSubtitleOn: z.boolean().optional(),
         title: z.string().min(1).max(200).optional(),
         type: z.string().min(1).optional(),
         size: z.union([sizeSpecSchema, z.string()]).optional(),

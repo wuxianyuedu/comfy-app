@@ -11,10 +11,59 @@ import {
   buildSegmentVf,
   buildFilmSrt,
   buildSrtBody,
+  buildWordFilmSrt,
   clipPathOf,
   formatSrtTimestamp,
+  formatSrtTimestampMs,
+  splitWordTimings,
   subtitleTextOf,
 } from "./compose-steps";
+
+describe("词级字幕（ISSUE #5277）", () => {
+  it("毫秒时间戳进位正确，与整句口径的 000 分开", () => {
+    expect(formatSrtTimestampMs(61.234)).toBe("00:01:01,234");
+    expect(formatSrtTimestampMs(0)).toBe("00:00:00,000");
+    expect(formatSrtTimestamp(61.234)).toBe("00:01:01,000");
+  });
+
+  it("西文按空白切词，时长按字数权重分配", () => {
+    const words = splitWordTimings("hello brave world", 3);
+    expect(words.map((word) => word.text)).toEqual(["hello", "brave", "world"]);
+    expect(words[0]?.start).toBe(0);
+    expect(words[2]?.end).toBeCloseTo(3);
+  });
+
+  it("中文按标点断句 + 每两字一块，脏输入不抛", () => {
+    const words = splitWordTimings("你好，世界！再见", 4);
+    expect(words.map((word) => word.text)).toEqual(["你好", "，", "世界", "！", "再见"]);
+    expect(splitWordTimings("", 4)).toEqual([]);
+    expect(splitWordTimings("台词", 0)).toEqual([]);
+  });
+
+  it("有外部词轴优先用，并在多镜之间累加时间轴", () => {
+    const srt = buildWordFilmSrt([
+      {
+        dur: 2,
+        text: "你好世界",
+        words: [
+          { end: 0.8, start: 0, text: "你好" },
+          { end: 2, start: 0.8, text: "世界" },
+        ],
+      },
+      { dur: 1, text: "再见" },
+    ]);
+    expect(srt).toContain("00:00:00,000 --> 00:00:00,800");
+    expect(srt).toContain("00:00:02,000 --> 00:00:03,000");
+    expect(srt).toContain("你好");
+    expect(srt).toContain("再见");
+  });
+
+  it("缺词轴时按整句降级，老分镜不会突然没字幕", () => {
+    const srt = buildWordFilmSrt([{ dur: 2, text: " hello world " }]);
+    expect(srt).toContain("hello");
+    expect(srt).toContain("world");
+  });
+});
 
 describe("buildSegmentVf", () => {
   it("拼出 scale/pad/fps + 首尾淡入淡出的滤镜串", () => {

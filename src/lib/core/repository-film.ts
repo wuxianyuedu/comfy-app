@@ -108,6 +108,8 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       title: string;
       type: string;
       userId: string;
+      /** 词级字幕开关（ISSUE #5277）。 */
+      wordSubtitleOn?: boolean;
     },
     executor?: DbExecutor,
   ): Promise<FilmProject> {
@@ -125,6 +127,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
         fps: input.fps,
         framesPerShot: input.framesPerShot,
         subtitleOn: input.subtitleOn,
+        wordSubtitleOn: input.wordSubtitleOn ?? false,
         bgmName: input.bgmName ?? null,
         status: "PARSING",
       })

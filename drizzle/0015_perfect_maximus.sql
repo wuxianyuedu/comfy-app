@@ -1,0 +1,1 @@
+ALTER TABLE `filmProject` ADD `wordSubtitleOn` integer DEFAULT false NOT NULL;

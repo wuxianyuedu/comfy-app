@@ -130,3 +130,88 @@ export function buildNormalizeArgs(opts: {
 export function clipPathOf(cwd: string, videoPath: string): string | null {
   return artifactDiskPath(videoPath, generatedRoot(cwd));
 }
+
+// ── 词级字幕（ISSUE #5277）───────────────────────────────────────────────
+/** 一个词的 SRT 时间片（相对本镜起点，秒）。 */
+export type WordTiming = {
+  end: number;
+  start: number;
+  text: string;
+};
+
+/** 带毫秒的 SRT 时间戳 `hh:mm:ss,mmm`（整句口径的 `formatSrtTimestamp` 毫秒恒 000）。 */
+export function formatSrtTimestampMs(seconds: number): string {
+  const totalMs = Math.max(0, Math.round(seconds * 1000));
+  const pad = (value: number, width: number): string => String(value).padStart(width, "0");
+  const ms = totalMs % 1000;
+  const totalSec = Math.floor(totalMs / 1000);
+  return (
+    `${pad(Math.floor(totalSec / 3600), 2)}:${pad(Math.floor(totalSec / 60) % 60, 2)}:` +
+    `${pad(totalSec % 60, 2)},${pad(ms, 3)}`
+  );
+}
+
+/** 无外部词级时间轴时的可解释降级：西文按空白分词，中文按标点断句、每 1~2 字一块。 */
+function tokenize(text: string): Array<string> {
+  const trimmed = text.trim();
+  if (trimmed === "") {
+    return [];
+  }
+  if (/\s/.test(trimmed)) {
+    return trimmed.split(/\s+/).filter((token) => token !== "");
+  }
+  const phrases = trimmed.split(/(?<=[，。！？；、,.!?;:])/).filter((part) => part !== "");
+  const tokens: Array<string> = [];
+  for (const phrase of phrases) {
+    const chars = [...phrase];
+    for (let i = 0; i < chars.length; i += 2) {
+      tokens.push(chars.slice(i, i + 2).join(""));
+    }
+  }
+  return tokens;
+}
+
+/** 按字数权重把镜头时长分给每个词，起点/终点都钳在本镜时长内。 */
+export function splitWordTimings(text: string, dur: number): Array<WordTiming> {
+  const tokens = tokenize(text);
+  if (tokens.length === 0 || dur <= 0) {
+    return [];
+  }
+  const weights = tokens.map((token) => Math.max(1, [...token].length));
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  let cursor = 0;
+  const result: Array<WordTiming> = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const start = cursor;
+    cursor += (dur * (weights[i] ?? 1)) / total;
+    result.push({ end: cursor, start, text: tokens[i] ?? "" });
+  }
+  return result;
+}
+
+/**
+ * 词级整片 SRT：与整句 `buildFilmSrt` 同一份文本/时长口径，只是每条字幕压到一个词。
+ * 有外部词轴（TTS 回写）优先用；没有就按字数均匀切分，不让老分镜突然没字幕。
+ */
+export function buildWordFilmSrt(
+  items: Array<{ dur: number; text: string; words?: Array<WordTiming> }>,
+): string {
+  let cursor = 0;
+  const blocks: Array<string> = [];
+  let index = 1;
+  for (const item of items) {
+    const dur = Math.max(0, item.dur);
+    const supplied = item.words ?? [];
+    const words = supplied.length > 0 ? supplied : splitWordTimings(item.text, dur);
+    for (const word of words) {
+      const start = cursor + Math.max(0, Math.min(dur, word.start));
+      const end = cursor + Math.max(0, Math.min(dur, word.end));
+      blocks.push(
+        `${index}\n${formatSrtTimestampMs(start)} --> ${formatSrtTimestampMs(end)}\n${word.text}\n`,
+      );
+      index += 1;
+    }
+    cursor += dur;
+  }
+  return blocks.join("\n");
+}

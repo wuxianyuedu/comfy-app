@@ -12,6 +12,7 @@ import path from "node:path";
 import { filmRepository, filmShotRepository, taskRepository } from "~/lib/core/repository";
 import { productionRepository } from "~/lib/core/repository-production";
 import { normalizeProductionProgress } from "~/lib/production/progress";
+import { asRecord } from "~/lib/is-record";
 import { withProductionContentLock } from "~/lib/production/content-write-lock";
 import type { Shot } from "~/lib/workshop/types";
 import { isFilmShotStatus, type ShotStatus } from "~/lib/film/film-status";
@@ -34,8 +35,10 @@ import {
   buildNormalizeArgs,
   buildSegmentVf,
   buildSrtBody,
+  buildWordFilmSrt,
   clipPathOf,
   subtitleTextOf,
+  type WordTiming,
 } from "./compose-steps";
 import { appendFilmLog } from "./film-log";
 import { checkFilmQuality, probeFilm } from "./film-quality";
@@ -54,6 +57,33 @@ function dialogueOfParams(params: unknown): string | null {
     }
   }
   return null;
+}
+
+/** TTS 回写的词级时间轴（ISSUE #5277）：只认受控形状，脏值当没有 → 走均匀切分降级。 */
+function wordTimingsOfParams(params: unknown): Array<WordTiming> | null {
+  const rec = asRecord(params);
+  if (rec === null || !Array.isArray(rec.audioWords)) {
+    return null;
+  }
+  const words: Array<WordTiming> = [];
+  for (const item of rec.audioWords) {
+    const word = asRecord(item);
+    const text = word?.text;
+    const start = word?.start;
+    const end = word?.end;
+    if (
+      typeof text === "string" &&
+      text !== "" &&
+      typeof start === "number" &&
+      Number.isFinite(start) &&
+      typeof end === "number" &&
+      Number.isFinite(end) &&
+      end > start
+    ) {
+      words.push({ end, start, text });
+    }
+  }
+  return words.length > 0 ? words : null;
 }
 
 // ── 回写：成片合成完成 → 统一项目逐镜 clip + 完成状态（Phase 5 / §6.3 + §7）──
@@ -427,16 +457,18 @@ export async function composeFilm(id: string) {
 
     /* 整片 SRT 与逐镜烧录用同一份文本/时长口径（ISSUE #5210）：既能烧录也能下载校对，
      * 不再出现「画面字幕一个来源、导出字幕另一个来源」。 */
-    const fullSrt = buildFilmSrt(
-      shots.map((shot) => ({
-        dur: shot.duration ?? film.framesPerShot / film.fps,
-        text: subtitleTextOf({
-          heading: shot.heading,
-          prompt: shot.prompt,
-          dialogue: dialogueOfParams(shot.params),
-        }),
-      })),
-    );
+    const srtItems = shots.map((shot) => ({
+      dur: shot.duration ?? film.framesPerShot / film.fps,
+      text: subtitleTextOf({
+        heading: shot.heading,
+        prompt: shot.prompt,
+        dialogue: dialogueOfParams(shot.params),
+      }),
+      words: wordTimingsOfParams(shot.params) ?? undefined,
+    }));
+    /* 词级字幕（ISSUE #5277）是显式开关：默认仍产整句 SRT，老数据/老习惯不破；
+     * 打开后与整句共用同一份文本与时长口径，只是每条压到一个词。 */
+    const fullSrt = film.wordSubtitleOn ? buildWordFilmSrt(srtItems) : buildFilmSrt(srtItems);
     if (fullSrt !== "") {
       await fs.writeFile(path.join(filmsRoot(), `${id}.srt`), fullSrt, "utf8");
     }

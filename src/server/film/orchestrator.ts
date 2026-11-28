@@ -73,6 +73,8 @@ export type CreateFilmInput = {
   userId: string;
   /** 逐镜生成用的**工作流库视频工作流 id**（本地链路唯一来源，内置模板已移除）。 */
   videoWorkflowId?: string | null;
+  /** 词级字幕开关（ISSUE #5277）。 */
+  wordSubtitleOn?: boolean;
 };
 
 const FILM_NEGATIVE =
@@ -216,6 +218,7 @@ async function persistFilmWithShots(args: {
   type: string;
   userId: string;
   videoWorkflowId: string;
+  wordSubtitleOn?: boolean;
 }): Promise<string> {
   return db.transaction(
     async (tx) => {
@@ -231,6 +234,7 @@ async function persistFilmWithShots(args: {
           fps: args.fps,
           framesPerShot: args.framesPerShot,
           subtitleOn: args.subtitleOn,
+          wordSubtitleOn: args.wordSubtitleOn ?? false,
           bgmName: args.bgmName ?? null,
         },
         tx,
@@ -328,6 +332,7 @@ export async function createFilm(input: CreateFilmInput) {
     videoWorkflowId: input.videoWorkflowId ?? "",
     imageWorkflowId: input.imageWorkflowId ?? "",
     ttsWorkflowId: input.ttsWorkflowId ?? null,
+    wordSubtitleOn: input.wordSubtitleOn,
     shotInputs: shots,
   });
 
@@ -354,6 +359,8 @@ export type CreateFilmFromProjectInput = {
   userId: string;
   /** 逐镜生成用的工作流库视频工作流 id（本地链路唯一来源）。 */
   videoWorkflowId?: string | null;
+  /** 词级字幕开关（ISSUE #5277）。 */
+  wordSubtitleOn?: boolean;
 };
 
 /** 从统一项目的 `production.shots` 直接建片（Phase 5 接入，设计 §6.3）：
@@ -420,6 +427,7 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
     videoWorkflowId: input.videoWorkflowId ?? "",
     imageWorkflowId: input.imageWorkflowId ?? "",
     ttsWorkflowId: input.ttsWorkflowId ?? null,
+    wordSubtitleOn: input.wordSubtitleOn,
     shotInputs,
   });
 
