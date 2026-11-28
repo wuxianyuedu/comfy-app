@@ -3,7 +3,13 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { continuityIssues, normalizeSegments, selectedSegment } from "./segments";
+import {
+  anchorIssues,
+  continuityIssues,
+  normalizeAnchors,
+  normalizeSegments,
+  selectedSegment,
+} from "./segments";
 
 describe("normalizeSegments", () => {
   it("只收 start>=0 且 end>start 的选段，脏项跳过", () => {
@@ -51,5 +57,39 @@ describe("continuityIssues", () => {
     expect(issues.join(" ")).toContain("不存在的场景 missing");
     expect(issues.join(" ")).toContain("没有台词");
     expect(issues.join(" ")).toContain("请人工核对");
+  });
+});
+
+describe("normalizeAnchors", () => {
+  it("只收五锚中的非空字符串，脏值/空串跳过", () => {
+    expect(
+      normalizeAnchors({
+        ambience: "雨声",
+        geography: "",
+        light: 42,
+        timeOfDay: "黄昏",
+        wardrobe: "红外套",
+        unknown: "x",
+      }),
+    ).toEqual({ ambience: "雨声", timeOfDay: "黄昏", wardrobe: "红外套" });
+    expect(normalizeAnchors("x")).toEqual({});
+  });
+});
+
+describe("anchorIssues", () => {
+  it("全没填不发声", () => {
+    expect(anchorIssues([{}, {}, {}])).toEqual([]);
+  });
+
+  it("相邻镜同一锚都填却不同 → 可行动提示", () => {
+    const issues = anchorIssues([{ light: "暖光左打" }, { light: "冷光右打" }]);
+    expect(issues.join(" ")).toContain("光照锚不一致");
+    expect(issues.join(" ")).toContain("逐字复制");
+  });
+
+  it("只填一镜 → 温和提示；都相同则无提示", () => {
+    const partial = anchorIssues([{ wardrobe: "红外套" }, {}]);
+    expect(partial.join(" ")).toContain("只在其中一镜填写");
+    expect(anchorIssues([{ wardrobe: "红外套" }, { wardrobe: "红外套" }])).toEqual([]);
   });
 });
