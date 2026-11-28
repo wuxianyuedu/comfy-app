@@ -308,6 +308,9 @@ export const characterInputSchema = z
     portraits: z.array(characterPortraitInputSchema).optional(),
     /** 已选定的定妆照（portraits 里的一张），后续分镜图以此作为参考图。 */
     portraitUrl: z.string().optional(),
+    /** 角色表演参考视频（ISSUE #5296）：定妆照动画化的短参照（开口/转头/眨眼/呼吸 + 声音），
+     *  后续镜头优先以此为表演锚点；失败或没配视频工作流时留空，回落定妆照。 */
+    performanceUrl: z.string().optional(),
     params: z.unknown().optional().transform(paramsObject), // 推荐生成参数
     /** 绑定的 LoRA 文件名（模型库 loras 目录，#2622 FR-QA-02③）。提交时取
      *  出场角色里第一个绑定，落到工作流「lora-name」契约口（LoraLoader 的

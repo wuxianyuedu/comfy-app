@@ -24,6 +24,9 @@ export async function synthesizeFirstFrame(opts: {
   negative?: string;
   projectId?: string | null;
   prompt: string;
+  /** 表演参考视频（ISSUE #5296）：角色卡里已确认的表演参照地址，按参考图口下发，
+   *  让镜头生成拿到「会动会说话」的角色锚点；没配则工作流用既有参考图。 */
+  referenceImages?: Array<string>;
   /** 采样种子：给了就落到工作流的「种子」口上（作者没连这一口则落不下去、用图内 seed）。
    *  「抽卡重生成」传一个新的随机值，让同提示词也能换图。 */
   seed?: number;
@@ -32,7 +35,7 @@ export async function synthesizeFirstFrame(opts: {
   /** 用来合成首帧的**图类**工作流库工作流 id。 */
   workflowId: string;
 }): Promise<string> {
-  const { userId, workflowId, prompt, negative, size, projectId, seed } = opts;
+  const { userId, workflowId, prompt, negative, size, projectId, seed, referenceImages } = opts;
   const { taskId } = await createWorkflowRunTask({
     userId,
     workflowId,
@@ -42,6 +45,7 @@ export async function synthesizeFirstFrame(opts: {
       ...(negative === undefined ? {} : { negativePrompt: negative }),
       ...(size === undefined ? {} : { size }),
       ...(seed === undefined ? {} : { seed }),
+      ...(referenceImages === undefined || referenceImages.length === 0 ? {} : { referenceImages }),
     },
   });
 
