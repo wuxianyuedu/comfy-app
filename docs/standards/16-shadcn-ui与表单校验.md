@@ -1324,6 +1324,7 @@ story 不经 store 读）。
 「手写 Esc、手写遮罩点击关闭、手写定位 + 滚动重定位、手写 z-index 魔数」。
 只换 ① 不删 ② 会留下两套关闭语义同时生效（例如 Esc 触发两次 dismiss）。
 
+| 搜索防抖                   | ~~**四套写法并存**：值侧地基 `useDebouncedValue`、手写 `setTimeout`、`beginStaleRun` 作废守卫、以及 style / material 两处「timer + alive/guard」的加载型组合~~ | 拆成两条并列出口：纯值降频走 `useDebouncedValue`；带竞态的加载型走 `~/components/ui/use-debounced-loader` 的 `useDebouncedLoader`（timer + `beginStaleRun` 一次给全，不套值侧地基——作废时机是语义核心）；**记录型边界，不成判据**（见 §16.2.4.78） | ✅ **见 §16.2.4.78** |
 | 形态                 | 原来自搓的位置                                                                                                         | 现在                                                                                       |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | 确认对话框           | `studio/ui/ModalDialog.tsx`（自搓 portal + Esc + 焦点）                                                                | `ui/dialog` 的 `Dialog` / `DialogContent`，自动聚焦确认按钮的行为保留                      |
@@ -6215,6 +6216,40 @@ P82 只盯 `<Button title=` 一个锚点 —— #3672 清掉 `<Badge title=…>`
 **P88 的生效面 = `pnpm ui:primitives` 的全扫描面**（含 stories；capitalized 组件
 prop、注释里的 `title=`、spread 展开（unknown 单列人工抽查）都不计违规）；与
 `pnpm ui:primitives` 同口径，pre-commit D 组照常跑。
+
+#### 16.2.4.78 搜索防抖的两条出口：值侧与加载型（ISSUE #5249）
+
+「搜索框输入 → 低频消费」在本仓曾有四套写法并存：`useDebouncedValue`（值侧地基）、
+手写 `setTimeout` + `clearTimeout` 的 timer、`beginStaleRun` 作废守卫、以及二者
+拼起来的「加载型防抖」。地基抽出来了，但消费侧分批铺开，老的两处（画风库 / 素材库）
+在地基出现前就用手写 timer 解决了，各自还带着竞态语义 —— 于是「唯一出口」在文档上
+成立、在代码上并存多套。裁决是**分两条并列出口、各管一件事**，不是把加载塞回值侧地基：
+
+| 场景 | 出口 | 管什么 |
+| ---- | ---- | ------ |
+| 把**值**降频喂给纯计算 / 查询缓存（markdown 预览解析、json 搜索、react-query 的 `q`） | `~/components/ui/use-debounced-value` 的 `useDebouncedValue` | 只返回防抖后的值；不碰加载、不作废 |
+| 防抖词落地后要**跑一轮带竞态的加载**（发请求 → 旧轮次结果作废，含失败文案与 `finally` 清 loading） | `~/components/ui/use-debounced-loader` 的 `useDebouncedLoader` | 值一变就作废在途请求 + 窗口安静后才发这一轮，timer + 作废守卫一次给全 |
+
+**为什么不套 `useDebouncedValue` 再在外面 `beginStaleRun`**：作废时机是加载型的语义
+核心 —— 每敲一字就得丢掉上一轮在途请求，而防抖值的更新要等窗口结束；两层叠起来
+会让在途旧请求多活一个窗口、短暂闪现旧结果。所以加载型出口把 timer + 守卫收在
+自己内部，行为与原来两处手写实现逐字等价（逐字重排 timer + 立即作废）。
+
+**边界（别越界）**：
+
+- `useDebouncedValue` 保持纯粹：它只做值防抖，不负责「加载中 / 作废」。需要加载
+  型语义的一律用 `useDebouncedLoader`，不要在调用处再手写 timer + `alive`。
+- `useDebouncedLoader` 是**这两处加载型防抖的唯一出口**，不是所有 timer 的出口：
+  「等一帧」（`~/lib/next-frame`）、「看门狗 / 赛跑」（P58）、「进度节流」
+  （§16.2.4.68）各有自己的判据，别往这里塞。
+- 两个差异用参数承载，**不复制实现**：空词立即加载传 `immediateWhen`；搜索词以外
+  还会重开一轮的取数维度（scope / folder / 刷新票据）传 `deps`。`load` 每次拿当轮
+  值，`commit` 里做这一轮的写入（含失败与清 loading）。
+- 本条是记录型边界、**不成判据**（机器分不出「加载型防抖」与「普通 timer」，
+  与 §16.2.4.70 刷新票据同理）；共识靠这一节，不新立 P 号。
+
+落地后四处的归属：`use-character-library` / `use-asset-library` / `use-markdown-html`
+/ `json-viewer` 接值侧地基；`use-style-library` / `use-material-library` 接加载型出口。
 
 ### 16.3 新增一个组件的标准动作
 

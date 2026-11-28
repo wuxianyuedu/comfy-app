@@ -143,3 +143,28 @@ describe("useStyleLibrary 单条取消（ISSUE #5098）", () => {
     expect(disposers).toHaveLength(0);
   });
 });
+
+describe("useStyleLibrary 搜索防抖（ISSUE #5249）", () => {
+  it("逐字输入在窗口内只保留最后一次，喂给 skill.list 的 q 是最后的词", async () => {
+    const { result } = renderHook(() => useStyleLibrary());
+    await expect.poll(() => result.current.styles.length).toBe(1);
+    const before = mocks.skillList.mock.calls.length;
+
+    act(() => {
+      result.current.setSearch("赛");
+    });
+    act(() => {
+      result.current.setSearch("赛博");
+    });
+    act(() => {
+      result.current.setSearch("赛博朋克");
+    });
+    /* 真时钟：120ms 窗口内不改请求次数（窗口后才会发最后一次）。 */
+    expect(mocks.skillList.mock.calls.length).toBe(before);
+
+    await expect.poll(() => mocks.skillList.mock.calls.length).toBeGreaterThan(before);
+    expect(mocks.skillList).toHaveBeenLastCalledWith(
+      expect.objectContaining({ category: "style", q: "赛博朋克" }),
+    );
+  });
+});
