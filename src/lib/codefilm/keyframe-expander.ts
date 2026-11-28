@@ -5,6 +5,7 @@
  * 「one map and one clock」的实现：切镜时世界不乱。
  *
  * 无 actionRef 的节拍用自由文本 pose 单帧表示（兼容 P0 合同）。 */
+import { clampInt } from "~/lib/clamp";
 import { findBuiltinAction } from "./action-library";
 import type { ActionBeat, CodeFilmContract } from "./contract-schema";
 
@@ -101,7 +102,7 @@ function makeFrame(ctx: FrameContext, spec: FrameSpec): GlobalKeyframe {
   return {
     actionRef: spec.actionRef ?? null,
     actorId: ctx.actorId,
-    frame: Math.min(Math.max(raw, ctx.slice.startFrame), ctx.slice.endFrame),
+    frame: clampInt(raw, ctx.slice.startFrame, ctx.slice.endFrame),
     fxRef: spec.fxRef ?? null,
     pose: spec.pose,
     shotId: ctx.shotId,
