@@ -1201,14 +1201,23 @@ className="
 模糊 **0 像素效果**，代价却是把它自己与背后的每一份内容拖进一个合成图层。
 
 **存量与执行者**：引入这条时实测 **41 处 / 30 文件**，一次清零（ISSUE #2031）。
-执行者 `scripts/gates/check-ui-primitives.cjs` 的 **P87**，锚点是**行内形状**：
-同一行里 `backdrop-blur*` 与贴边定位（`inset-x-0` / `inset-y-0` / `inset-0` /
-`fixed`，或上下 / 左右两条对边各自归零）**同现**即放行，否则判红。
+执行者 `scripts/gates/check-ui-primitives.cjs` 的 **P87**，锚点是**行内形状**，
+按两道闸判定（ISSUE #5269 收紧）：一行里出现 `backdrop-blur*` 后——
+
+1. **必须两条对边贴齐**：`inset-x-0` / `inset-y-0` / `inset-0`，或上下 / 左右
+   两条对边各自归零（`top-0`+`bottom-0` / `left-0`+`right-0`）。单独一个 `fixed`
+   只说明脱文档流、不说明贴住容器两条边，**不再足以放行**。
+2. **底色不得带 `/85~95` 高不透明半透档**：贴边条「留模糊、去半透」，
+   `bg-panel/95` + 模糊是同一笔合成税的两半，同样判红。
+
+两道任一不满足即判红。`ui/dialog-overlay` 的遮罩
+（`fixed ... inset-0 ... bg-scrim ... backdrop-blur-xs`）过①（`inset-0`）且过②
+（`bg-scrim` 不带 `/85~95`），继续豁免。
 
 - 不用白名单：白名单会随新增屏漂移（P86 那一课）；「这一条是不是贴着容器边」
   是从形状读得出来的。
 - **`ui/` 一起扫**（`UI_ALSO_SCANNED`）：基元自己带模糊更贵 —— 它下面所有调用点
   一起继承那个图层。这一条落进 `ui/` 时清掉了 `settings-card` / `confirm-dialog` /
   `segment-popover` 各一处；`ui/dialog-overlay` 的遮罩**不算**（它铺满内容区，是贴边条）。
-- 用例在 `tests/check-ui-primitives.test.ts` 的 P87 三条（正例 / 贴边条放行 /
-  注释里的不算）。
+- 用例在 `tests/check-ui-primitives.test.ts` 的 P87（卡片整块 / 纯 `fixed` 浮层 /
+  贴边+半透三条判红；贴边条 / 注释里的不算 / dialog-overlay 遮罩三条放行）。
