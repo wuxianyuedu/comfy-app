@@ -5,7 +5,7 @@
 // IO）。三种运行状态各有视觉形态：生成中（进度环 + 徽标）、完成（产物预览 +
 // 外链）、空闲（占位说明）；失败告警在中栏，右栏保留日志与请求现场。
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   CircleAlert,
@@ -25,6 +25,7 @@ import { ViewableImage } from "~/components/ui/image-viewer";
 import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
 import { displayValue } from "~/lib/display-value";
+import { formatClock } from "~/lib/time-format";
 import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import { classifyModelTestError } from "./model-test-runs";
 import type { useModelTest } from "./hooks/use-model-test";
@@ -134,6 +135,12 @@ function EmptySlot({ children }: { children: ReactNode }) {
  *  哪个节点；关掉后视图停在用户翻到的位置（#4743）。 */
 function TaskLogSection({ autoscroll, logs }: { autoscroll: boolean; logs: Array<TaskLogEntry> }) {
   const boxRef = useRef<HTMLDivElement | null>(null);
+  /* 日志逐行的时间在行数据里派生一次：SSE 日志随任务跑持续追加，逐行格式化会
+   * 在每次父渲染重复一遍（#5290）。 */
+  const rows = useMemo(
+    () => logs.map((entry, index) => ({ entry, index, clock: formatClock(entry.t) })),
+    [logs],
+  );
   useEffect(() => {
     if (!autoscroll) {
       return;
@@ -145,14 +152,12 @@ function TaskLogSection({ autoscroll, logs }: { autoscroll: boolean; logs: Array
       className="border-border bg-surface-1 max-h-72 overflow-y-auto rounded-lg border"
       ref={boxRef}
     >
-      {logs.map((entry, i) => (
+      {rows.map(({ entry, index, clock }) => (
         <div
           className="text-2xs flex items-start gap-2 px-3 py-1 font-mono"
-          key={`${String(entry.t)}-${String(i)}`}
+          key={`${String(entry.t)}-${String(index)}`}
         >
-          <span className="text-muted-foreground shrink-0 tabular-nums">
-            {new Date(entry.t).toLocaleTimeString()}
-          </span>
+          <span className="text-muted-foreground shrink-0 tabular-nums">{clock}</span>
           <span
             className={cn(
               "w-11 shrink-0 font-semibold",

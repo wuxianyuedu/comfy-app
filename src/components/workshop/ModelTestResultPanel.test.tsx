@@ -3,6 +3,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import type { TaskLogEntry } from "~/lib/workshop/generation-client";
 import { LogsCard, ModelTestResultPanel } from "./ModelTestResultPanel";
+import { formatClock } from "~/lib/time-format";
+
+const clockMock = vi.hoisted(() => vi.fn((value: number) => `T${String(value)}`));
+vi.mock("~/lib/time-format", () => ({ formatClock: clockMock }));
 
 const line = (msg: string, t: number): TaskLogEntry => ({ level: "info", msg, t });
 
@@ -100,5 +104,23 @@ describe("LogsCard 的大屏查看入口（#4743）", () => {
 
     view.rerender(<LogsCard logs={[line("第一条", 1)]} />);
     expect(screen.queryByRole("button", { name: "大屏查看" })).toBeNull();
+  });
+});
+
+describe("LogsCard 的日志时刻（#5290）", () => {
+  it("逐行时刻经 formatClock 统一出口输出", () => {
+    clockMock.mockClear();
+    render(<LogsCard logs={[line("第一条", 123)]} />);
+    expect(formatClock).toHaveBeenCalledWith(123);
+    expect(screen.getByText("T123")).toBeTruthy();
+  });
+
+  it("同一组 props 重渲染不重复格式化（逐行时刻纳入 useMemo 派生）", () => {
+    const logs = [line("第一条", 1), line("第二条", 2)];
+    clockMock.mockClear();
+    const view = render(<LogsCard logs={logs} />);
+    expect(clockMock).toHaveBeenCalledTimes(2);
+    view.rerender(<LogsCard logs={logs} />);
+    expect(clockMock).toHaveBeenCalledTimes(2);
   });
 });

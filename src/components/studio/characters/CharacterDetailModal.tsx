@@ -23,6 +23,7 @@ import {
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { ViewableImage } from "~/components/ui/image-viewer";
 import { displayValue } from "~/lib/display-value";
+import { formatClock, formatDate } from "~/lib/time-format";
 import { cn } from "~/lib/utils";
 
 import { characterStatusClass, CHARACTER_STATUS_LABELS } from "./character-status";
@@ -54,9 +55,9 @@ export type CharacterDetailModalProps = {
   selectedPortraitUrls: Array<string>;
 };
 
-/** 历史时间统一成可读文案（createdAt 是 epoch 毫秒）。 */
+/** 历史时间统一成可读文案（createdAt 是 epoch 毫秒）：日期走统一出口，避免宿主区域设置漂移。 */
 function historyTime(createdAt: number): string {
-  return new Date(createdAt).toLocaleString("zh-CN");
+  return `${formatDate(createdAt)} ${formatClock(createdAt)}`;
 }
 
 export function CharacterDetailModal({
