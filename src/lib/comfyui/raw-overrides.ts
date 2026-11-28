@@ -24,6 +24,7 @@ import { z } from "zod";
 
 import { asRecord, isPlainRecord, isRecord } from "~/lib/is-record";
 import { randomSeed } from "./random-seed";
+import { cloneJsonGraph } from "./clone-json-graph";
 
 /** 任意 JSON 对象的宽松视图（外部输入的中间层窄化用）。 */
 export type JsonRecord = Record<string, unknown>;
@@ -679,7 +680,7 @@ export function applyApiOverrides(
   if (graph === null || graph === undefined || typeof graph !== "object" || Array.isArray(graph)) {
     return {};
   }
-  const parsed: unknown = JSON.parse(JSON.stringify(graph));
+  const parsed = cloneJsonGraph(graph);
   const out = asRecord(parsed) ?? {};
   if (overrides === undefined || overrides.length === 0) {
     return out;
@@ -720,7 +721,7 @@ export function applyRawOverrides(
   rawJson: unknown,
   overrides?: Array<RawWorkflowOverride>,
 ): JsonRecord {
-  const parsed: unknown = JSON.parse(JSON.stringify(rawJson));
+  const parsed = cloneJsonGraph(rawJson);
   const raw = asRecord(parsed) ?? {};
   /* **没有**覆盖项也要走漂移抵消：comfy-cli 的提升控件回写错位与「这次有没有
    * 画布覆盖」无关 —— 它错的是宿主自己的值（本次现场 17 处全在我们一次都没碰过
