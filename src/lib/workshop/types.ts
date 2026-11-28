@@ -360,6 +360,13 @@ export const shotInputSchema = z
      *  （既有口径，见 feature-workshop-flow.md §4）。`.optional()` 收在**最外层**
      *  （transform 之后）：输出类型里这个键保持可选，旧的对象字面量不破。 */
     referenceImages: stringList.transform((value) => value.slice(0, 16)).optional(),
+    /** 参考图职责（ISSUE #5298）：与 referenceImages 逐槽对应；一张图只负责一件事
+     *  （identity / texture / background / wardrobe / prop）。缺省或脏值一律按 identity，
+     *  老草稿的字符串列表不破；上限仍为 16。 */
+    referenceRoles: z
+      .array(z.enum(["background", "identity", "prop", "texture", "wardrobe"]))
+      .transform((value) => value.slice(0, 16))
+      .optional(),
     // ── 视频生成计划 ──
     dialogue: z.string().optional(), // 对白 / 字幕文本
     /** 逐镜声音覆写（ISSUE #5213）：覆盖出场角色的声音绑定。 */
