@@ -104,6 +104,26 @@ describe("useMaterialLibrary", () => {
     expect(result.current.searching).toBe(true);
   });
 
+  it("逐字输入在防抖窗口内不发请求，只把最后一次的词喂给列表（ISSUE #5249）", async () => {
+    const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
+    await expect.poll(() => result.current.loading).toBe(false);
+    const before = mockedList.mock.calls.length;
+
+    act(() => {
+      result.current.setSearch("赛");
+    });
+    act(() => {
+      result.current.setSearch("赛博");
+    });
+    act(() => {
+      result.current.setSearch("赛博朋克");
+    });
+    expect(mockedList.mock.calls.length).toBe(before);
+
+    await expect.poll(() => mockedList.mock.calls.length).toBeGreaterThan(before);
+    expect(mockedList).toHaveBeenLastCalledWith(expect.objectContaining({ q: "赛博朋克" }));
+  });
+
   it("切换 scope 时退回到分类列表（避免停在已消失的分类）", async () => {
     const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
     act(() => {
