@@ -22,6 +22,18 @@ vi.mock("~/lib/log/app-runtime-log", async (importOriginal) => ({
   ...(await importOriginal<typeof AppRuntimeLogModule>()),
   createAppRuntimeLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
+/* P1 的 generate / render 走 LLM 与入队：测试里换成确定性假件，只验 router 接线。 */
+vi.mock("~/lib/codefilm/contract-compiler.server", () => ({
+  compileContract: vi.fn(() => Promise.resolve({ attempts: 1, contract: {} })),
+}));
+vi.mock("~/server/codefilm/orchestrator", () => ({
+  runCodeFilm: vi.fn(() => Promise.resolve({ projectId: null, shotsWritten: 1, tasks: [] })),
+}));
+vi.mock("~/lib/core/repository-task", () => ({
+  taskRepository: {
+    findByIdsWithImages: vi.fn(() => Promise.resolve([])),
+  },
+}));
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { codeFilmRouter } from "~/server/api/routers/code-film";
@@ -84,5 +96,23 @@ describe("codeFilm router / 执行者", () => {
     const err = await errorEnvelope(caller.toShots({ contract: bad }));
     expect(err?.code).toBe("BAD_REQUEST");
     expect(err?.message).toContain("静态 QA");
+  });
+
+  it("generate：LLM 编译入口真调用", async () => {
+    const result = await caller.generate({ scriptMarkdown: "水豚扫落叶，战舰降临" });
+    expect(result.attempts).toBe(1);
+  });
+
+  it("render：落库 + 逐镜入队入口真调用", async () => {
+    const result = await caller.render({
+      contract: CONTRACT,
+      videoWorkflowId: "wf-video",
+    });
+    expect(result.shotsWritten).toBe(1);
+  });
+
+  it("status：按 taskId 批量查状态", async () => {
+    const rows = await caller.status({ taskIds: ["task-1"] });
+    expect(rows).toEqual([{ id: "task-1", status: "NOT_FOUND" }]);
   });
 });

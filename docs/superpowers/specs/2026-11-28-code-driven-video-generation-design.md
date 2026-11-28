@@ -159,12 +159,15 @@
 
 | 阶段 | 内容 | 验收重心 |
 | --- | --- | --- |
-| **P0（本次落地）** | 合同 schema + 静态 QA + 合同→Shot / RunWorkflowInput 纯映射 + `code-film` API（编译/校验/预览，**不落库、不接真实渲染**）+ 测试 + 文档同步 | 纯函数与 API 可测，不依赖 ComfyUI 是否运行 |
-| P1 | 编译器接 LLM、落库 production、逐镜入队、取消/恢复、Agent stub 补齐、MCP 三工具 | 3 镜端到端真出图 |
+| **P0（已落地，PR #5294）** | 合同 schema + 静态 QA + 合同→Shot / RunWorkflowInput 纯映射 + `code-film` API 的 compile/validate/toShots + 测试 + 文档同步 | 纯函数与 API 可测，不依赖 ComfyUI 是否运行 |
+| **P1（已落地，待提交）** | 编译器接 LLM（有界 QA 修复重试）、落库 `production.shots` + 逐镜 `createWorkflowRunTask` 入队 + 失败补偿取消、`generate`/`render`/`status` 三口、MCP 三工具、Agent stub 可行动提示 | 逐镜入队可测；真出图需用户配好视频工作流 |
 | P2 | `actionBeats` 动作库、全局时钟、多镜头连续、整季批量复用 | 打斗分镜动作编排可验收 |
 | P3 | Three.js 代码渲染后端 + headless 帧渲染 + ffmpeg；QA 移植穿模 / 脚滑 / 抖动 / 突现检测 | 打斗场景纯代码渲染 |
 
 > P0 刻意不落库、不接渲染：这样门禁可全绿、行为可验证，避免「依赖本机 ComfyUI 恰好在跑」的不确定性。
+>
+> P1 的边界：`render` 只做「落库 + 入队」，不等待生成完成；逐镜状态复用 `task` 表查询
+> （`codeFilm.status`），进度仍走既有 SSE。真出图依赖用户在工作流库配好视频工作流。
 
 ## 10. 验收标准
 

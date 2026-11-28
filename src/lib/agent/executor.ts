@@ -446,7 +446,9 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
           Promise.resolve({
             ok: false,
             summary: "生图需在「镜头生图」页手动触发",
-            detail: "Agent MVP 暂不直接触发 ComfyUI 生图，请使用页面上的生图按钮",
+            detail:
+              "Agent 不直接触发 ComfyUI 生图：请用页面「镜头生图」按钮；" +
+              "代码驱动生成走 MCP 的 codefilm_generate_contract → codefilm_preview_shots → 应用内 codeFilm.render",
           }),
       };
     }

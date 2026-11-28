@@ -1,17 +1,24 @@
-/** 合同层客户端封装测试：三个方法把参数原样转发给对应的 tRPC procedure。 */
+/** 合同层客户端封装测试：各方法把参数原样转发给对应的 tRPC procedure。 */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   compileMutate: vi.fn(),
+  generateMutate: vi.fn(),
+  renderMutate: vi.fn(),
+  statusQuery: vi.fn(),
   validateQuery: vi.fn(),
   toShotsQuery: vi.fn(),
 }));
-const { compileMutate, validateQuery, toShotsQuery } = mocks;
+const { compileMutate, generateMutate, renderMutate, statusQuery, validateQuery, toShotsQuery } =
+  mocks;
 
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     codeFilm: {
       compile: { mutate: mocks.compileMutate },
+      generate: { mutate: mocks.generateMutate },
+      render: { mutate: mocks.renderMutate },
+      status: { query: mocks.statusQuery },
       validate: { query: mocks.validateQuery },
       toShots: { query: mocks.toShotsQuery },
     },
@@ -19,9 +26,12 @@ vi.mock("~/trpc/vanilla", () => ({
 }));
 
 import {
+  codeFilmStatus,
   compileContractPreview,
-  validateContract,
+  generateContract,
   previewShots,
+  renderCodeFilm,
+  validateContract,
 } from "~/lib/codefilm/codefilm-client";
 
 describe("codefilm-client", () => {
@@ -49,5 +59,27 @@ describe("codefilm-client", () => {
     toShotsQuery.mockResolvedValueOnce(result);
     await expect(previewShots({ foo: 1 }, 12)).resolves.toEqual(result);
     expect(toShotsQuery).toHaveBeenCalledWith({ contract: { foo: 1 }, fps: 12 });
+  });
+
+  it("generateContract 转发剧本与元信息", async () => {
+    const input = { scriptMarkdown: "剧本", meta: { title: "打斗" } };
+    generateMutate.mockResolvedValueOnce({ attempts: 1 });
+    await expect(generateContract(input)).resolves.toEqual({ attempts: 1 });
+    expect(generateMutate).toHaveBeenCalledWith(input);
+  });
+
+  it("renderCodeFilm 转发合同与工作流 id", async () => {
+    const input = { contract: {}, videoWorkflowId: "wf-1" };
+    const result = { projectId: null, shotsWritten: 1, tasks: [] };
+    renderMutate.mockResolvedValueOnce(result);
+    await expect(renderCodeFilm(input)).resolves.toEqual(result);
+    expect(renderMutate).toHaveBeenCalledWith(input);
+  });
+
+  it("codeFilmStatus 转发 taskId 列表", async () => {
+    const rows = [{ id: "t1", status: "SUCCEEDED" }];
+    statusQuery.mockResolvedValueOnce(rows);
+    await expect(codeFilmStatus(["t1"])).resolves.toEqual(rows);
+    expect(statusQuery).toHaveBeenCalledWith({ taskIds: ["t1"] });
   });
 });

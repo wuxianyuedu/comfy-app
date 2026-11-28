@@ -82,6 +82,9 @@ Claude Desktop 示例（`claude_desktop_config.json`）：
 | `workshop_poll_video` | 轮询视频任务，完成时回写 `clipUrl` |
 | `workshop_compose_final` | 成片合成：写出合成清单 JSON（`render:true` 且 ffmpeg 可用时合成 mp4） |
 | `workshop_set_comfy_workflow` | 配置 ComfyUI 通道（默认模型 / 自定义生图 / 图生视频工作流模板） |
+| `codefilm_generate_contract` | 把剧本交给 LLM 编译为制片合同（共享地图 / 镜头表 / 时间轴 / 动作节拍），最多 3 次有界 QA 修复重试 |
+| `codefilm_validate_contract` | 合同静态 QA：时间轴连续性 / 实体引用 / 节拍顺序 / 成本上限，逐条返回字段路径 |
+| `codefilm_preview_shots` | 合同 → 工坊镜头表 + 逐镜生成入参（不落库、不入队）；真正入队走应用内 `codeFilm.render` |
 
 ## AI 指挥全流程（推荐顺序）
 
