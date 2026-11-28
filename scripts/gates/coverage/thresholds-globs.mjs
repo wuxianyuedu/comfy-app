@@ -359,6 +359,16 @@ export const COVERAGE_THRESHOLDS = {
     statements: 65,
     branches: 55,
   },
+  /* 代码驱动影片域（P0）：合同 schema / 静态 QA / 两个纯翻译都是可全测的函数。
+   * 门槛取实测值向下取整到 5 的倍数（实测 lines 88.15 / functions 95.23 /
+   * statements 88.75 / branches 75.6），只升不降。未覆盖的是 newShotId 与 QA
+   * 的少数分支，补测试时同步抬档。 */
+  "src/lib/codefilm/**": {
+    lines: 85,
+    functions: 95,
+    statements: 85,
+    branches: 75,
+  },
   /* 通用图片查看器的两个出口（简化台账见 `docs/standards/16`）。
    * 门槛取**实测值向下取整到 5 的倍数**（§18.6 / §11.7 的口径：不设
    * 理想值 —— 设高了会让无关提交变红，设低了等于没设）：

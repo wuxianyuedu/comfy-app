@@ -17,6 +17,7 @@ import { referenceLoaderRouter } from "~/server/api/routers/reference-loader";
 import { assetRouter } from "~/server/api/routers/asset";
 import { characterLibraryRouter } from "~/server/api/routers/character-library";
 import { generationControlRouter } from "~/server/api/routers/generation-control";
+import { codeFilmRouter } from "~/server/api/routers/code-film";
 
 /**
  * 服务端主路由：`/api/routers` 新增路由须在此手工登记，登记即欠「执行者」（测试能真调用，E3 照出
@@ -42,6 +43,7 @@ export const appRouter = createTRPCRouter({
   asset: assetRouter,
   characterLibrary: characterLibraryRouter,
   generationControl: generationControlRouter,
+  codeFilm: codeFilmRouter,
 });
 
 // 对外导出 API 的类型定义
