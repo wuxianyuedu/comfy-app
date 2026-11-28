@@ -21,6 +21,7 @@ import {
   FILM_WATCH_TICK_MS as WATCH_POLL_MS,
 } from "~/lib/film/film-wait";
 import { appendFilmLog } from "./film-log";
+import { syncShotAudio } from "./audio-task";
 import { composeFilm } from "./compose-film";
 
 function isResultImages(v: unknown): v is Array<{ localPath?: string; mediaType?: unknown }> {
@@ -198,6 +199,11 @@ async function watchLoop(id: string, opts: { resumed?: boolean; skipCompose?: bo
       );
       return;
     }
+    /* 对白音轨与视频分开跟（ISSUE #5244）：只查有 audioTaskId 的镜头，
+     * 成功写回 params.audioPath 供成片合成混入；音频失败不动视频镜头状态。 */
+    // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：先收音频产物再判视频进度
+    await syncShotAudio(shots, id);
+
     let pending = 0;
     let done = 0;
     let failed = 0;

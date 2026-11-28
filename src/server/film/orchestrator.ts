@@ -29,6 +29,7 @@ import { appendFilmLog } from "./film-log";
 import { resolveFilmFirstFrame } from "./first-frame";
 import { extractTailFrameUrl } from "./tail-frame";
 import { resolveVoice, ttsParamsOf, type VoiceBinding } from "./voice-track";
+import { ensureShotAudio } from "./audio-task";
 /* 监看（无响应看门狗 / 超时收口 / 重启恢复扫描）在 film-watch.ts，这里只取入口。 */
 import { watchFilm } from "./film-watch";
 
@@ -66,6 +67,8 @@ export type CreateFilmInput = {
   styleSlug?: string | null;
   subtitleOn?: boolean;
   title: string;
+  /** 逐镜对白用的 T2S 工作流 id（ISSUE #5244）；不配则只出字幕不出配音。 */
+  ttsWorkflowId?: string | null;
   type?: string;
   userId: string;
   /** 逐镜生成用的**工作流库视频工作流 id**（本地链路唯一来源，内置模板已移除）。 */
@@ -209,6 +212,7 @@ async function persistFilmWithShots(args: {
   styleSlug?: string | null;
   subtitleOn: boolean;
   title: string;
+  ttsWorkflowId?: string | null;
   type: string;
   userId: string;
   videoWorkflowId: string;
@@ -254,6 +258,8 @@ async function persistFilmWithShots(args: {
             size: shotSizeFor(args.sizeSpec),
             videoWorkflowId: args.videoWorkflowId,
             imageWorkflowId: args.imageWorkflowId,
+            /* TTS 工作流 id（ISSUE #5244）：逐镜对白任务从 params 读它，不另起配置面。 */
+            ttsWorkflowId: args.ttsWorkflowId ?? "",
             ...(shot.firstFrame === undefined || shot.firstFrame === ""
               ? {}
               : { firstFrame: shot.firstFrame }),
@@ -321,6 +327,7 @@ export async function createFilm(input: CreateFilmInput) {
     bgmName: input.bgmName ?? null,
     videoWorkflowId: input.videoWorkflowId ?? "",
     imageWorkflowId: input.imageWorkflowId ?? "",
+    ttsWorkflowId: input.ttsWorkflowId ?? null,
     shotInputs: shots,
   });
 
@@ -341,6 +348,8 @@ export type CreateFilmFromProjectInput = {
   size?: unknown;
   subtitleOn?: boolean;
   title?: string;
+  /** 逐镜对白用的 T2S 工作流 id（ISSUE #5244）。 */
+  ttsWorkflowId?: string | null;
   type?: string;
   userId: string;
   /** 逐镜生成用的工作流库视频工作流 id（本地链路唯一来源）。 */
@@ -410,6 +419,7 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
     bgmName: input.bgmName ?? null,
     videoWorkflowId: input.videoWorkflowId ?? "",
     imageWorkflowId: input.imageWorkflowId ?? "",
+    ttsWorkflowId: input.ttsWorkflowId ?? null,
     shotInputs,
   });
 
@@ -551,6 +561,9 @@ export async function startFilm(id: string, opts: { skipCompose?: boolean } = {}
       try {
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         await filmShotRepository.markQueued(shot.id, taskId);
+        /* 逐镜对白（ISSUE #5244）：有 ttsParams 才起任务，失败只记日志、不改视频镜头态。 */
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：视频任务排队后再起对白任务
+        await ensureShotAudio(film.userId, id, shot.id, shot.params);
       } catch (error) {
         /* 记账失败的补偿（ISSUE #3867）：任务行已真实建立、会被执行器领取——
          * 只把镜头标 FAILED 会留下一个照跑的孤儿任务。先取消它再记账。 */
