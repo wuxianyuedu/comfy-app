@@ -783,7 +783,9 @@ export function flagConflicts(opt) {
  * 「走到终态且绿」；只读口的 0 只是「这次读成功」，写侧快动作（建单 / 评论 /
  * 领取 / 重派 CI）的 0 也只表示「这一件做完了」。两者都不跑写链，收尾那句
  * 都不许复写链的码表词。这里跟着「命令行长什么样」动（复用 `parseArgs` 的旗标面），
- * 与 `main()` 里「单件动作不落盘」那份同一族动作。
+ * 与 `main()` 里「单件动作不落盘」那份同一族动作 —— 事实上就是它的**唯一判定源**：
+ * `main()` 直接消费本函数决定 `ship-result.json` 的写盘开关（ISSUE #5239），
+ * 不要再在别处抄一份名单。新增单件动作时只改这里与 `parseArgs`，两处自动同步。
  *
  * @param {ReturnType<typeof parseArgs>} opt
  * @returns {boolean}
