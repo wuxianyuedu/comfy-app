@@ -269,6 +269,54 @@ describe("useInterval", () => {
     expect(run, "到新档就跑了").toHaveBeenCalledTimes(4);
   });
 
+  /* 函数形态 `ms` 的引用稳定性契约（ISSUE #5262）：`ms` 进了 effect 依赖数组，
+   * 调用方若每次渲染都现造一个新函数（漏包 `useCallback` / 依赖数组写错），
+   * 定时器就会被拆掉重建、`immediate` 按定义立即补跑一拍 —— 症状是「跑着跑着
+   * 突然多打一次 / 计时被重置」。下面两条用例把这条注释契约变成行为判据：
+   * 引用稳定 ⇒ 重渲不重建；引用变化 ⇒ 确实重建（反向验证，证明判据精确）。 */
+  it("ms 为函数且引用稳定：重渲不重建定时器、计时不被重置", async () => {
+    const run = vi.fn();
+    const getMs = () => 1000;
+    const { rerender } = renderHook(() => {
+      useInterval(run, { ms: getMs });
+    });
+    expect(run, "挂载即先跑一次").toHaveBeenCalledTimes(1);
+
+    /* 走到半拍时重渲：若 `ms` 的引用变化触发了 effect 重建，定时器会被重新
+       装上并立即补跑一拍（immediate 默认 true）；引用稳定则不会。 */
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    rerender();
+    expect(run, "稳定引用重渲不该立即补跑").toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(run, "原定时器按排定的半拍到点，没被重置").toHaveBeenCalledTimes(2);
+  });
+
+  it("ms 函数换成新引用：effect 重建定时器、immediate 立即补跑一拍", async () => {
+    const run = vi.fn();
+    const { rerender } = renderHook<void, { getMs: () => number }>(
+      (props) => {
+        useInterval(run, { ms: props.getMs });
+      },
+      { initialProps: { getMs: () => 1000 } },
+    );
+    expect(run, "挂载即先跑一次").toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    rerender({ getMs: () => 1000 });
+
+    /* 反向验证：新引用就是新函数 —— 重建发生、`immediate` 补跑一拍。
+       这条若绿不成（实现改成走 ref 不再依赖 ms），说明契约语义变了、
+       注释里的「换引用会重建」也随之失效，需一并更新。 */
+    expect(run, "换引用后 immediate 应立刻补跑一拍").toHaveBeenCalledTimes(2);
+  });
+
   it("ms 函数返回 0：立刻再跑一拍（事件驱动「不等下一拍」那一档）", async () => {
     const run = vi.fn();
     renderHook(() => {
