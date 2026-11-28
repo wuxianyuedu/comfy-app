@@ -96,3 +96,18 @@ describe("JsonViewer 高亮导航（#5229 F3）", () => {
     expect(after.find((m) => m.dataset.jvActiveHit === "true")).not.toBe(firstActive);
   });
 });
+
+describe("JsonViewer 高亮 CSS（#5264 死代码清理）", () => {
+  it("只注入真正生效的 mark 子串规则，不再注入永不写入的 pair 行级规则", () => {
+    render(<JsonViewer data={{ hello: "world" }} initialCollapsedDepth={0} />);
+    const style = document.head.querySelector<HTMLStyleElement>('style[data-jv-hilite="true"]');
+    expect(style).not.toBeNull();
+    const css = style?.textContent ?? "";
+    /* pair 上的 data-jv-hit / data-jv-active-hit 从不被写入，这两条规则永不命中。 */
+    expect(css).not.toContain(".json-view--pair[data-jv-hit");
+    expect(css).not.toContain(".json-view--pair[data-jv-active-hit");
+    /* 真正生效的是 <mark> 子串着色与它的 active 态。 */
+    expect(css).toContain("mark.jv-hit-sub");
+    expect(css).toContain('mark.jv-hit-sub[data-jv-active-hit="true"]');
+  });
+});

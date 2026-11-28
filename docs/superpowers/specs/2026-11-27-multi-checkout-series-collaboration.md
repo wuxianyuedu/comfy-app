@@ -33,7 +33,7 @@
 
 **必须共享**（全部落在同一份 DB）：
 
-- 剧集域：`series` / `season` / `episode` / `character` / `episode_character`（`src/server/db/schema-series.ts`）
+- 剧集域：`series` / `season` / `episode` / `character` / `episode_character` / `seriesAsset` / `episode_asset`（`src/server/db/schema-series.ts`；跨集资产库与视觉圣经也在这份 DB 里，ISSUE #5283）
 - 生产域：`project` / `production`（脚本、角色、分镜、进度、run）
 - 执行域：`task` / `taskImage` / `taskLog`、`filmProject` / `filmShot`
 - 沉淀域：`asset`、`workflowTemplate`

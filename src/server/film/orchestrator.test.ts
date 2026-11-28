@@ -646,6 +646,29 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
     expect(JSON.parse(created.size)).toHaveProperty("clarity");
   });
 
+  it("视觉圣经与禁止清单随逐镜提示词下发（ISSUE #5283）", async () => {
+    filmRepo.create.mockResolvedValue({ id: "f-bible" });
+    llmStructured.mockResolvedValue([
+      { heading: "场景", action: "道场", dialogue: "", shotCount: 1 },
+    ]);
+
+    await createFilm({
+      userId: "u1",
+      title: "视觉圣经",
+      script: "剧本",
+      visualBible: "冷蓝夜景，道场暖黄顶灯",
+      negativeExtra: "不要现代霓虹",
+    });
+
+    const [, shots] = shotRepo.createMany.mock.calls[0]!;
+    expect(shots[0]!.prompt).toContain("冷蓝夜景，道场暖黄顶灯");
+    expect(shots[0]!.negative).toContain("不要现代霓虹");
+    /* 不传时不引入额外句子：基线仍只有 FILM_NEGATIVE 与景别词。 */
+    await createFilm({ userId: "u1", title: "无圣经", script: "剧本" });
+    const [, plain] = shotRepo.createMany.mock.calls[1]!;
+    expect(plain[0]!.prompt).not.toContain("冷蓝夜景");
+  });
+
   it("LLM 不可用时回退到工坊分镜解析（离线也要能建片）", async () => {
     filmRepo.create.mockResolvedValue({ id: "f-offline" });
     llmStructured.mockRejectedValue(new Error("no llm"));

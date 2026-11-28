@@ -55,6 +55,9 @@ export const filmRouter = createTRPCRouter({
         script: z.string().min(1),
         type: z.string().min(1),
         styleSlug: z.string().min(1).nullable().optional(),
+        /** 系列视觉圣经 / 禁止清单（ISSUE #5283）：随逐镜提示词下发，不落新列。 */
+        visualBible: z.string().max(8000).optional(),
+        negativeExtra: z.string().max(4000).optional(),
         size: z.union([sizeSpecSchema, z.string()]).optional(),
         fps: z.number().int().positive().optional(),
         framesPerShot: z.number().int().positive().optional(),
@@ -84,6 +87,8 @@ export const filmRouter = createTRPCRouter({
         fps: input.fps,
         framesPerShot: input.framesPerShot,
         subtitleOn: input.subtitleOn,
+        visualBible: input.visualBible,
+        negativeExtra: input.negativeExtra,
         bgmName: input.bgmName,
         videoWorkflowId: input.videoWorkflowId,
         imageWorkflowId: input.imageWorkflowId,
