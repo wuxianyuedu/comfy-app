@@ -72,6 +72,7 @@ import {
 import {
   addPathKey,
   classifyStagedSurface,
+  noCommitOutsideHeadReading,
   pushFailureNote,
   runCommitStage,
   runPushStage,
@@ -8509,6 +8510,43 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
     expect(heard.join("\n"), "未暂存改动存在却没提醒").toContain("还有未暂存的改动");
   });
 
+  it("#5255：--no-commit 逐条点名 HEAD 之外的改动，明示平台看不到（读数不拦）", async () => {
+    const heard: Array<string> = [];
+    const { run } = fake({
+      porcelain: [
+        " M tests/derived-compute-memo.test.ts", // 解冲突后的工作区修正
+        "?? .scratch/note.txt", // 未跟踪
+      ].join("\n"),
+    });
+    const code = await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--no-commit", "--dry-run"],
+    });
+    const text = heard.join("\n");
+    expect(text).toContain("--no-commit：以下改动不在 HEAD 里、平台不会看到");
+    expect(text).toContain("· tests/derived-compute-memo.test.ts");
+    expect(text).toContain("· .scratch/note.txt");
+    // 读数：dry-run 的退码不被这一行改变（原路照走）。
+    expect(code).toBe(CODE.GREEN);
+  });
+
+  it("#5255：没有 HEAD 之外的改动时 --no-commit 不刷那组读数", async () => {
+    const heard: Array<string> = [];
+    const { run } = fake();
+    await main({
+      root: process.cwd(),
+      run,
+      log: (s: string) => heard.push(s),
+      probeCnb: () => true,
+      args: ["--no-commit", "--dry-run"],
+    });
+    const text = heard.join("\n");
+    expect(text).not.toContain("不在 HEAD 里、平台不会看到");
+  });
+
   it("阶段 0 念出「单子」那一行，而它是读数：退码不因它改变", async () => {
     /* 默认夹具那份 `changelog.d/0-x.md` 不在盘上 ⇒ 只念「无号碎片 1 份」，
      * **不**指控没立案（首行读不到就不判）。这一条钉的两件事：读数在场、闸不在场。 */
@@ -11643,5 +11681,23 @@ describe("staleBaseReading：基线混有已 squash 落地的旧提交（ISSUE #
     /* SAFETY: 类型断言已复核 —— 判据对非字符串输入的宽容度在此钉住。 */
     expect(staleBaseReading(null).lines).toEqual([]);
     expect(staleBaseReading(undefined).landed).toEqual([]);
+  });
+});
+
+describe("noCommitOutsideHeadReading：HEAD 之外改动面的纯函数读数（ISSUE #5255）", () => {
+  it("干净树 ⇒ 零行", () => {
+    expect(noCommitOutsideHeadReading({ unstagedModified: [], untracked: [] })).toEqual([]);
+  });
+
+  it("未暂存与未跟踪逐条点名，各占一行", () => {
+    const lines = noCommitOutsideHeadReading({
+      unstagedModified: ["tests/a.test.ts", "src/b.ts"],
+      untracked: ["??.md"],
+    });
+    expect(lines).toHaveLength(5);
+    expect(lines[1]).toContain("tests/a.test.ts");
+    expect(lines[2]).toContain("src/b.ts");
+    expect(lines[3]).toContain("??.md");
+    expect(lines.join("\n")).toContain("平台不会看到");
   });
 });

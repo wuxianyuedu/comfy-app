@@ -31,7 +31,9 @@ pnpm ship --no-commit                     # 「这一笔我自己已经提交（
                                           # 不看工作树，HEAD 原样进推送段」（#3619/#3676）—— 纯合并
                                           # 那一跳（--mode auto --no-commit）靠它免掉重报 --add；
                                           # 与 --add / --message / --message-file / --allow-staged
-                                          # 任一同行退 2（没有提交段，那些旗标没有对象）
+                                          # 任一同行退 2（没有提交段，那些旗标没有对象）；
+                                          # HEAD 之外若有未暂存 / 未跟踪改动，阶段 0 逐条点名
+                                          # 「不在 HEAD 里、平台不会看到」（读数、不拦）
 pnpm ship                    # 到「CI 出终态 + 打印下一动作」为止
 pnpm ship --merge            # CI 绿了才合并（squash）
 pnpm ship --merge --close-issue --clean-branch   # 合上之后关单、并把**这一次那条**分支收掉

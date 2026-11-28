@@ -42,7 +42,7 @@ import {
 import { HANDLE_SOURCES } from "../platform/dev-handle.mjs";
 import { DEV_HANDLE_ENV_KEY, issueAuthoring, ticketReading } from "./ship-ticket.mjs";
 import { logInstanceReading } from "./ship-reap.mjs";
-import { parsePorcelain, staleBaseReading } from "./ship-local.mjs";
+import { noCommitOutsideHeadReading, parsePorcelain, staleBaseReading } from "./ship-local.mjs";
 import { envInitHint } from "../devtools/env-preflight.mjs";
 
 /**
@@ -309,6 +309,14 @@ export async function runPreflightStage(ctx) {
   }
   if (unstagedModified.length + untracked.length > 0 && opt.adds.length === 0) {
     log("[ship] 还有未暂存的改动，而本次没给 --add ⇒ 暂存面由你负责，脚本不替你 `git add -A`。");
+  }
+  /* `--no-commit` 那一跳的显式读数（ISSUE #5255）：提交段整段跳过，工作区里的改动
+   * 不在 HEAD 里、平台也看不到。逐条点名，避免「本地已修、平台仍红」的白跑一轮。
+   * 只念不拦，也不改提交段的语义（是否阻断另议）。 */
+  if (opt.noCommit === true) {
+    for (const line of noCommitOutsideHeadReading({ unstagedModified, untracked })) {
+      log(line);
+    }
   }
   if (baseRef === null) {
     log(
