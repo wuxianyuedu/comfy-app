@@ -17,6 +17,7 @@ import { cn } from "~/lib/utils";
 import { displayValue } from "~/lib/display-value";
 import { fixed } from "~/lib/number-format";
 import { unique } from "~/lib/ordered-set";
+import { formatClock } from "~/lib/time-format";
 import { tailWindow } from "~/lib/page-window";
 import { clampText } from "~/lib/text-clamp";
 import { classifyModelTestError, type ModelTestRun } from "./model-test-runs";
@@ -84,6 +85,12 @@ export function ModelTestRunHistory({
       unique(compared.flatMap((run) => Object.keys(run.values).filter(isWorkshopInputType))).sort(),
     [compared],
   );
+  /* 每行的展示时刻在行数据里派生一次：列表带轮询刷新，逐行 new Date + Intl
+   * 格式化会在每次父渲染重复一遍（#5290）。同一字符串同时喂给 aria-label 与显示文本。 */
+  const rows = useMemo(
+    () => runs.map((run) => ({ run, clock: formatClock(run.startedAt) })),
+    [runs],
+  );
   const { changedCount, referenceImagesDiffer } = useMemo(() => {
     const changedParameters = parameterKeys.filter(
       (key) => (compared[0]?.values[key] ?? "") !== (compared[1]?.values[key] ?? ""),
@@ -126,13 +133,13 @@ export function ModelTestRunHistory({
       </div>
       <p className="text-muted-foreground text-2xs">勾选任意两次运行，可逐项对比参数与结果。</p>
       <ol className="flex flex-col gap-2">
-        {runs.map((run) => (
+        {rows.map(({ run, clock }) => (
           <li
             className="border-border bg-surface-1 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2"
             key={run.id}
           >
             <Checkbox
-              aria-label={`对比 ${new Date(run.startedAt).toLocaleTimeString()} 的运行`}
+              aria-label={`对比 ${clock} 的运行`}
               checked={selected.includes(run.id)}
               className="size-3.5"
               onCheckedChange={() => {
@@ -149,9 +156,7 @@ export function ModelTestRunHistory({
             >
               {statusLabel[run.status]}
             </span>
-            <span className="text-ink text-xs font-medium tabular-nums">
-              {new Date(run.startedAt).toLocaleTimeString()}
-            </span>
+            <span className="text-ink text-xs font-medium tabular-nums">{clock}</span>
             <span className="text-muted-foreground text-2xs tabular-nums">
               {durationText(run.durationMs)} · {Object.keys(run.values).length} 项参数
               {run.referenceImages.length > 0

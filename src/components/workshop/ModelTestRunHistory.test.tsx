@@ -3,6 +3,11 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { ModelTestRunHistory } from "./ModelTestRunHistory";
 import type { ModelTestRun } from "./model-test-runs";
+import { formatClock } from "~/lib/time-format";
+
+/* 计数桩：判「时刻走统一出口」+「同一组 props 重渲染不重复格式化」。 */
+const clockMock = vi.hoisted(() => vi.fn((value: number) => `T${String(value)}`));
+vi.mock("~/lib/time-format", () => ({ formatClock: clockMock }));
 
 const run = (
   id: string,
@@ -152,5 +157,33 @@ describe("ModelTestRunHistory", () => {
     expect(onRetry).toHaveBeenCalledWith(runs[1]);
     fireEvent.click(screen.getByRole("button", { name: "清空运行记录" }));
     expect(onClear).toHaveBeenCalledOnce();
+  });
+
+  it("时刻经 formatClock 统一出口，aria-label 与显示文本共用同一字符串", () => {
+    clockMock.mockClear();
+    render(
+      <ModelTestRunHistory
+        generating={false}
+        onClear={vi.fn()}
+        onRetry={vi.fn()}
+        runs={[run("a", "A")]}
+      />,
+    );
+    expect(formatClock).toHaveBeenCalledWith(1_700_000_000_000);
+    expect(screen.getByText("T1700000000000")).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "对比 T1700000000000 的运行" })).toBeTruthy();
+  });
+
+  it("同一组 props 重渲染不重复逐行格式化（行时刻纳入 useMemo 派生）", () => {
+    const runs = [run("a", "A"), run("b", "B")];
+    clockMock.mockClear();
+    const view = render(
+      <ModelTestRunHistory generating={false} onClear={vi.fn()} onRetry={vi.fn()} runs={runs} />,
+    );
+    expect(clockMock).toHaveBeenCalledTimes(2);
+    view.rerender(
+      <ModelTestRunHistory generating={false} onClear={vi.fn()} onRetry={vi.fn()} runs={runs} />,
+    );
+    expect(clockMock).toHaveBeenCalledTimes(2);
   });
 });
