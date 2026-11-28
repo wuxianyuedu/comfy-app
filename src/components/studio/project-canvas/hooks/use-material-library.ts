@@ -4,12 +4,12 @@
 // 承载搜索防抖、列表拉取、上传、删除与错误提示；MaterialLibraryPanel 视图
 // 只消费本 hook 返回的 controller，不再自己发请求。
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useDebouncedLoader } from "~/components/ui/use-debounced-loader";
 import { useRefreshTicket } from "~/components/ui/use-refresh-ticket";
 
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { normalizeNeedle } from "~/lib/list-filter";
-import { beginStaleRun } from "~/lib/stale-run";
 
 import {
   deleteMaterial,
@@ -103,55 +103,45 @@ export function useMaterialLibrary({
     setFolder(next);
   }, []);
 
-  /* ── 拉取素材（搜索做防抖）── */
-  useEffect(() => {
-    /* 这一轮的作废守卫（规范 16 §16.2.4.34）：卸载、或切分类 / 作用域、
-     * 或改关键字都会重开一轮，旧轮次的结果一律不落地（含失败与空列表）。 */
-    const guard = beginStaleRun();
-    /* 关键字归一化走唯一出口（§16.2.4.16）：`trim().toLowerCase()` 手写一处
-     * 就会漏一处 —— 这个 hook 此前只 `trim()`，候选里含拉丁字母的关键字
-     * 大小写敏感（与 `AttributeMultiSelect` 的历史缺陷同源）。 */
-    const q = normalizeNeedle(search);
-
-    const run = async () => {
+  /* ── 拉取素材（搜索做防抖 + 旧轮次作废：规范 16 §16.2.4.78）── */
+  /* 关键字归一化走唯一出口（§16.2.4.16）：`trim().toLowerCase()` 手写一处
+   * 就会漏一处 —— 这个 hook 此前只 `trim()`，候选里含拉丁字母的关键字
+   * 大小写敏感（与 `AttributeMultiSelect` 的历史缺陷同源）。 */
+  useDebouncedLoader({
+    value: normalizeNeedle(search),
+    delayMs: SEARCH_DEBOUNCE_MS,
+    immediateWhen: (q) => q === "",
+    deps: [projectId, scope, folder, reloadKey],
+    load: (q, commit) => {
       setLoading(true);
       setLoadError(null);
-      try {
-        const result = await fetchMaterials({
-          projectId,
-          scope,
-          // 搜索优先于 folder：与后端 /api/materials 的取值顺序一致（有 q 时忽略 folder）
-          folder: q ? null : folder,
-          q: q || undefined,
-        });
-        guard.commit(() => {
-          setFolders(result.folders);
-          setItems(result.items);
-        });
-      } catch (error) {
-        guard.commit(() => {
-          setLoadError(errMsg(error, "读取素材库失败"));
-          setFolders([]);
-          setItems([]);
-        });
-      } finally {
-        guard.commit(() => {
-          setLoading(false);
-        });
-      }
-    };
-
-    const t = setTimeout(
-      () => {
-        void run();
-      },
-      q ? SEARCH_DEBOUNCE_MS : 0,
-    );
-    return () => {
-      guard.dispose();
-      clearTimeout(t);
-    };
-  }, [projectId, scope, folder, search, reloadKey]);
+      void (async () => {
+        try {
+          const result = await fetchMaterials({
+            projectId,
+            scope,
+            // 搜索优先于 folder：与后端 /api/materials 的取值顺序一致（有 q 时忽略 folder）
+            folder: q ? null : folder,
+            q: q || undefined,
+          });
+          commit(() => {
+            setFolders(result.folders);
+            setItems(result.items);
+          });
+        } catch (error) {
+          commit(() => {
+            setLoadError(errMsg(error, "读取素材库失败"));
+            setFolders([]);
+            setItems([]);
+          });
+        } finally {
+          commit(() => {
+            setLoading(false);
+          });
+        }
+      })();
+    },
+  });
 
   /* ── 上传（分类列表页上传时默认丢进「参考素材」）── */
   const upload = useCallback(

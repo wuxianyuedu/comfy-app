@@ -8,6 +8,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useDebouncedLoader } from "~/components/ui/use-debounced-loader";
+
 import { vanillaApi } from "~/trpc/vanilla";
 import {
   buildLibraryWorkflowInput,
@@ -144,34 +146,31 @@ export function useStyleLibrary() {
 
   const catalog = useModelCatalog("image", "T2I");
 
-  /** 画风列表随搜索词刷新；卸载时把旧轮次的结果丢掉（竞态防护）。 */
-  useEffect(() => {
-    let alive = true;
-    const timer = setTimeout(() => {
+  /** 画风列表随搜索词刷新；防抖 + 旧轮次作废走加载型防抖唯一出口（规范 16 §16.2.4.78）。 */
+  useDebouncedLoader({
+    value: search,
+    delayMs: 120,
+    load: (q, commit) => {
       void (async () => {
         setLoading(true);
         try {
-          const data = await vanillaApi.skill.list.query({ category: "style", q: search.trim() });
-          if (alive) {
+          const data = await vanillaApi.skill.list.query({ category: "style", q: q.trim() });
+          commit(() => {
             setStyles(parseStyles(data.skills));
             setLoadError("");
-          }
+          });
         } catch {
-          if (alive) {
+          commit(() => {
             setLoadError("画风列表读取失败，稍后重试");
-          }
+          });
         } finally {
-          if (alive) {
+          commit(() => {
             setLoading(false);
-          }
+          });
         }
       })();
-    }, 120);
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
-  }, [search]);
+    },
+  });
 
   /* 卸载时退订仍挂着的 SSE（有界：只收这一页起的观察器）。 */
   useEffect(
