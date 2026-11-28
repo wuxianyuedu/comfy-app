@@ -378,6 +378,11 @@ export const shotInputSchema = z
     /** 跨镜接力（ISSUE #5212）：从这一镜的尾帧抽图当本镜首帧；留空 = 用定稿图。
      *  只在服务端建片时消费，用户手改不会破坏已有片段。 */
     continuityFromShotId: z.string().optional(),
+    /** 机位覆盖（ISSUE #5297）：引用一条已成立的基础动作片段，换机位重拍同一动作；
+     *  留空 = 常规逐镜生成。与 `continuityFromShotId`（时间接续）分工不同。 */
+    coverageFromShotId: z.string().optional(),
+    /** 覆盖机位预设：wide / low / foreground；缺省由工作流自身机位决定。 */
+    coveragePreset: optionalEnum(["foreground", "low", "wide"]),
     /** 本机视频任务的 id（同 `taskId`：随草稿持久化，重挂载后据此恢复失联任务）。
      *  API 直连通道的 remoteTaskId 是另一套体系，不落这里。 */
     clipTaskId: z.string().optional(),

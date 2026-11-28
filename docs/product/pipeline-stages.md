@@ -104,7 +104,7 @@
 | **AI 的用法** | MCP `workshop_submit_video` / `workshop_poll_video`；自主 run 的 `render_videos` 阶段先起逐镜视频（`startFilm(..., {skipCompose:true})`，片段齐了不自动合成），`render_film` 阶段再对同一份影片显式合成（ISSUE #5211） |
 | **质量验收口径** | ① 首帧确实是 `Shot.imageUrl`（图生视频链路成立，不是文生视频另起一张）；② `clipStatus` 有终态且失败可单独重跑；③ 片段时长与分镜设定一致（差一个数量级 = 参数没传进工作流）；④ 成片前所有镜头的 `clipUrl` 都非空（缺一个都不该进合成） |
 | **当前状态** | 已上线（图生视频，工坊内）；自主 run 已有独立 `render_videos` 阶段与按镜头 rev 的定点重出（ISSUE #5211）；`render_film` 只消费已就绪的片段 |
-| **已知缺口** | 片段级审批停点仍借用人工裁决快照、尚未接成独立按钮；无视频**一致性**机制（同一角色的运动 / 光影跨镜不连续）；首尾帧跨镜接力已上线（`Shot.continuityFromShotId` 抽上镜尾帧作本镜首帧，抽帧失败回落定稿图，ISSUE #5212）；批量视频的失败重试口径未成文 |
+| **已知缺口** | 片段级审批停点仍借用人工裁决快照、尚未接成独立按钮；无视频**一致性**机制（同一角色的运动 / 光影跨镜不连续）；首尾帧跨镜接力已上线（`Shot.continuityFromShotId` 抽上镜尾帧作本镜首帧，抽帧失败回落定稿图，ISSUE #5212）；机位覆盖已上线（ISSUE #5297：`coverageFromShotId` + `coveragePreset` 从基础动作抽末帧锚点并接机位约束，保留站位/动作方向/服装，顺序不对只告警）；批量视频的失败重试口径未成文 |
 | **代码落点** | `src/components/workshop/VideoStudio.tsx`；合并触发 `src/server/agent/run-engine.ts` |
 
 ---
