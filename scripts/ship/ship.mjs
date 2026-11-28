@@ -333,37 +333,20 @@ export async function main(deps = {}) {
    * ship」就成了假读数；`tests/ship.test.ts` 还有一条 `readdirSync(gitDir)` 必须
    * 为空的回收断言会当场红。只有 CLI 入口传真实 `resolveGitDir` 才写。 */
   const { shipResultResolve, ...flowDeps } = deps;
-  /* 只读单件动作**不落盘**（ISSUE #3923）：`--result` / `--status` 这些口读的就是
-   * `.git/ship-result.json` 这份文件；查询自己再写一份进去（write-ahead 一创建就写
-   * `running`），会把后台那一跑的活读数覆盖掉 —— 轮询的眼睛毁掉它正在看的东西。
-   * 所以这一族（result / status / whoami / branches / claims / diagnose /
-   * stage-log / gh-logs / gh-prs）即使处在 CLI 入口（给了 shipResultResolve）也不写。 */
-  /* 单件动作**不落盘**（ISSUE #3923 / #4510）：`--result` / `--status` 这些口读的就是
-   * `.git/ship-result.json` 这份文件；查询自己再写一份进去（write-ahead 一创建就写
-   * `running`），会把后台那一跑的活读数覆盖掉 —— 轮询的眼睛毁掉它正在看的东西。
+  /* 单件动作**不落盘**（ISSUE #3923 / #4510 / #5239）：`--result` / `--status` 这些口
+   * 读的就是 `.git/ship-result.json` 这份文件；查询自己再写一份进去（write-ahead 一创建
+   * 就写 `running`），会把后台那一跑的活读数覆盖掉 —— 轮询的眼睛毁掉它正在看的东西。
    * #4510 把同一条理由扩到**写侧快动作**：`--comment` 这类单件跑得快、一样收口落盘，
    * 流程长跑（--mode auto 等 CI）期间它一收口，就把 `status=running` 的活读数覆盖成
    * 自己的结论 ⇒ `ship:wait` 拿旧结论当终态、等错对象。所以除完整流程外的所有
-   * 单件动作（读的 + 写的）都不写 —— 这份文件只当「流程那一跑」的账。 */
+   * 单件动作（读的 + 写的）都不写 —— 这份文件只当「流程那一跑」的账。
+   *
+   * #5239：判定**只有一份**——`ship-args.mjs` 的 `singleActionSettled()`，与收尾那句
+   * 「单件动作完成」共用。此前这里手抄了一份缺项的名单，漏了 `--find-issues` 等较新
+   * 的动作，于是查重那一下就把正在跑的活快照覆盖掉；两份维护面必然漂移，收成一份。 */
   const sinkArgs = deps.args ?? process.argv.slice(2);
   const sinkOpt = parseArgs(sinkArgs);
-  const sideAction =
-    sinkOpt.result ||
-    sinkOpt.status ||
-    sinkOpt.whoami ||
-    sinkOpt.branches ||
-    sinkOpt.claims ||
-    sinkOpt.diagnose ||
-    sinkOpt.stageLog ||
-    sinkOpt.ghLogs ||
-    sinkOpt.ghPrs ||
-    sinkOpt.fetchIssue ||
-    sinkOpt.comment !== null ||
-    sinkOpt.claim !== null ||
-    sinkOpt.release !== null ||
-    sinkOpt.misclaim ||
-    sinkOpt.newIssue !== null ||
-    sinkOpt.rerunCi;
+  const sideAction = singleActionSettled(sinkOpt);
   const sink = createShipResultSink({
     root,
     args: sinkArgs,

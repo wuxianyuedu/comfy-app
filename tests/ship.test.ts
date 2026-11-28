@@ -405,9 +405,11 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
     expect(parseArgs(["--only=poll"]).only).toBe("poll");
   });
 
-  it("#4764：singleActionSettled 认「单件 / 侧动作」的旗标面，写链不误判", () => {
+  it("#4764/#5239：singleActionSettled 认「单件 / 侧动作」的旗标面，写链不误判", () => {
     /* 只读口与写侧快动作都复用 `finish()`，收尾词按这一格分；写链（含 --merge /
-     * --clean-branch / --only）必须落回码表词，不能被这一格吞掉。 */
+     * --clean-branch / --only）必须落回码表词，不能被这一格吞掉。
+     * #5239：这个函数同时是 `ship-result.json` 落盘守门的唯一判定源，所以这里
+     * 逐枚列全 `parseArgs` 的单件动作 —— 少一枚，那枚就会覆盖后台活快照。 */
     for (const args of [
       ["--result"],
       ["--status"],
@@ -417,10 +419,15 @@ describe("parseArgs：拼错的旗标不许被静默忽略", () => {
       ["--diagnose"],
       ["--stage-log", "受影响用例"],
       ["--gh-prs"],
+      ["--gh-logs", "pr:1"],
       ["--fetch-issue", "4764"],
+      ["--find-issues", "串行 读盘"],
+      ["--screenshot-reply", "4764", "--file", "/tmp/x.png"],
       ["--new-issue", "标题"],
       ["--comment", "4764"],
       ["--claim", "4764"],
+      ["--release", "4764"],
+      ["--edit-issue", "4764"],
       ["--rerun-ci"],
     ]) {
       expect(singleActionSettled(parseArgs(args)), args.join(" ")).toBe(true);
@@ -11042,6 +11049,45 @@ describe("写侧快动作不落盘（ISSUE #4510）", () => {
     } finally {
       rmSync(gitDir, { recursive: true, force: true });
     }
+  });
+
+  it("#5239：--find-issues / --screenshot-reply / --edit-issue 收口都不改写活快照", async () => {
+    /* 现场：后台 ship 等 CI（status=running）期间跑 `--find-issues` 查重，它的
+     * 单件结论覆盖掉活快照 ⇒ `ship:wait` 把旧结论当终态、等错对象（#4510 同形）。
+     * 这三个是当时手写白名单漏掉的较新动作；逐个拿真 `main()` 跑一遍落盘那格。 */
+    const cases = [
+      ["--find-issues", "串行 读盘"],
+      ["--screenshot-reply", "4764", "--file", "/tmp/x.png"],
+      ["--edit-issue", "4764"],
+    ];
+    await Promise.all(
+      cases.map(async (args) => {
+        const gitDir = mkdtempSync(path.join(os.tmpdir(), "ship-5239-"));
+        try {
+          const sink = createShipResultSink({
+            root: process.cwd(),
+            resolve: () => gitDir,
+            args: ["--mode", "auto"],
+          });
+          sink.append("[ship] ▶ 等 CI | build=cnb-5239 | pr=5238");
+          const file = path.join(gitDir, "ship-result.json");
+          const before = readFileSync(file, "utf8");
+
+          const log: Array<string> = [];
+          await main({
+            args,
+            log: (l: string) => log.push(l),
+            probeCnb: () => true,
+            root: process.cwd(),
+            resolveGitDir: () => gitDir,
+            shipResultResolve: () => gitDir,
+          });
+          expect(readFileSync(file, "utf8"), args.join(" ")).toBe(before);
+        } finally {
+          rmSync(gitDir, { recursive: true, force: true });
+        }
+      }),
+    );
   });
 });
 
