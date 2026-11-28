@@ -44,6 +44,7 @@ import { appendFilmLog } from "./film-log";
 import { checkFilmQuality, probeFilm } from "./film-quality";
 import { audioPathOfParams, buildDialogueMixArgs, type DialogueTrack } from "./voice-track";
 import { checkDeliveryPromise, checkFilmAudit, runFilmAudit } from "./film-audit";
+import { continuityIssues, normalizeSegments, selectedSegment } from "~/lib/workshop/segments";
 
 /** `filmShot.params`（JSON 列）里的台词。只认字符串，形状不对就当没有——
  *  字幕宁可回退标题，也不把「[object Object]」烧进画面。 */
@@ -295,6 +296,32 @@ export async function composeFilm(id: string) {
     return;
   }
 
+  /* 逐镜连续性（ISSUE #5299）：从已落库的镜头参数/项目草稿里取有数据的项做只读核对，
+   * 缺数据只给温和提示；与 #5276 的成片黑帧/静音/承诺自检分工。 */
+  const production =
+    film.projectId === null
+      ? null
+      : await productionRepository.getForUser(film.userId, film.projectId).catch(() => null);
+  /* 没有项目草稿（自由建片）时没有角色/场景数据可核对，不制造「请人工核对」噪声。 */
+  if (production !== null) {
+    const continuity = continuityIssues({
+      characters: production.characters,
+      scenes: production.scenes,
+      shots: shots.map((shot) => ({
+        characterIds: (() => {
+          const raw = asRecord(shot.params)?.characterIds;
+          return Array.isArray(raw)
+            ? raw.filter((item): item is string => typeof item === "string")
+            : [];
+        })(),
+        dialogue: dialogueOfParams(shot.params) ?? undefined,
+        duration: shot.duration ?? undefined,
+        sceneId: shot.heading ?? undefined,
+      })),
+    });
+    await Promise.all(continuity.map((issue) => appendFilmLog(id, "warn", issue)));
+  }
+
   const cwd = process.cwd();
   /* 成片画幅：列里存的是尺寸表达（老行是 "1280x720" 字符串，`toSizeSpec` 兼容），
    * ffmpeg 要的是像素 —— 在这里按**生效的**尺寸表折算（ISSUE #3972：设置里改过
@@ -329,7 +356,21 @@ export async function composeFilm(id: string) {
         });
       }
       const segOut = path.join(tmpDir, `seg_${i}.mp4`);
-      const dur = shot.duration ?? film.framesPerShot / fps;
+      /* 生成选段（ISSUE #5299）：有选段按第一段裁剪，没有则回落整段（老数据不破）。 */
+      const segment = selectedSegment(normalizeSegments(asRecord(shot.params)?.segments));
+      const start = segment?.start ?? 0;
+      const dur =
+        segment === null
+          ? (shot.duration ?? film.framesPerShot / fps)
+          : Math.max(0.1, segment.end - segment.start);
+      if (segment !== null) {
+        // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：选段口径先留痕再合成
+        await appendFilmLog(
+          id,
+          "info",
+          `镜头 ${i + 1} 采用选段「${segment.purpose}」：${String(start)}s → ${String(segment.end)}s`,
+        );
+      }
       const fadeOut = Math.max(0, dur - 0.3);
       const vf = buildSegmentVf({ width: W, height: H, fps, fadeOut });
 
@@ -353,6 +394,7 @@ export async function composeFilm(id: string) {
           vf,
           dur,
           out: segOut,
+          start,
           srtPath: tryWithSub ? srtPath : null,
         }),
         tmpDir,
@@ -362,7 +404,7 @@ export async function composeFilm(id: string) {
         await appendFilmLog(id, "warn", `镜头 ${i + 1} 字幕烧录失败，重试（无字幕）`);
         // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
         res = await runFFmpeg(
-          buildNormalizeArgs({ clip, vf, dur, out: segOut, srtPath: null }),
+          buildNormalizeArgs({ clip, vf, dur, out: segOut, start, srtPath: null }),
           tmpDir,
         );
       }
