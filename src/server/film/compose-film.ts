@@ -44,7 +44,13 @@ import { appendFilmLog } from "./film-log";
 import { checkFilmQuality, probeFilm } from "./film-quality";
 import { audioPathOfParams, buildDialogueMixArgs, type DialogueTrack } from "./voice-track";
 import { checkDeliveryPromise, checkFilmAudit, runFilmAudit } from "./film-audit";
-import { continuityIssues, normalizeSegments, selectedSegment } from "~/lib/workshop/segments";
+import {
+  anchorIssues,
+  continuityIssues,
+  normalizeAnchors,
+  normalizeSegments,
+  selectedSegment,
+} from "~/lib/workshop/segments";
 
 /** `filmShot.params`（JSON 列）里的台词。只认字符串，形状不对就当没有——
  *  字幕宁可回退标题，也不把「[object Object]」烧进画面。 */
@@ -321,6 +327,13 @@ export async function composeFilm(id: string) {
     });
     await Promise.all(continuity.map((issue) => appendFilmLog(id, "warn", issue)));
   }
+
+  /* 跨镜五锚（ISSUE #5304）：相邻镜同一锚都填却不同 → 可行动提示；只填一镜 → 温和提示；
+   *  全没填不发声。只读、不阻断，与 #5299 引用检查、#5276 成片自检分工。 */
+  const anchorWarnings = anchorIssues(
+    shots.map((shot) => normalizeAnchors(asRecord(shot.params)?.anchors)),
+  );
+  await Promise.all(anchorWarnings.map((issue) => appendFilmLog(id, "warn", issue)));
 
   const cwd = process.cwd();
   /* 成片画幅：列里存的是尺寸表达（老行是 "1280x720" 字符串，`toSizeSpec` 兼容），
