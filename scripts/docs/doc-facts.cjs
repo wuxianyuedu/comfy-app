@@ -84,6 +84,10 @@ const SCOPED_DOCS = [
   /* 《出端之刃》制作 playbook（ISSUE #5283）：里面写着的 tRPC 出口、params 字段与
    * film.create 的 visualBible / negativeExtra 都来自源码，漂了会让录制口径指向不存在的开关。 */
   "docs/guides/production-playbook-chuduan-zhi-ren.md",
+  /* AI 短片五步工作流通用模板（ISSUE #5289）：与实例共用同一批 tRPC 出口和 params 字段，
+   * 漂了会让新项目照抄到不存在的开关。 */
+  "docs/guides/ai-short-film-workflow.md",
+
   /* 产品需求文档（ISSUE #2421）：产品功能与需求的唯一口径。里面大量引用代码落点
    * （router / 组件 / 表名）与功能状态，漂了就会指着一个不存在的实现说需求 ——
    * 与功能流程图同类，纳入校验。 */
