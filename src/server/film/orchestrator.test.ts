@@ -128,11 +128,19 @@ const resolveFirstFrameMock = vi.hoisted(() =>
 vi.mock("./first-frame", () => ({ resolveFilmFirstFrame: resolveFirstFrameMock }));
 /* 成片质检的 ffprobe 是外部能力（ISSUE #5214）：用例里给一份合格读数，
  * 不让「本机没装 ffprobe」的 warn 混进「全部镜头成功」的日志断言。 */
+/* 观感自检（ISSUE #5276）是额外一次 ffmpeg 调用：测试里给干净读数，保持既有 composeFilm
+ * 用例只判自己的那一段（判据本身在 film-audit.test.ts 里逐条验）。 */
+vi.mock("./film-audit", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  runFilmAudit: vi.fn(() =>
+    Promise.resolve({ blackSeconds: 0, frozenLongest: 0, silentSeconds: 0 }),
+  ),
+}));
 vi.mock("./film-quality", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   probeFilm: vi.fn(() =>
     Promise.resolve({
-      duration: 12,
+      duration: 3,
       hasAudio: true,
       hasVideo: true,
       height: 720,
@@ -519,7 +527,9 @@ describe("composeFilm — 合成前置条件不满足时必须落 FAILED 且文�
 });
 
 describe("composeFilm — 部分镜头失败仍合成，但必须知情交付（#4609）", () => {
-  /** composeFilm 全流程要读的影片行（画幅折算 / 字幕 / BGM / 回写开关）。 */
+  /** composeFilm 全流程要读的影片行（画幅折算 / 字幕 / BGM / 回写开关）。
+   *  subtitleOn=true：镜头有 heading/prompt，导出本来就有字幕，避免「未开字幕却带字幕」
+   *  这条新告警混进「不出现失败 warn」的断言（#5276）。 */
   function filmRow() {
     return {
       id: "f1",
@@ -527,7 +537,7 @@ describe("composeFilm — 部分镜头失败仍合成，但必须知情交付（
       size: JSON.stringify({ ratio: "16:9 横屏", clarity: "1k", multiple: 64 }),
       fps: 16,
       framesPerShot: 49,
-      subtitleOn: false,
+      subtitleOn: true,
       bgmName: null,
       projectId: null,
       userId: "u1",
