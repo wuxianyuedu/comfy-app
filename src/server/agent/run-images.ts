@@ -18,6 +18,11 @@ import {
 } from "~/lib/workshop/storyboard-quality";
 import { performanceRefsOf } from "~/lib/workshop/acting-reference";
 import {
+  normalizeReferenceRoles,
+  orderedReferences,
+  referenceRoleAnnotation,
+} from "~/lib/workshop/reference-roles";
+import {
   markActionProcessed,
   type ProductionRun,
   type ProductionRunView,
@@ -100,16 +105,25 @@ export async function execImages(
         previewUrl = preview;
       }
     }
+    /* 参考图职责化（ISSUE #5298）：镜头参考图 + 角色表演参考逐槽对齐，缺职责按 identity。
+     * 提示词附「槽位 ↔ 职责 ↔ 图片编号」对照，让人能核对上传槽位是否错位。 */
+    const shotImages = shot.referenceImages ?? [];
+    const roles = normalizeReferenceRoles(shot.referenceRoles, shotImages.length);
+    const references = orderedReferences({
+      performance: performanceRefsOf(row.characters, shot.characterIds ?? []),
+      shotImages,
+      shotRoles: roles,
+    });
+    const annotation = referenceRoleAnnotation(references.map((reference) => reference.role));
     try {
       // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：后一步要用前一步的结果（既有串行路径）
       const path = await synthesizeFirstFrame({
         userId,
         workflowId: run.imageWorkflowId,
-        prompt: shot.prompt,
+        prompt: annotation === "" ? shot.prompt : `${shot.prompt}, ${annotation}`,
         negative: shot.negativePrompt || undefined,
         projectId,
-        /* 角色表演参考（ISSUE #5296）：已确认的角色视频元素优先作为表演锚点注入。 */
-        referenceImages: performanceRefsOf(row.characters, shot.characterIds ?? []),
+        referenceImages: references.map((reference) => reference.url),
         seed: randomSeed(),
         /* 与逐镜视频任务同一份场景无关画幅（ISSUE #5138）：首帧与潜空间同尺寸。 */
         size: shotSizeFor(asRecord(shot.params)?.size),
