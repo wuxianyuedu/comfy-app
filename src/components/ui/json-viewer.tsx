@@ -1,7 +1,7 @@
 "use client";
 
 /** JsonViewer — 重构：此前自写的纯客户端 JSON 查看器（660+ 行）有结构性问题 —— PrimitiveRow 用 `<div>` 渲染值、block-in-block 把 key-value 拆成两行；嵌套 paddingLeft 在深 indent 处把值挤到右侧造成视觉错位；primitive string 整段渲染、没有 substring 着色，active hit 看不出来。
- * 现改用 react18-json-view 处理渲染层（语法着色 / 容器折叠 / 长 string 折叠 / 暗黑主题 / clipboard / 多主题 + URL 识别）；本模块只负责：① 搜索（collectHits 遍历 + 计数 + Enter/Shift+Enter/箭头/Esc）；② scroll-into-view（active hit 居中）；③ DOM 后处理（text node 内 substring 高亮 + active hit 行标 + data-jv-active-hit）。
+ * 现改用 react18-json-view 处理渲染层（语法着色 / 容器折叠 / 长 string 折叠 / 暗黑主题 / clipboard / 多主题 + URL 识别）；本模块只负责：① 搜索（collectHits 遍历 + 计数 + Enter/Shift+Enter/箭头/Esc）；② scroll-into-view（active hit 居中）；③ DOM 后处理（text node 内 substring 高亮 + active hit 的 data-jv-active-hit 标记）。
  * 选该库的理由：0.2.10 仍维护、React 18+ 兼容声明、零业务依赖 + 7 主题 + CSS 变量覆盖；我们自己的搜索 / 计数 / 跳转逻辑仍是自写（约 50 行 wrapper），渲染结构、外观、长 string 折叠、clipboard 全交给 lib。 */
 
 import {
@@ -56,8 +56,7 @@ function isJsonValue(value: unknown): value is JsonValue {
 
 /** 命中路径 — `{[nodeId]: {class_type, inputs, widgets_values, ...}}` 这一层
  *  对应 `["nodes", "3", "widgets_values", "2"]`。在 我们用不到具体 path
- *  做 DOM 后处理, 留作 collectHits 返回类型 + 日后扩展 (例如 toggle 行级
- *  highlight) 时使用。 */
+ *  做 DOM 后处理, 留作 collectHits 返回类型 + 日后扩展时使用。 */
 type Path = ReadonlyArray<string | number>;
 /** 命中路径的单向链表节点：递归时只挂一层父指针，不再每层 `[...path, key]` 复制
  *  整条数组（#5224 A6，深树遍历曾为 O(深度²) 分配/GC）。`toPath()` 只在真正
@@ -136,20 +135,6 @@ function ensureHighlightCss() {
   const style = document.createElement("style");
   style.dataset.jvHilite = "true";
   style.textContent = `
-/* 非 active hit — 行级提示色。色值一律取 globals.css 的两态 token
-   （--json-view-hit-*，浅色深琥珀 / 深色亮琥珀）：写死琥珀字面量时
-   浅色下是「近白字压浅琥珀底」，命中看不出来。 */
-.json-view .json-view--pair[data-jv-hit="true"] {
-  background-color: var(--json-view-hit-bg);
-  border-radius: 3px;
-  box-shadow: inset 0 0 0 1px var(--json-view-hit-ring);
-}
-/* active hit — 强对比 */
-.json-view .json-view--pair[data-jv-active-hit="true"] {
-  background-color: var(--json-view-hit-bg-active) !important;
-  border-radius: 3px;
-  box-shadow: inset 0 0 0 2px var(--json-view-hit-solid) !important;
-}
 /* string value 内的 substring mark */
 .json-view mark.jv-hit-sub {
   background-color: var(--json-view-hit-bg-active);
@@ -174,17 +159,12 @@ function ensureHighlightCss() {
 
 /** 删除掉之前注入的命中标记 — 重新扫描前先清干净 */
 function clearPreviousHighlights(body: HTMLElement) {
-  // 1. 移除 active hit / passive hit 的行级 data 标记
-  body.querySelectorAll<HTMLElement>(".json-view--pair[data-jv-hit]").forEach((el) => {
-    delete el.dataset.jvHit;
-    delete el.dataset.jvActiveHit;
-  });
-  // 2. 把注入的 <mark class="jv-hit-sub"> 还原成 textNode
+  // 1. 把注入的 <mark class="jv-hit-sub"> 还原成 textNode
   body.querySelectorAll("mark.jv-hit-sub").forEach((mark) => {
     const txt = document.createTextNode(mark.textContent || "");
     mark.parentNode?.replaceChild(txt, mark);
   });
-  // 3. 合并相邻 textNode
+  // 2. 合并相邻 textNode
   body.normalize();
 }
 
