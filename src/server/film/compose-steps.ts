@@ -4,6 +4,7 @@
 //    §12.12 孪生形状：改一个忘改另一个 ⇒ 有无字幕走两条编码参数），现收成 `buildNormalizeArgs`，以
 //    `srtPath` 是否为 null 决定接不接字幕滤镜；② 纯字符串算术下沉后，`composeFilm` 只留编排骨架。
 import { normalizeSlashes } from "~/lib/path-display";
+import { clamp } from "~/lib/clamp";
 import { fixed } from "~/lib/number-format";
 import { artifactDiskPath, generatedRoot } from "~/lib/media/output-paths";
 
@@ -204,8 +205,8 @@ export function buildWordFilmSrt(
     const supplied = item.words ?? [];
     const words = supplied.length > 0 ? supplied : splitWordTimings(item.text, dur);
     for (const word of words) {
-      const start = cursor + Math.max(0, Math.min(dur, word.start));
-      const end = cursor + Math.max(0, Math.min(dur, word.end));
+      const start = cursor + clamp(word.start, 0, dur);
+      const end = cursor + clamp(word.end, 0, dur);
       blocks.push(
         `${index}\n${formatSrtTimestampMs(start)} --> ${formatSrtTimestampMs(end)}\n${word.text}\n`,
       );
