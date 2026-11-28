@@ -26,8 +26,10 @@ const DOCUMENT_VIEWS = [
   path.join(STUDIO, "assets", "AssetLibrary.tsx"),
   /* #5069：风格库同走文档容器 + full 档（左侧画风栏要贴齐内容区左边距）。 */
   path.join(STUDIO, "styles", "StyleLibrary.tsx"),
-  /* #5087：脸库同族，左侧脸部列表贴齐内容区左边距。 */
-  path.join(STUDIO, "faces", "FaceLibrary.tsx"),
+  /* #5125/#5126：脸库 / 服饰库 / 装饰库把页面布局收进 ResearchLibraryView 共用后，
+   *  真正持有 DocumentFrame 的是那个共享视图，薄壳页面不再重复一层容器。判据要跟着
+   *  容器宿主走，挂到薄壳上只会得到「没抽出任何 className」的假红（ISSUE #5271）。 */
+  path.join(STUDIO, "research", "ResearchLibraryView.tsx"),
   path.join(STUDIO, "ProjectOutputs.tsx"),
   // 这三屏是「浮层入口 → 视图」那一批改出来的，收口时漏登记，所以它们各自漏掉的
   // 约定（左右内边距）在这里第一次有了执行者。
