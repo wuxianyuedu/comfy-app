@@ -301,16 +301,21 @@ flowchart TD
 
 ---
 
-## 10. 两条生成通道对照
+## 10. 生成通道对照
 
-| 维度 | 本地 · ComfyUI 工作流 | API 直连（远端模型） |
-|---|---|---|
-| 可执行来源 | 工作流库工作流（必须已配好对外参数） | 设置页「远端模型」或「模型适配」视图 |
-| 请求入口 | `generate.generate`（tRPC） | `/api/workshop-api/generate`（relay） |
-| 进度 / 日志 | SSE `/api/tasks/:id/stream`（含节点级进度与执行日志） | 一次性响应；异步任务的进度靠轮询 |
-| 参数翻译 | `buildEncapsulatedInputs`（统一输入 → 端口） | 远端模式适配器（统一输入 → 接口字段名） |
-| 密钥位置 | 无（本机） | 只在服务端（浏览器只见脱敏视图） |
-| 失败出口 | 阶段内错误条 + 执行日志 | 阶段内错误条（relay 错误信息归一） |
+| 维度 | 本地 · ComfyUI 工作流 | API 直连（远端模型） | 代码驱动 · 合同层（P0，规划中） |
+|---|---|---|---|
+| 可执行来源 | 工作流库工作流（必须已配好对外参数） | 设置页「远端模型」或「模型适配」视图 | 制片合同（声明式 JSON，非自由代码） |
+| 请求入口 | `generate.generate`（tRPC） | `/api/workshop-api/generate`（relay） | `codeFilm.compile` / `validate` / `toShots`（只做预览，不入队） |
+| 进度 / 日志 | SSE `/api/tasks/:id/stream`（含节点级进度与执行日志） | 一次性响应；异步任务的进度靠轮询 | P0 无异步执行；后续复用同一 task 表与 SSE |
+| 参数翻译 | `buildEncapsulatedInputs`（统一输入 → 端口） | 远端模式适配器（统一输入 → 接口字段名） | `contract-to-runs`（合同 → `WorkshopExposedValues`） |
+| 密钥位置 | 无（本机） | 只在服务端（浏览器只见脱敏视图） | 无（本机） |
+| 失败出口 | 阶段内错误条 + 执行日志 | 阶段内错误条（relay 错误信息归一） | `BAD_REQUEST` + 合同字段路径（静态 QA 逐条报） |
+
+> **代码驱动通道（P0 边界）**：目前只有合同层的编译预览、静态 QA 与镜头预览三个无副作用口，
+> **不落库、不入队、不接渲染**。它不改动上面两条既有通道，也不改变工坊六阶段的用户可见行为。
+> 完整范式、模块清单与分期见
+> [代码驱动视频生成设计规格](../superpowers/specs/2026-11-28-code-driven-video-generation-design.md)。
 
 ---
 
@@ -357,7 +362,8 @@ flowchart LR
 - [ ] 改阶段划分 / 顺序 → 同步 `STAGE_DEFS`、`STAGE_TITLES`、本文第 2 节流程图
 - [ ] 改对外参数口径 → `src/lib/workshop/workflow-encapsulation.ts` +
       [工作流库流程 §5](feature-workflow-library-flow.md)（两处是同一份契约的两端）
-- [ ] 新增生成通道 → 本文第 10 节表格 + 第 6/7 节的门禁分支
+- [ ] 新增生成通道 → 本文第 10 节表格 + 第 6/7 节的门禁分支；代码驱动通道另见
+      [设计规格](../superpowers/specs/2026-11-28-code-driven-video-generation-design.md)
 - [ ] 改草稿结构 → 服务端 DTO（`draft-sync-shared.ts`）与本文第 9 节同步
 - [ ] 改动任何 `src/lib/**` → 先读 [规范 18](../standards/18-lib层规范.md)（Node-only 三选一、
       分层 element、文件/函数长度棘轮）

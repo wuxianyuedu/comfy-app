@@ -3,6 +3,7 @@
 // HTTP(Streamable) 两种 transport 共用同一份工具定义；覆盖工坊全流程（会话 →
 // 脚本 → 角色 → 分镜 → 生图 → 生视频），AI 客户端可按顺序调用指挥端到端创作。
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerCodeFilmTools } from "./codefilm-tools";
 import { z } from "zod";
 
 import { APP_VERSION } from "~/lib/app-version";
@@ -438,5 +439,6 @@ export function buildWorkshopMcpServer(): McpServer {
       ),
   );
 
+  registerCodeFilmTools(server);
   return server;
 }

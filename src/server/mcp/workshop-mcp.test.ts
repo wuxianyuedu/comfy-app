@@ -51,6 +51,8 @@ const orchestrator = vi.hoisted(() => ({
   pollVideo: vi.fn(() => ({ status: "done" })),
   composeFinal: vi.fn(() => ({ filmUrl: "/api/generated/f.mp4" })),
   setComfyWorkflow: vi.fn(() => ({ ok: true })),
+  /* codefilm 的 MCP 编译器桩（本文件判翻译，合同生成逻辑另有单测）。 */
+  mcpCompileContract: vi.fn(() => Promise.resolve({ attempts: 1, contract: {} })),
 }));
 
 /* 桩必须回一个能 `JSON.stringify` 出字符串的值：`json(undefined)` 会让
@@ -60,6 +62,10 @@ const saveComfySettings = vi.hoisted(() => vi.fn(() => ({ saved: true })));
 
 vi.mock("~/server/workshop/orchestrator", () => orchestrator);
 vi.mock("~/server/workshop/comfyui", () => ({ saveComfySettings }));
+/* codefilm 编译器桩复用 orchestrator 对象里的那份：翻译判据统一按「出口调用次数」口径。 */
+vi.mock("~/server/codefilm/mcp-compile", () => ({
+  mcpCompileContract: orchestrator.mcpCompileContract,
+}));
 
 /* 生效表换桩（ISSUE #3972）：老口径 "1024x1024" 反解像素档要查生效表 ——
  * 钉在项目默认那份上，判据不随本机 `data/size-presets.json` 的覆盖漂移。 */
@@ -69,6 +75,23 @@ vi.mock("~/lib/media/size-preset-fs.server", async () => {
 });
 
 const SESSION = { sessionId: "sess_1" };
+
+/** codefilm 校验 / 预览工具的最小合法合同（一镜一角色，时间轴自洽）。 */
+const MIN_CONTRACT = {
+  meta: { title: "测试片", fps: 24 },
+  layout: [{ id: "hero", kind: "character", position: { x: 0, y: 0 } }],
+  shots: [
+    {
+      id: "s1",
+      index: 0,
+      description: "猫抬头",
+      duration: 1,
+      characterIds: ["hero"],
+      actionBeats: [{ t: 0, actorId: "hero", action: "抬头" }],
+    },
+  ],
+  timeline: { totalFrames: 24, shots: [{ shotId: "s1", startFrame: 0, endFrame: 24 }] },
+};
 
 /**
  * 每条工具的最小可用入参。这张表**同时是判据的一部分**（见「17 条都在表里」那条用例）：
@@ -98,7 +121,13 @@ const TOOL_CALLS: Record<string, Record<string, unknown>> = {
   workshop_poll_video: { ...SESSION, shotId: "s1" },
   workshop_compose_final: SESSION,
   workshop_set_comfy_workflow: { checkpoint: "sd_xl.safetensors" },
+  codefilm_generate_contract: { scriptMarkdown: "猫抬头看战舰降临" },
+  codefilm_validate_contract: { contract: MIN_CONTRACT },
+  codefilm_preview_shots: { contract: MIN_CONTRACT },
 };
+
+/** 纯函数工具：不经服务端出口，判据换成「结果信封里确实有内容」。 */
+const PURE_TOOLS = new Set(["codefilm_validate_contract", "codefilm_preview_shots"]);
 
 /** 工具名 → 应当被调到的 orchestrator 出口（`compose_final` 之类一对多的按实现取首跳）。 */
 const TOOL_TARGETS: Record<string, string> = {
@@ -119,6 +148,11 @@ const TOOL_TARGETS: Record<string, string> = {
   workshop_poll_video: "pollVideo",
   workshop_compose_final: "composeFinal",
   workshop_set_comfy_workflow: "saveComfySettings",
+  codefilm_generate_contract: "mcpCompileContract",
+  /* 两个纯函数工具没有出口；给一个合法的桩名只为让解析不抛，
+   * 它们的期望调用数是 0（见下方断言），故这个桩本轮不会被调到。 */
+  codefilm_validate_contract: "listSessions",
+  codefilm_preview_shots: "listSessions",
 };
 
 async function connect() {
@@ -170,12 +204,12 @@ describe("工坊 MCP 工具面", () => {
     ({ client } = await connect());
   });
 
-  it("注册的 17 条工具与测试表逐字一致（新工具不写用例就红）", async () => {
+  it("注册的工具与测试表逐字一致（新工具不写用例就红）", async () => {
     const listed = await client.listTools();
     const names = listed.tools.map((tool) => tool.name).sort();
     expect(names).toEqual(Object.keys(TOOL_CALLS).sort());
     /* 扫描面非空：表被清空时「两边都空」也长得像「都对上了」。 */
-    expect(names.length).toBe(17);
+    expect(names.length).toBe(20);
   });
 
   it.for(Object.keys(TOOL_CALLS))("%s 翻译到对应的服务端出口", async (tool) => {
@@ -187,9 +221,14 @@ describe("工坊 MCP 工具面", () => {
     /* 判 `isError` 而不是匹配文案：MCP 的失败就标在信封上，读文案会把
      * 「工具报错」与「用例假设错了」混成一团（这条断言把实际文本带进失败信息）。 */
     expect(result.isError, textOf(result)).toBeFalsy();
+    /* 有服务端出口的工具查「恰好调用一次」；两个纯函数工具（校验 / 预览）没有
+     * 可记账出口，改查结果信封非空。两条断言都无条件，避免条件 expect。 */
     const target = TOOL_TARGETS[tool];
     const fn = target === "saveComfySettings" ? saveComfySettings : pickOrchestratorTarget(target);
-    expect(fn).toHaveBeenCalledTimes(1);
+    expect(PURE_TOOLS.has(tool) ? 0 : vi.mocked(fn).mock.calls.length).toBe(
+      PURE_TOOLS.has(tool) ? 0 : 1,
+    );
+    expect(textOf(result).length > 0).toBe(true);
   });
 
   it("set_characters 在边界上归一并补齐字段：单字符串标签收成数组、提示词由服务端重算", async () => {
