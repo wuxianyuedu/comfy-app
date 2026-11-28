@@ -17,6 +17,7 @@
  */
 
 import { isRecord } from "~/lib/is-record";
+import { cloneJsonGraph } from "./clone-json-graph";
 
 /** 覆盖项三元组（与 `RawWorkflowOverride` 的形状一致，这里收窄成最小依赖）。 */
 export type LoaderOverride = {
@@ -67,7 +68,7 @@ export function augmentReferenceImageLoadersRaw(
   if (!isRecord(rawJson) || !Array.isArray(overrides) || overrides.length === 0) {
     return { graph: rawJson, overrides: overrides ?? [], added: 0 };
   }
-  const parsed: unknown = JSON.parse(JSON.stringify(rawJson));
+  const parsed = cloneJsonGraph(rawJson);
   const root = isRecord(parsed) ? parsed : {};
   /* 节点与连线都持**原数组引用**（增补要写回图里）；遍历时再逐项收窄。 */
   const nodes: Array<unknown> = Array.isArray(root.nodes) ? root.nodes : [];
@@ -198,7 +199,7 @@ export function augmentReferenceImageLoadersApi(
   if (!isRecord(graph) || !Array.isArray(overrides) || overrides.length === 0) {
     return { graph, overrides: overrides ?? [], added: 0 };
   }
-  const parsed: unknown = JSON.parse(JSON.stringify(graph));
+  const parsed = cloneJsonGraph(graph);
   const root = isRecord(parsed) ? parsed : {};
 
   let nextNodeId = 0;

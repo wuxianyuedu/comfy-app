@@ -23,6 +23,7 @@
 // 无 React、无 IO（规范 §17.2 第①层），可直接单测。
 
 import { isRecord } from "~/lib/is-record";
+import { cloneJsonGraph } from "./clone-json-graph";
 import type { ReferenceLoaderPreset } from "~/lib/workshop/reference-loader-preset";
 import {
   chainWidgetsValues,
@@ -164,7 +165,7 @@ export function applyReferenceLoaderChainsRaw(
   ) {
     return { graph: rawJson, overrides: overrides ?? [], added: 0 };
   }
-  const parsed: unknown = JSON.parse(JSON.stringify(rawJson));
+  const parsed = cloneJsonGraph(rawJson);
   const root = isRecord(parsed) ? parsed : {};
   const nodes: Array<unknown> = Array.isArray(root.nodes) ? root.nodes : [];
   const links: Array<unknown> = Array.isArray(root.links) ? root.links : [];
@@ -381,7 +382,7 @@ export function applyReferenceLoaderChainsApi(
   ) {
     return { graph, overrides: overrides ?? [], added: 0 };
   }
-  const parsed: unknown = JSON.parse(JSON.stringify(graph));
+  const parsed = cloneJsonGraph(graph);
   const root = isRecord(parsed) ? parsed : {};
 
   let nextNodeId = 0;
