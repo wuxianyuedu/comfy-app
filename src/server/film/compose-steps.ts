@@ -95,13 +95,16 @@ export function buildNormalizeArgs(opts: {
   dur: number;
   out: string;
   srtPath: string | null;
+  /** 选段起点秒（ISSUE #5299）：0 = 整段从头；非 0 时在 `-i` 前 `-ss` 定位。 */
+  start?: number;
   vf: string;
 }): Array<string> {
-  const { clip, vf, dur, out, srtPath } = opts;
+  const { clip, vf, dur, out, srtPath, start } = opts;
   const vfWithSub =
     srtPath === null ? vf : `${vf},subtitles='${escapeFilter(normalizeSlashes(srtPath))}'`;
   return [
     "-y",
+    ...(start !== undefined && start > 0 ? ["-ss", fixed(start, 2) ?? "0"] : []),
     "-i",
     clip,
     "-vf",

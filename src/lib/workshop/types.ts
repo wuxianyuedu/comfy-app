@@ -382,6 +382,18 @@ export const shotInputSchema = z
     transition: optionalEnum(TRANSITIONS), // 与下一镜的转场
     clipStatus: optionalEnum(SHOT_STATUSES),
     clipUrl: z.string().optional(), // 生成的视频片段地址
+    /** 生成选段（ISSUE #5299）：一段生成里可保留多个可用选段，成片合成按第一段裁剪；
+     *  留空 = 用整段，老数据不破。 */
+    segments: z
+      .array(
+        z.object({
+          end: z.number().positive(),
+          purpose: z.string().max(80).optional(),
+          start: z.number().nonnegative(),
+        }),
+      )
+      .transform((value) => value.slice(0, 16))
+      .optional(),
     /** 跨镜接力（ISSUE #5212）：从这一镜的尾帧抽图当本镜首帧；留空 = 用定稿图。
      *  只在服务端建片时消费，用户手改不会破坏已有片段。 */
     continuityFromShotId: z.string().optional(),

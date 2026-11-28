@@ -62,6 +62,8 @@ export type FilmShotInput = {
   negative?: string;
   order: number;
   prompt: string;
+  /** 生成选段（ISSUE #5299）：随镜头落 params，合成按第一段裁剪。 */
+  segments?: unknown;
   /** 工作流选型决策日志（ISSUE #5278）：随 params 落库，复盘时回答「用了什么/花了多少」。 */
   selection?: SelectionLog;
   /** 关联的统一镜头 id（Phase 5 逐镜回写用）；自由建片（剧本自解析）时无来源，留空。 */
@@ -296,6 +298,8 @@ async function persistFilmWithShots(args: {
             ...(shot.tailFrameFrom === undefined || shot.tailFrameFrom === ""
               ? {}
               : { tailFrameFrom: shot.tailFrameFrom }),
+            /* 生成选段（ISSUE #5299）：有选段才落库，合成时按第一段裁剪。 */
+            ...(shot.segments === undefined ? {} : { segments: shot.segments }),
             /* 机位覆盖（ISSUE #5297）：来源片段与机位预设随镜头落库。 */
             ...(shot.coverageFrom === undefined || shot.coverageFrom === ""
               ? {}
@@ -509,6 +513,7 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
       return typeof prev?.clipUrl === "string" && prev.clipUrl !== "" ? prev.clipUrl : undefined;
     })(),
     coveragePreset: shot.coveragePreset ?? undefined,
+    segments: shot.segments ?? undefined,
     /* 声音归属：镜头覆写 > 出场角色绑定 > 空绑定（ISSUE #5213）。 */
     voice: resolveVoice(characters, shot.characterIds ?? [], shot.voice),
     audioUrl: shot.audioUrl ?? undefined,
