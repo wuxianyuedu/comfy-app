@@ -34,6 +34,7 @@ import { appendFilmLog } from "./film-log";
 import { resolveFilmFirstFrame } from "./first-frame";
 import { extractTailFrameUrl } from "./tail-frame";
 import { resolveVoice, ttsParamsOf, type VoiceBinding } from "./voice-track";
+import { coverageOrderIssues, coveragePromptSuffix } from "~/lib/workshop/coverage";
 import { ensureShotAudio } from "./audio-task";
 import {
   buildSelectionLog,
@@ -48,6 +49,9 @@ import { watchFilm } from "./film-watch";
 export type FilmShotInput = {
   /** 逐镜配音产物地址（ISSUE #5213）：落 params.audioPath，成片合成混入对白轨。 */
   audioUrl?: string;
+  /** 机位覆盖（ISSUE #5297）：基础动作片段地址 + 机位预设。 */
+  coverageFrom?: string;
+  coveragePreset?: string;
   /** 角色台词（工坊 Shot.dialogue）：字幕与后续配音的唯一源，落 params.dialogue。 */
   dialogue?: string;
   /** 镜头时长（秒，工坊 Shot.duration）；缺省按 frames / fps 折算。 */
@@ -292,6 +296,13 @@ async function persistFilmWithShots(args: {
             ...(shot.tailFrameFrom === undefined || shot.tailFrameFrom === ""
               ? {}
               : { tailFrameFrom: shot.tailFrameFrom }),
+            /* 机位覆盖（ISSUE #5297）：来源片段与机位预设随镜头落库。 */
+            ...(shot.coverageFrom === undefined || shot.coverageFrom === ""
+              ? {}
+              : { coverageFrom: shot.coverageFrom }),
+            ...(shot.coveragePreset === undefined || shot.coveragePreset === ""
+              ? {}
+              : { coveragePreset: shot.coveragePreset }),
             /* 逐镜配音（ISSUE #5213）：声音绑定与 TTS 载荷在建片时算一次落 params；
              * 已有配音产物的镜头把地址一并落库，成片合成据此混入对白轨。 */
             ...(shot.voice === undefined
@@ -487,11 +498,28 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
       const prev = rawShots.find((candidate) => candidate.id === from);
       return typeof prev?.clipUrl === "string" && prev.clipUrl !== "" ? prev.clipUrl : undefined;
     })(),
+    /* 覆盖机位（#5297）：引用同一条已成立的基础动作，换机位重拍；
+     * 有覆盖来源时优先于普通尾帧接力，两者不叠加。 */
+    coverageFrom: (() => {
+      const from = shot.coverageFromShotId;
+      if (typeof from !== "string" || from === "") {
+        return undefined;
+      }
+      const prev = rawShots.find((candidate) => candidate.id === from);
+      return typeof prev?.clipUrl === "string" && prev.clipUrl !== "" ? prev.clipUrl : undefined;
+    })(),
+    coveragePreset: shot.coveragePreset ?? undefined,
     /* 声音归属：镜头覆写 > 出场角色绑定 > 空绑定（ISSUE #5213）。 */
     voice: resolveVoice(characters, shot.characterIds ?? [], shot.voice),
     audioUrl: shot.audioUrl ?? undefined,
     duration: shot.duration,
   }));
+
+  /* 覆盖顺序（ISSUE #5297）：基础动作必须先于覆盖镜；顺序不对只记 warn，
+   * 让用户能看见「先生成基础动作再补机位」的口径，不阻断建片。 */
+  for (const issue of coverageOrderIssues(shots)) {
+    logger.warn(`[film] ${issue}`);
+  }
 
   const selection = await selectionFor({
     fps,
@@ -557,9 +585,17 @@ async function generateVideoShot(
    * LoadImage 只认 input 目录里的文件名，先落盘读字节再上传，换成上传后的名字。 */
   /* 跨镜接力优先于定稿图（ISSUE #5212）：上一镜片段的尾帧作本镜首帧；
    * 抽帧失败回落定稿图，不阻断生成。 */
-  const tailFrom = typeof params.tailFrameFrom === "string" ? params.tailFrameFrom : "";
-  if (tailFrom !== "") {
-    const tail = await extractTailFrameUrl(tailFrom);
+  /* 机位覆盖（ISSUE #5297）：基础动作片段优先——从它抽末帧当覆盖镜的视觉锚点，
+   * 让同一动作在不同机位有同一姿态起点；抽帧失败回落普通尾帧/定稿图。 */
+  const coverageFrom = typeof params.coverageFrom === "string" ? params.coverageFrom : "";
+  const relayFrom =
+    coverageFrom === ""
+      ? typeof params.tailFrameFrom === "string"
+        ? params.tailFrameFrom
+        : ""
+      : coverageFrom;
+  if (relayFrom !== "") {
+    const tail = await extractTailFrameUrl(relayFrom);
     if (tail !== null) {
       inputImage = tail;
     }
@@ -591,7 +627,11 @@ async function generateVideoShot(
     userId,
     workflowId: videoWorkflowId,
     values: {
-      prompt: shot.prompt,
+      /* 覆盖镜把机位约束接在镜头提示词之后：保留基础动作的站位/方向/服装。 */
+      prompt:
+        coverageFrom === ""
+          ? shot.prompt
+          : `${shot.prompt}, ${coveragePromptSuffix(params.coveragePreset)}`,
       ...(shot.negative !== null && shot.negative !== "" ? { negativePrompt: shot.negative } : {}),
       firstFrame: inputImage,
       frames: typeof params.frames === "number" ? params.frames : 81,
