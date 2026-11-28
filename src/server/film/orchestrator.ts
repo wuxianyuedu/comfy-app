@@ -47,6 +47,8 @@ import {
 import { watchFilm } from "./film-watch";
 
 export type FilmShotInput = {
+  /** 跨镜五锚（ISSUE #5304）：随镜头落 params，合成前逐字核对相邻镜的一致性。 */
+  anchors?: unknown;
   /** 逐镜配音产物地址（ISSUE #5213）：落 params.audioPath，成片合成混入对白轨。 */
   audioUrl?: string;
   /** 机位覆盖（ISSUE #5297）：基础动作片段地址 + 机位预设。 */
@@ -298,6 +300,8 @@ async function persistFilmWithShots(args: {
             ...(shot.tailFrameFrom === undefined || shot.tailFrameFrom === ""
               ? {}
               : { tailFrameFrom: shot.tailFrameFrom }),
+            /* 跨镜五锚（ISSUE #5304）：有锚才落库，合成前逐字核对相邻镜。 */
+            ...(shot.anchors === undefined ? {} : { anchors: shot.anchors }),
             /* 生成选段（ISSUE #5299）：有选段才落库，合成时按第一段裁剪。 */
             ...(shot.segments === undefined ? {} : { segments: shot.segments }),
             /* 机位覆盖（ISSUE #5297）：来源片段与机位预设随镜头落库。 */
@@ -487,6 +491,7 @@ export async function createFilmFromProject(input: CreateFilmFromProjectInput) {
   const shotInputs: Array<FilmShotInput> = shots.map((shot, i) => ({
     order: i,
     shotId: shot.id,
+    anchors: shot.anchors ?? undefined,
     heading: shot.sceneHeading || undefined,
     dialogue: shot.dialogue ?? undefined,
     prompt: shot.prompt,

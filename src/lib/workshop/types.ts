@@ -328,6 +328,17 @@ export const characterInputSchema = z
     negativePrompt: "",
   }));
 
+/** 跨镜五锚（ISSUE #5304）：光照 / 服装 / 时段 / 地理 / 音床，逐字复制防漂移；
+ *  全部可选，留空 = 这一项不参与核对，老草稿不破。显式列字段而非 z.record(z.string())，
+ *  避免在 MCP 的 JSON Schema 上落成「任意对象」真空口。 */
+export const shotAnchorsSchema = z.object({
+  ambience: z.string().optional(),
+  geography: z.string().optional(),
+  light: z.string().optional(),
+  timeOfDay: z.string().optional(),
+  wardrobe: z.string().optional(),
+});
+
 /** 一个分镜镜头，对应一次图片生成任务（之后还会对应一段视频片段）。 */
 export const shotInputSchema = z
   .object({
@@ -394,6 +405,8 @@ export const shotInputSchema = z
       )
       .transform((value) => value.slice(0, 16))
       .optional(),
+    /** 跨镜五锚（ISSUE #5304）：相邻镜同一锚逐字复制，漂移只提示不阻断。 */
+    anchors: shotAnchorsSchema.optional(),
     /** 跨镜接力（ISSUE #5212）：从这一镜的尾帧抽图当本镜首帧；留空 = 用定稿图。
      *  只在服务端建片时消费，用户手改不会破坏已有片段。 */
     continuityFromShotId: z.string().optional(),
