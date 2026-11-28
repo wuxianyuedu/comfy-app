@@ -64,6 +64,8 @@ export const filmRouter = createTRPCRouter({
         videoWorkflowId: z.string().optional(),
         /** 文生视频镜头合成首帧用的图类工作流 id。 */
         imageWorkflowId: z.string().optional(),
+        /** 逐镜对白 T2S 工作流 id（ISSUE #5244）；不配则只出字幕不出配音。 */
+        ttsWorkflowId: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -83,6 +85,7 @@ export const filmRouter = createTRPCRouter({
         bgmName: input.bgmName,
         videoWorkflowId: input.videoWorkflowId,
         imageWorkflowId: input.imageWorkflowId,
+        ttsWorkflowId: input.ttsWorkflowId,
       });
       return { id, shots };
     }),
@@ -95,6 +98,8 @@ export const filmRouter = createTRPCRouter({
         projectId: z.string().min(1),
         videoWorkflowId: z.string().optional(),
         imageWorkflowId: z.string().optional(),
+        /** 逐镜对白 T2S 工作流 id（ISSUE #5244）。 */
+        ttsWorkflowId: z.string().optional(),
         title: z.string().min(1).max(200).optional(),
         type: z.string().min(1).optional(),
         size: z.union([sizeSpecSchema, z.string()]).optional(),

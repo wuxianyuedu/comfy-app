@@ -386,6 +386,23 @@ export class FilmShotRepository {
       .where(eq(filmShot.id, shotId));
   }
 
+  /** 只改镜头参数里的几个键（ISSUE #5244）：TTS 任务 id / 重试计数 / 产物地址与视频任务态互不覆盖。
+   *  读改写收在调用方（建任务前已读 params），这里整体写回当前值。 */
+  async patchParams(shotId: string, patch: Record<string, unknown>): Promise<void> {
+    const rows = await db
+      .select({ params: filmShot.params })
+      .from(filmShot)
+      .where(eq(filmShot.id, shotId))
+      .limit(1);
+    const current = rows[0]?.params;
+    const base =
+      current !== null && typeof current === "object" && !Array.isArray(current) ? current : {};
+    await db
+      .update(filmShot)
+      .set({ params: { ...base, ...patch } })
+      .where(eq(filmShot.id, shotId));
+  }
+
   async listActiveWithTask(filmId: string): Promise<Array<{ id: string; taskId: string | null }>> {
     return db
       .select({ id: filmShot.id, taskId: filmShot.taskId })
