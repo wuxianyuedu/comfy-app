@@ -12,6 +12,8 @@ import { shotSizeFor } from "~/lib/film/film-size";
 import { withProductionContentLock } from "~/lib/production/content-write-lock";
 import { appendRunStep, type ProductionRun } from "~/lib/production/run-types";
 import { withPortraitCandidate } from "~/lib/workshop/character-portrait";
+import { needsPerformance } from "~/lib/workshop/acting-reference";
+import { generateActingReference } from "~/server/film/acting-reference";
 import { buildCharacterNegative, buildCharacterPrompt } from "~/lib/workshop/prompt-builder";
 import type { Character } from "~/lib/workshop/types";
 import type { Production } from "~/server/db/schema";
@@ -69,25 +71,50 @@ export async function execCharacterRefs(
     }
   }
 
+  /* 表演参考（ISSUE #5296）：定妆照齐了才做，复用视频工作流把静态图变成会动会说话的
+   * 短参照。失败只记缺失、回落定妆照，不阻断后续阶段；没配视频工作流则整步跳过。 */
+  const performanceMade = new Map<string, string>();
+  if (run.videoWorkflowId) {
+    for (const character of characters) {
+      const portrait = made.get(character.id) ?? character.portraitUrl;
+      if (typeof portrait !== "string" || portrait === "" || !needsPerformance(character)) {
+        continue;
+      }
+      // oxlint-disable-next-line no-await-in-loop -- 顺序依赖：逐个角色复用同一条视频工作流
+      const url = await generateActingReference({
+        character: { ...character, portraitUrl: portrait },
+        projectId,
+        userId,
+        videoWorkflowId: run.videoWorkflowId,
+      });
+      if (url !== null) {
+        performanceMade.set(character.id, url);
+      }
+    }
+  }
+
   /* 慢 IO 在锁外；回写收进 per-project 内容写锁，只叠本轮产出的角色。 */
   await withProductionContentLock(projectId, async () => {
     const fresh = await productionRepository.getForUser(userId, projectId);
     const freshCharacters = isCharacterArray(fresh?.characters) ? fresh.characters : [];
     const merged = freshCharacters.map((character) => {
       const url = made.get(character.id);
-      if (url === undefined) {
-        return character;
-      }
-      return withPortraitCandidate(character, {
-        createdAt: Date.now(),
-        source: "local",
-        url,
-      });
+      const withPortrait =
+        url === undefined
+          ? character
+          : withPortraitCandidate(character, { createdAt: Date.now(), source: "local", url });
+      const performance = performanceMade.get(character.id);
+      return performance === undefined
+        ? withPortrait
+        : { ...withPortrait, performanceUrl: performance };
     });
     await productionRepository.patchContent(userId, projectId, { characters: merged });
   });
 
-  const summary = `角色定妆照：${made.size}/${targets.length} 成功`;
+  const performanceNote = run.videoWorkflowId
+    ? `；表演参考：${performanceMade.size} 条`
+    : "；未配视频工作流，跳过表演参考";
+  const summary = `角色定妆照：${made.size}/${targets.length} 成功${performanceNote}`;
   return {
     ok: true,
     summary,

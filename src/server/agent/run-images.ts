@@ -16,6 +16,7 @@ import {
   characterIdsOf,
   checkStoryboardQuality,
 } from "~/lib/workshop/storyboard-quality";
+import { performanceRefsOf } from "~/lib/workshop/acting-reference";
 import {
   markActionProcessed,
   type ProductionRun,
@@ -107,6 +108,8 @@ export async function execImages(
         prompt: shot.prompt,
         negative: shot.negativePrompt || undefined,
         projectId,
+        /* 角色表演参考（ISSUE #5296）：已确认的角色视频元素优先作为表演锚点注入。 */
+        referenceImages: performanceRefsOf(row.characters, shot.characterIds ?? []),
         seed: randomSeed(),
         /* 与逐镜视频任务同一份场景无关画幅（ISSUE #5138）：首帧与潜空间同尺寸。 */
         size: shotSizeFor(asRecord(shot.params)?.size),
